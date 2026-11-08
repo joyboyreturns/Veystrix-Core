@@ -1,5 +1,7 @@
 # Documentation
 
+> **Development status:** The upcoming Veystrix CHAT and AGENTIC modes are implemented in a local, not-yet-pushed working tree. See the [mode and agentic validation guide](flashnext/agentic-validation.md) for tested CHAT behavior, planned AGENTIC checks, and honest publication status.
+
 Use the component handoff before changing code or running a benchmark. Read
 the research record when you need prior measurements or rejected approaches.
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) defines the shared workflow.
