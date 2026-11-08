@@ -19,6 +19,7 @@ from macqwen.conversation import Conversation
 from macqwen.model_settings import FLASHNEXT_DEFAULTS
 from macqwen.sampling import Sampler, Sampling
 from macqwen.text import stream_decode
+from models.flashnext import gpu_sync, progress
 from models.flashnext.settings import get_registry
 
 DEFAULT_FUSION_MODEL = FLASHNEXT_DEFAULTS["fusion_model"]
@@ -114,7 +115,19 @@ class Stats:
         return self.prompt_tokens / self.prefill_seconds if self.prefill_seconds else 0.0
 
 
+RELEASE_CACHE_BYTES = 64 * 2 ** 20      # trim the MLX allocator cache between requests when it holds more than this
+
+
 class FlashNextBackend(Conversation):
+    # What the last prefill reused from the prefix cache (None when it was off); see prefix_session.Report.
+    last_prefix = None
+    # What the opt-in decode-pool release did before the last prefill (None when the flag is off or no fresh prefill
+    # ran); see models/flashnext/pool_lifecycle.make_room.
+    last_pool_release = None
+    # What the opt-in memory manager planned and did before the last prefill, and its cleanup after the request.
+    last_memory_report = None
+    last_memory_after = None
+
     def settings_registry(self):
         return get_registry()
 
@@ -138,6 +151,7 @@ class FlashNextBackend(Conversation):
                   native_mtp: str | None = None,
                   mtp_depth: int | None = None,
                   session_dir: str = "~/.cache/flashnext/sessions"):
+        gpu_sync.install_exit_drain()      # drain before mlx_vlm's GIL-holding stream cleanup at exit
         AutoTokenizer = _load_transformers_tokenizer()
         from models.flashnext.loader import load_streaming
 
@@ -288,6 +302,15 @@ class FlashNextBackend(Conversation):
                 "fusion_max_prompt": self.fusion_max_prompt,
             })
         return profile
+
+    def _prefix_session(self):
+        """The prefix cache for this engine (built on first use; fingerprint = checkpoint, tokenizer,
+        engine files and routing profile, the same compatibility record exact sessions use)."""
+        from models.flashnext.prefix_session import PrefixSession
+
+        if getattr(self, "_prefix", None) is None:
+            self._prefix = PrefixSession(self.encode, lambda: self._sessions()._compatibility())
+        return self._prefix
 
     def _sessions(self):
         from models.flashnext.sessions import SessionStore
@@ -501,6 +524,238 @@ class FlashNextBackend(Conversation):
     def generate(self, max_tokens: int, out=None, on_prefilled=None,
                  on_prefill_progress=None, on_decode_token=None,
                  should_cancel=None) -> tuple[str, Stats]:
+        """Feed everything pending through the model, then decode a reply (see ``_generate``)."""
+        from models.flashnext import pool_lifecycle, purge_recovery
+
+        # The activity record covers the whole call (prefill, decode, GPU work, expert reads and the cleanup in
+        # the finally below), so the optional cache-purge recovery never runs during any of it and a purge that
+        # is already running finishes before this request starts.
+        # Counts this call while FLASHNEXT_PREFILL_RELEASE_DECODE_POOL=1 so a concurrent request is never
+        # left without its decode pool; a no-op, and no other behaviour, when the flag is off.
+        # Recovery BEFORE the request: the engine is idle here, the activity record below is not held yet, so a purge
+        # (when RAM is short for this request and file cache can fix it) cannot overlap any GPU work or live state.
+        try:
+            purge_recovery.prepare_for_request(
+                len(self.pending) + (len(self.tape) if getattr(self, "_replay_needed", False) else 0))
+        except Exception:
+            pass
+        try:
+            from models.flashnext import memory_controller
+            memory_controller.begin_request()
+            self.turn_memory_before = self._turn_memory()
+        except Exception:
+            self.turn_memory_before = None
+        with purge_recovery.ACTIVITY.request(), pool_lifecycle.exclusive_request():
+            fault = pool_lifecycle.lifecycle_fault() or getattr(self, "_memory_cleanup_error", None)
+            if fault:
+                raise RuntimeError("previous memory cleanup failed; restart the process: " + fault)
+            with pool_lifecycle.in_flight():
+                try:
+                    from models.flashnext import expert_pool
+                    expert_pool.reset_decline(pool_lifecycle.store_of(self.language))   # re-check headroom once per request
+                except Exception:
+                    pass
+                from models.flashnext import trace_phase
+
+                def prefilled():
+                    trace_phase.set_phase("decode")      # the safety trace labels each stage of the request
+                    if on_prefilled is not None:
+                        on_prefilled()
+
+                trace_phase.set_phase("prefill")
+                try:
+                    return self._generate(max_tokens, out, prefilled, on_prefill_progress,
+                                          on_decode_token, should_cancel)
+                finally:
+                    try:
+                        try:
+                            if os.environ.get("FLASHNEXT_CHAT_GUARD") == "1":
+                                gpu_sync.synchronize()
+                        finally:
+                            self._after_request()
+                    finally:
+                        trace_phase.set_phase("idle")
+
+    def reclaim_owned_memory(self, reading) -> int:
+        """Free Veystrix-owned temporary memory before a cache purge is considered; returns bytes freed.
+
+        Called only while the engine is idle. The allocator cache is always safe to trim. RAM prefix snapshots
+        move to SSD (nothing is lost) only when the machine is actually under pressure or nearly out of room, and
+        the decode pool is never touched here."""
+        freed = 0
+        try:
+            cache = mx.get_cache_memory()
+            if cache:
+                mx.clear_cache()
+                freed += int(cache)
+        except Exception:
+            pass
+        store = getattr(self, "_prefix", None)
+        stressed = reading.pressure >= 2 or reading.available < 3.5e9
+        if store is not None and stressed:
+            try:
+                freed += int(self._prefix_session().store().shrink_ram(0))
+            except Exception:
+                pass
+        return freed
+
+    def _turn_memory(self) -> dict:
+        """Where this process and the machine stand right now (never raises; values are bytes unless named)."""
+        from models.flashnext import memory_controller, purge_recovery
+
+        row = {"mlx_active": int(mx.get_active_memory()), "mlx_cache": int(mx.get_cache_memory()),
+               "mlx_peak": int(mx.get_peak_memory())}
+        try:
+            import subprocess
+            rss = subprocess.run(["ps", "-o", "rss=", "-p", str(os.getpid())], capture_output=True, text=True,
+                                 timeout=5).stdout.strip()
+            row["rss"] = int(rss) * 1024 if rss else None
+        except Exception:
+            row["rss"] = None
+        try:
+            reading = purge_recovery.read_system()
+            row["categories"] = memory_controller.categorize(
+                reading, mlx_active=row["mlx_active"], mlx_cache=row["mlx_cache"], rss=row["rss"] or 0)
+            row["compressor"] = reading.compressor * reading.page
+            row["wired"] = reading.wired * reading.page
+        except Exception:
+            pass
+        return row
+
+    def _release_between_turns(self) -> None:
+        """Between requests the engine is idle: the request has finished, its tokens are evaluated, and the activity record
+        is still held, so no purge can overlap. Release what is safe and record before and after, so any memory that
+        grows between tool turns is visible per request.
+
+        Order: a GPU barrier that cannot deadlock against MLX's completion handler (``gpu_sync``, never ``mx.synchronize``),
+        the prefill ring fence, Python garbage (numpy staging buffers), then the MLX allocator cache. The live KV and
+        recurrent state, the decode pool and exact prefix snapshots stay. RAM snapshots move to SSD only while the memory
+        controller is ELEVATED. Never raises."""
+        from models.flashnext import memory_controller, prefill_ring
+
+        released = {"cache_cleared": False, "snapshots_moved_bytes": 0}
+        try:
+            gpu_sync.synchronize()
+            prefill_ring.fence()
+            import gc
+            gc.collect()
+            if int(mx.get_cache_memory()) > RELEASE_CACHE_BYTES:
+                mx.clear_cache()
+                released["cache_cleared"] = True
+            try:
+                from models.flashnext import pool_lifecycle
+                store = pool_lifecycle.store_of(self.language)
+                if store is not None and getattr(store, "_uncached", False):
+                    store.set_uncached_reads(False)          # decode keeps the file cache for hot experts
+                    released["buffered_reads_restored"] = True
+            except Exception:
+                pass
+            if memory_controller.elevated() and getattr(self, "_prefix", None) is not None:
+                released["snapshots_moved_bytes"] = int(self._prefix_session().store().shrink_ram(0))
+            self.last_turn_memory = {"before": getattr(self, "turn_memory_before", None),
+                                     "after": self._turn_memory(), "released": released,
+                                     "controller": memory_controller.ledger()}
+        except Exception as error:
+            self.last_turn_memory = {"error": f"{type(error).__name__}: {error}"}
+
+    def _after_request(self) -> None:
+        """Memory cleanup after every request (success, cancellation and error alike); never raises."""
+        from models.flashnext import memory_manager, pool_lifecycle
+
+        self._release_between_turns()
+        if not memory_manager.enabled():
+            return
+        if pool_lifecycle.lifecycle_fault():
+            self._memory_cleanup_error = pool_lifecycle.lifecycle_fault()
+            self.last_memory_after = {"error": self._memory_cleanup_error}
+            return
+        try:
+            import mlx.core as mx
+
+            prefix_store = None
+            try:
+                from models.flashnext import prefix_session
+                if prefix_session.enabled() or getattr(self, "_prefix", None) is not None:
+                    prefix_store = self._prefix_session().store()
+            except Exception:
+                prefix_store = None
+
+            self.last_memory_after = memory_manager.get().after_request(
+                pool_lifecycle.store_of(self.language),
+                prefix_store=prefix_store,
+                clear_cache=mx.clear_cache,
+                synchronize=gpu_sync.synchronize,
+            )
+            if self.last_memory_after.get("error"):
+                self._memory_cleanup_error = self.last_memory_after["error"]
+                pool_lifecycle.mark_lifecycle_fault(self._memory_cleanup_error)
+        except Exception as error:
+            self.last_memory_after = {"error": f"{type(error).__name__}: {error}"}
+            self._memory_cleanup_error = self.last_memory_after["error"]
+            pool_lifecycle.mark_lifecycle_fault(self._memory_cleanup_error)
+
+    def _make_room_for_prefill(self, prompt, prefix_cache_runs: bool, fresh: bool = True) -> None:
+        """Opt-in memory planning before a prefill.
+
+        With FLASHNEXT_MEMORY_MANAGER=1 the manager plans every prefill (pool budget and release, RAM snapshots,
+        uncached short reads, refusal); with only FLASHNEXT_PREFILL_RELEASE_DECODE_POOL=1 the decode pool is dropped
+        before a fresh ring-eligible prefill. What counts is the tokens the prefill will really run: a prompt whose
+        long system prefix is restored from the prefix cache leaves a short suffix, which never uses the ring, so its
+        warm pool is kept. The caller decides that the conversation is fresh (empty tape or replay, empty cache, no
+        draft decoder) before any state changes. Never raises, except MemoryBudgetRefused from the manager.
+        """
+        from models.flashnext import memory_manager, pool_lifecycle
+
+        managed = memory_manager.enabled()
+        if not managed and not pool_lifecycle.enabled():
+            self.last_pool_release = None
+            return
+        reusable = 0
+        if prefix_cache_runs:
+            try:
+                reusable = int(self._prefix_session().reusable_tokens(prompt))
+            except Exception:              # an unreadable cache means "assume nothing is reused"
+                reusable = 0
+        tokens = len(prompt) - reusable
+        if managed:
+            self.last_memory_report = self._plan_memory(tokens, len(prompt), prefix_cache_runs, fresh)
+            return
+        report = pool_lifecycle.make_room(self.language, tokens)
+        if report is not None:
+            report["prompt_tokens"], report["reusable_tokens"] = len(prompt), reusable
+        self.last_pool_release = report
+
+    def _plan_memory(self, tokens: int, prompt_tokens: int, prefix_cache_runs: bool, fresh: bool) -> dict:
+        import mlx.core as mx
+
+        from models.flashnext import expert_pool, memory_manager, pool_lifecycle, prefill, prefill_ring
+
+        ring_eligible = bool(
+            prefill_ring.enabled() and expert_pool.enabled() and prefill_ring.configured_experts() > 0
+            and tokens >= prefill_ring.min_tokens() and prefill_ring.scratch_enabled())
+        request = memory_manager.Request(
+            tokens=tokens, prompt_tokens=prompt_tokens, chunk_tokens=prefill.chunk_tokens() or max(tokens, 1),
+            fresh=fresh, ring_eligible=ring_eligible)
+        prefix_store = None
+        if prefix_cache_runs:
+            try:
+                prefix_store = self._prefix_session().store()
+            except Exception:
+                prefix_store = None
+        report = memory_manager.get().before_prefill(
+            pool_lifecycle.store_of(self.language), request, prefix_store,
+            synchronize=gpu_sync.synchronize, clear_cache=mx.clear_cache)
+        plan = report["plan"]
+        return {"released_bytes": report["released_bytes"], "evicted_ram_bytes": report["evicted_ram_bytes"],
+                "applied": report["applied"], "tokens": tokens, "prompt_tokens": prompt_tokens,
+                "ring_eligible": ring_eligible, "pool_gb": plan.pool_gb, "release_pool": plan.release_pool,
+                "uncached_reads": plan.uncached_reads, "predicted_headroom": plan.predicted_headroom,
+                "predicted_decode_headroom": plan.predicted_decode_headroom, "reasons": list(plan.reasons),
+                "available_before": report["snapshot"].available, "pool_before": report["snapshot"].pool_bytes}
+
+    def _generate(self, max_tokens: int, out=None, on_prefilled=None,
+                  on_prefill_progress=None, on_decode_token=None,
+                  should_cancel=None) -> tuple[str, Stats]:
         """Feed everything pending through the model, then decode a reply.
 
         `on_prefilled` fires once the prompt is in the cache and before the
@@ -590,8 +845,15 @@ class FlashNextBackend(Conversation):
             # above. Block native MTP until reset.
             self._mtp_blocked = True
         prompt = list(self.tape) + self.pending if self._replay_needed else list(self.pending)
+        from models.flashnext import prefix_session
+
+        fresh_prefix_cache = (
+            prefix_session.enabled() and decoder is None
+            and (self._replay_needed or not self.tape) and self.cache_tokens == 0
+        )
         ids = mx.array(prompt)[None]
         prompt_tokens = int(ids.shape[1])
+        fresh_for_pool = decoder is None and (self._replay_needed or not self.tape) and self.cache_tokens == 0
         self.tape.extend(self.pending)
         self.pending = []
         self._replay_needed = False
@@ -621,6 +883,7 @@ class FlashNextBackend(Conversation):
         completed_layers = set()
 
         def layer_completed(layer_id):
+            progress.PROGRESS.tick()             # real forward progress for the out-of-process watchdog
             check_cancel()
             completed_layers.add(layer_id)
             if on_prefill_progress is not None and streamed_layers:
@@ -633,7 +896,24 @@ class FlashNextBackend(Conversation):
         set_prefill_progress(layer_completed)
         try:
             check_cancel()
-            if decoder is None:
+            self.last_pool_release = None
+            self.last_memory_report = None
+            from models.flashnext import memory_manager
+
+            if fresh_for_pool or memory_manager.enabled():
+                try:
+                    self._make_room_for_prefill(prompt, fresh_prefix_cache, fresh_for_pool)
+                except memory_manager.MemoryBudgetRefused:
+                    self._mark_replay_needed()        # nothing was allocated; the conversation can be retried
+                    raise
+            if decoder is None and fresh_prefix_cache:
+                # Opt-in (FLASHNEXT_PREFIX_CACHE=1): restore the longest stored exact prefix, prefill only
+                # the rest, snapshot at the system-prompt boundary. A fresh conversation only.
+                token, self.cache, self.last_prefix = self._prefix_session().prefill(
+                    self.language, prompt, self.cache, sampler=Sampler(self.sampling)
+                )
+            elif decoder is None:
+                self.last_prefix = None
                 _, token = prefill_language(
                     self.language, ids, self.cache, sampler=Sampler(self.sampling)
                 )
@@ -736,6 +1016,7 @@ class FlashNextBackend(Conversation):
                         budget_state["forced_close"] or "</think>" in piece
                     ):
                         budget_state["phase"] = "answer"
+                progress.PROGRESS.tick(len(produced) + 1)
                 if on_decode_token is not None:
                     on_decode_token(value, piece)
                 if not piece:

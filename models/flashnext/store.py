@@ -381,8 +381,23 @@ class SafeTensorStore:
                                 "F_RDAHEAD could not be cleared on "
                                 f"{shard}; refusing to run the arm"
                             )
+                    if getattr(self, "_uncached", False):
+                        fcntl.fcntl(fd, fcntl.F_NOCACHE, 1)
                     self._fds[shard] = fd
         return fd
+
+    def set_uncached_reads(self, enabled: bool) -> int:
+        """Opt-in (memory manager): read expert rows with F_NOCACHE so they do not fill the file cache.
+
+        Flips every open shard descriptor and every one opened later. The bytes read and their order are
+        unchanged, so results are identical; only whether macOS keeps a second copy in the file cache differs.
+        Returns the number of descriptors that were open.
+        """
+        with self._fd_lock:
+            self._uncached = bool(enabled)
+            for fd in list(self._fds.values()):
+                fcntl.fcntl(fd, fcntl.F_NOCACHE, 1 if enabled else 0)
+            return len(self._fds)
 
     def _mark_read(self, name: str, rows) -> None:
         """Record rows just pulled in, newest last, evicting the oldest."""

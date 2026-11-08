@@ -602,6 +602,159 @@ def _apply_seed(seed: int | None) -> None:
         mx.random.seed(seed)
 
 
+def _prepare_startup(prefs, benchmarking, display):
+    """Autonomous memory preparation before any model load (CHAT and AGENTIC). Returns (recovery, verdict).
+
+    Bounded rounds of safe recovery (Veystrix-owned memory, a conditional file-cache purge, optional graceful closing of
+    owner-listed apps), a settle wait and a fresh reading, then admission. AGENTIC stops here with ONE actionable report
+    (exit 69, nothing loaded) when no safe recovery can admit the launch. CHAT only prepares for the 9 GiB gate; the guard
+    that follows keeps deciding. See models/flashnext/resource_prep.py."""
+    if prefs["model"] != "flashnext" or benchmarking:
+        return None, None
+    from models.flashnext import prefill_readiness as readiness
+    from models.flashnext import memory_waiver, purge_recovery, resource_prep
+    from models.flashnext.app_closer import AppCloser
+
+    agentic = _agentic_mode()
+    recovery = purge_recovery.from_environment()
+    if recovery is not None and agentic:
+        recovery._blocker = readiness.purge_blocker_tiered      # no purge for a refusal that file cache cannot fix
+    out = lambda text: print(text, file=display, flush=True)
+    preparer = resource_prep.ResourcePreparer(agentic=agentic, recovery=recovery, closer=AppCloser(), out=out)
+    report = preparer.prepare()
+    if report.steps and any(step.action == "done" for step in report.steps):
+        for step in report.steps:
+            if step.action == "done":
+                print(f"memory preparation: {step.name}: {step.detail} "
+                      f"(available {step.available_before / 2 ** 30:.2f} -> {step.available_after / 2 ** 30:.2f} GiB)",
+                      file=display, flush=True)
+    if agentic:
+        if not report.admitted and memory_waiver.active():
+            return recovery, report.verdict            # _admit_agentic records the waiver and sets the requested tier
+        if not report.admitted:
+            readiness.log(report.verdict)
+            print(report.failure_report(), file=sys.stderr, flush=True)
+            raise SystemExit(readiness.ADMISSION_EXIT_CODE)
+        return recovery, report.verdict
+    if recovery is not None:
+        print(f"auto-purge: start gate {'READY' if report.admitted else 'NOT reached'} "
+              f"({report.verdict.categories['gate_available'] / 2 ** 30:.2f} GiB available, {report.seconds:.0f}s)"
+              + ("" if report.admitted else f"; the safety guard decides: {report.stop_reason}"), file=display, flush=True)
+    return recovery, None
+
+
+def _apply_tier(verdict, display) -> None:
+    """Enforce the admitted size: a smaller context and cold-prefill limit than the default only when memory required it."""
+    tier = getattr(verdict, "tier", None)
+    if tier is None:
+        return
+    from models.flashnext.settings import modes
+
+    current = modes.context_limit_from_environment()
+    limit = min(tier.context_limit, current) if current else tier.context_limit
+    os.environ["VEYSTRIX_CONTEXT_LIMIT"] = str(limit)
+    os.environ["VEYSTRIX_MAX_COLD_PREFILL"] = str(tier.max_cold_prefill)
+    if tier.name != "standard":
+        print(f"admitted at tier {tier.name}: context limit {limit}, cold prefill up to {tier.max_cold_prefill} tokens "
+              f"(memory does not admit the standard tier right now; larger requests are refused, never truncated)",
+              file=display, flush=True)
+
+
+def _start_watchdog(chat_guard, display):
+    """AGENTIC: spawn the out-of-process stall watchdog (FLASHNEXT_WATCHDOG=1). It shares no interpreter with this process."""
+    from models.flashnext import progress
+
+    if not progress.enabled():
+        return None
+    process = progress.start_watchdog(trace_path=str(chat_guard.path) if chat_guard is not None else None)
+    if process is not None:
+        import atexit
+
+        atexit.register(progress.PROGRESS.stage, "stopping")
+        print(f"watchdog       ON  (separate process {process.pid}; stage deadlines "
+              f"{progress.status_dir()})", file=display, flush=True)
+    return process
+
+
+def _agentic_mode() -> bool:
+    return os.environ.get("VEYSTRIX_MODE") == "agentic"
+
+
+def _admit_agentic(prefs, benchmarking, display, verdict=None):
+    """AGENTIC only: refuse to load when the cold-prefill budget is not met (the 9 GiB gate is part of the verdict).
+
+    Runs before the guard and before any model load; returns the verdict, or exits with the admission code. ``verdict`` is
+    the tiered one from ``_prepare_startup``; without it the standard-size verdict is read here."""
+    if prefs["model"] != "flashnext" or benchmarking or not _agentic_mode():
+        return None
+    from models.flashnext import prefill_readiness as readiness
+
+    from models.flashnext import memory_waiver
+
+    if verdict is None:
+        verdict = readiness.live()
+    readiness.log(verdict)
+    if not verdict.admitted and memory_waiver.active():
+        # The owner's waiver: launch at the smallest tier that serves the stated context, whatever the headroom rule says.
+        tiers = readiness.active_tiers()
+        tier = tiers[-1]
+        print(memory_waiver.banner(), file=sys.stderr, flush=True)
+        print(readiness.render(verdict), file=sys.stderr, flush=True)
+        print(f"waived refusal; launching at tier {tier.name} (context {tier.context_limit}, cold prefill up to "
+              f"{tier.max_cold_prefill})", file=sys.stderr, flush=True)
+        import dataclasses
+        readiness.log(dataclasses.replace(verdict, tier=tier, advice=[*verdict.advice, "launched under FLASHNEXT_MEMORY_WAIVER"]))
+        _apply_tier(dataclasses.replace(verdict, tier=tier), display)
+        return verdict
+    if not verdict.admitted:
+        print(readiness.render(verdict), file=sys.stderr, flush=True)
+        print("Nothing was loaded. No guard was weakened; free the memory named above and start again.",
+              file=sys.stderr, flush=True)
+        raise SystemExit(readiness.ADMISSION_EXIT_CODE)
+    print("prefill readiness: " + verdict.checks[0].detail, file=display, flush=True)
+    _apply_tier(verdict, display)
+    return verdict
+
+
+def _purge_monitor(recovery, backend, display) -> None:
+    """Watch every FLASHNEXT_PURGE_CHECK_SECONDS while idle (chat prompt or server), stop cleanly at exit."""
+    if recovery is None:
+        return
+    import atexit
+    from models.flashnext import purge_recovery
+
+    if hasattr(backend, "reclaim_owned_memory"):
+        recovery.add_reclaim(backend.reclaim_owned_memory)
+    monitor = purge_recovery.Monitor(recovery).start()
+    purge_recovery.register(recovery)             # also recovers at the request boundary (purge_recovery.prepare_for_request)
+    atexit.register(monitor.stop)
+    atexit.register(purge_recovery.register, None)
+    print(f"auto-purge: idle monitor every {recovery.cfg.interval_s:g}s and before each request (purge only when "
+          f"justified; log {recovery.log_path})", file=display, flush=True)
+
+
+def _print_mode_banner(prefs, args, display, chat_guard) -> None:
+    """Show the launch mode, checkpoint, pool, cache, chunk policy, memory readiness and supervisor state."""
+    if prefs["model"] != "flashnext":
+        return
+    from models.flashnext.settings import modes
+
+    plan = modes.plan_from_environment()
+    if plan is None:
+        return
+    available = None
+    try:
+        from models.flashnext.memory_manager import read_system
+
+        available = read_system().get("available", 0) / 1e9 or None
+    except Exception:
+        pass
+    trace = getattr(getattr(chat_guard, "path", None), "name", None)
+    print(modes.banner(plan, checkpoint=args.model_path, available_gb=available, guard_trace=trace,
+                       auto_purge=os.environ.get("FLASHNEXT_AUTO_PURGE") == "1"),
+          file=display, flush=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     from macqwen.model_settings import FLASHNEXT_DEFAULTS
@@ -852,12 +1005,34 @@ def main() -> int:
     began = time.time()
     product_json = args.benchmark_product_json
     display = sys.stderr if benchmarking else sys.stdout
+    recovery, prepared = _prepare_startup(prefs, benchmarking, display)
+    _admit_agentic(prefs, benchmarking, display, prepared)
+    chat_guard = None
+    if (prefs["model"] == "flashnext" and not benchmarking
+            and os.environ.get("FLASHNEXT_CHAT_GUARD") == "1"):
+        import tempfile
+        from models.flashnext.chat_guard import ChatGuard
+
+        trace = Path(tempfile.gettempdir()) / f"veystrix-chat-{os.getpid()}.jsonl"
+        chat_guard = ChatGuard(trace).start()
+        print(f"FlashNext safety trace: {trace}", file=display, flush=True)
+    _start_watchdog(chat_guard, display)
+    _print_mode_banner(prefs, args, display, chat_guard)
     print(f"{C['dim']}loading {prefs['model']}...{C['0']}", flush=True, file=display)
-    if benchmarking:
-        with contextlib.redirect_stdout(sys.stderr):
+    from models.flashnext.purge_recovery import ACTIVITY
+
+    from models.flashnext import progress as _progress
+
+    _progress.PROGRESS.stage("loading")
+    with ACTIVITY.loading_model():          # a cache purge never runs while the checkpoint loads
+        if benchmarking:
+            with contextlib.redirect_stdout(sys.stderr):
+                backend = build_backend(prefs["model"], args, prefs)
+        else:
             backend = build_backend(prefs["model"], args, prefs)
-    else:
-        backend = build_backend(prefs["model"], args, prefs)
+    _progress.PROGRESS.stage("idle")
+    if chat_guard is not None:
+        chat_guard.tracer.store = backend.store
     _apply_seed(args.seed)
     session = Session(
         backend,
@@ -868,6 +1043,7 @@ def main() -> int:
         migrate_system_prompt=not benchmarking,
     )
     ready_seconds = time.time() - began
+    _purge_monitor(recovery, backend, display)
     print(f"{C['dim']}ready in {time.time() - began:.1f}s  "
           f"{prefs['model']} / {prefs['profile']}  "
           f"use /help for commands{C['0']}\n", file=display)
@@ -888,8 +1064,11 @@ def main() -> int:
     if args.server:
         from macqwen.server import serve
 
+        from models.flashnext.settings.modes import context_limit_from_environment, max_cold_prefill_from_environment
+
         serve(session, args.host, args.port, args.server_api_key,
-              args.allow_origin)
+              args.allow_origin, context_limit=context_limit_from_environment(),
+              max_cold_prefill=max_cold_prefill_from_environment())
         return 0
     print(commands.render_help(session.profile) + "\n")
 

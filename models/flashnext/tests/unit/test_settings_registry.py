@@ -23,6 +23,10 @@ class SettingsRegistryTests(unittest.TestCase):
         # Internal storage, kernel, prefill, and speculative probes stay
         # explicit until a user-facing setting provider owns them.
         allowlisted_internal = {
+            # Safety supervisor switch set by the CHAT and AGENTIC launch modes, not a user tuning setting.
+            "FLASHNEXT_CHAT_GUARD", "FLASHNEXT_WATCHDOG", "FLASHNEXT_WATCHDOG_DEADLINES", "FLASHNEXT_WATCHDOG_HARD",
+            "FLASHNEXT_WATCHDOG_ACTIVITY_WINDOW", "FLASHNEXT_WATCHDOG_POLL", "FLASHNEXT_WATCHDOG_GRACE",
+            "FLASHNEXT_WATCHDOG_KILL_WAIT", "FLASHNEXT_WATCHDOG_SAMPLE",
             # Storage and allocator diagnostics.
             "FLASHNEXT_DLPACK", "FLASHNEXT_F_NOCACHE", "FLASHNEXT_RDAHEAD",
             "FLASHNEXT_MMAP_ADVICE", "FLASHNEXT_NGRAM_DONTNEED",

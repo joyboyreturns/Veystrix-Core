@@ -12,6 +12,7 @@ child-process supervisor, and the exactness, gate and paired-effect analysis.
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 import os
 import re
 import statistics
@@ -57,7 +58,7 @@ LATER_PREFACE = "Now summarize this further text in one sentence.\n\n"
 
 def production_flags() -> dict[str, str]:
     """Environment names of the opt-in flags, read from the production modules."""
-    from models.flashnext import prefill_memory, prefill_ring
+    from models.flashnext import linear_state, memory_manager, pool_lifecycle, prefill, prefill_memory, prefill_ring, prefix_session
 
     return {
         "ring": prefill_ring.FLAG_EXPERTS,
@@ -66,6 +67,14 @@ def production_flags() -> dict[str, str]:
         "min_tokens": prefill_ring.FLAG_MIN_TOKENS,
         "margin_gb": prefill_ring.FLAG_MARGIN_GB,
         "transient_gb": prefill_ring.FLAG_TRANSIENT_GB,
+        "linear_state": linear_state.FLAG,
+        "chunk_tokens": prefill.FLAG_CHUNK_TOKENS,
+        "chunk_policy": prefill.FLAG_CHUNK_POLICY,
+        "prefix_cache": prefix_session.FLAG,
+        "prefix_restore": prefix_session.FLAG_RESTORE,
+        "release_pool": pool_lifecycle.FLAG,
+        "memory_manager": memory_manager.FLAG,
+        "short_uncached": memory_manager.FLAG_SHORT_UNCACHED,
     }
 
 
@@ -82,10 +91,22 @@ class Condition:
     # Test-only control: the baseline with F_NOCACHE on the store's shard descriptors, set by the
     # benchmark child on its own store object. No environment flag, no production change.
     uncached_reads: bool = False
+    # FLASHNEXT_EVAL_LINEAR_STATE=1: evaluate each GatedDeltaNet conv state as its layer finishes. Read at
+    # import, so it applies to first-turn arms (the flag is in the child's launch environment).
+    linear_state: bool = False
+    chunk_tokens: int = 0         # FLASHNEXT_PREFILL_CHUNK_TOKENS; 0 = one call
+    chunk_policy: str = ""        # FLASHNEXT_PREFILL_CHUNK_POLICY; "" = unset (the grid policy)
+    prefix_cache: bool = False    # FLASHNEXT_PREFIX_CACHE=1 (directory and budgets come from the child options)
+    release_pool: bool = False    # FLASHNEXT_PREFILL_RELEASE_DECODE_POOL=1: drop the decode pool before a fresh ring-eligible prefill
+    memory_manager: bool = False  # FLASHNEXT_MEMORY_MANAGER=1: the adaptive memory manager plans every prefill
+    short_uncached: bool = False  # FLASHNEXT_MEMORY_SHORT_UNCACHED=1: short prefills read experts with F_NOCACHE
+    prefix_restore: bool = True   # False: FLASHNEXT_PREFIX_CACHE_RESTORE=0, the session's chunk plan without restoring or snapshots
 
     @property
     def is_baseline(self) -> bool:
-        return self.ring == 0 and not self.scratch and self.cache_mb == 0 and not self.uncached_reads
+        return (self.ring == 0 and not self.scratch and self.cache_mb == 0 and not self.uncached_reads
+                and not self.linear_state and not self.chunk_tokens and not self.prefix_cache
+                and not self.chunk_policy)
 
     @property
     def ring_on(self) -> bool:
@@ -114,6 +135,35 @@ DIAGNOSTIC_CONDITIONS: dict[str, Condition] = {c.id: c for c in (
     Condition("F2s", "first", ring=SMALL_RING_EXPERTS, scratch=True,
               summary="diagnostic: F2 with a 256-expert scratch ring; a layer that routes more experts "
                       "than 256 falls back to the normal read path"),
+    Condition("F2L", "first", ring=RING_EXPERTS, scratch=True, linear_state=True,
+              summary="F2 plus eager GatedDeltaNet state evaluation (FLASHNEXT_EVAL_LINEAR_STATE=1)"),
+    Condition("F2P", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=512,
+              prefix_cache=True,
+              summary="F2L plus 512-token chunked prefill and the exact prefix cache (long-context validation)"),
+    Condition("F2B", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=2048,
+              chunk_policy="balanced", prefix_cache=True,
+              summary="F2L plus boundary-aware 2,048-token chunked prefill and the exact prefix cache"),
+    Condition("F2Pn", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=512,
+              prefix_cache=True, prefix_restore=False,
+              summary="F2P with restore and snapshots off: the identical 512-token chunk plan, always cold (same-plan reference)"),
+    Condition("F2Bn", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=2048,
+              chunk_policy="balanced", prefix_cache=True, prefix_restore=False,
+              summary="F2B with restore and snapshots off: the identical balanced 2,048-token plan, always cold (same-plan reference)"),
+    Condition("F2Bnr", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=2048,
+              chunk_policy="balanced", prefix_cache=True, prefix_restore=False, release_pool=True,
+              summary="F2Bn plus the decode-pool release before a fresh long prefill (sequential cold requests)"),
+    Condition("F2Br", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=2048,
+              chunk_policy="balanced", prefix_cache=True, release_pool=True,
+              summary="F2B plus the decode-pool release: balanced 2,048 plan, exact prefix cache, sequential long requests"),
+    Condition("F2Pnr", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=512,
+              prefix_cache=True, prefix_restore=False, release_pool=True,
+              summary="F2Pn plus the decode-pool release: the validated 512-token plan, always cold (quality reference)"),
+    Condition("F2Bm", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=2048,
+              chunk_policy="balanced", prefix_cache=True, memory_manager=True,
+              summary="F2B under the adaptive memory manager (automatic pool budget, release, eviction)"),
+    Condition("F2Bmu", "first", ring=RING_EXPERTS, scratch=True, linear_state=True, chunk_tokens=2048,
+              chunk_policy="balanced", prefix_cache=True, memory_manager=True, short_uncached=True,
+              summary="F2Bm plus uncached expert reads during short prefills"),
     Condition("F0u", "first", uncached_reads=True,
               summary="test-only control: baseline with uncached (F_NOCACHE) expert reads; no pool, no ring"),
 )}
@@ -136,6 +186,22 @@ def condition_overlay(cond: Condition, flags: dict[str, str] | None = None) -> d
         overlay[names["scratch"]] = "1"
     if cond.cache_mb:
         overlay[names["cache_mb"]] = str(cond.cache_mb)
+    if cond.linear_state:
+        overlay[names["linear_state"]] = "1"
+    if cond.chunk_tokens:
+        overlay[names["chunk_tokens"]] = str(cond.chunk_tokens)
+    if cond.chunk_policy:
+        overlay[names["chunk_policy"]] = cond.chunk_policy
+    if cond.release_pool:
+        overlay[names["release_pool"]] = "1"
+    if cond.memory_manager:
+        overlay[names["memory_manager"]] = "1"
+    if cond.short_uncached:
+        overlay[names["short_uncached"]] = "1"
+    if cond.prefix_cache:
+        overlay[names["prefix_cache"]] = "1"
+        if not cond.prefix_restore:
+            overlay[names["prefix_restore"]] = "0"
     return overlay
 
 
@@ -242,6 +308,83 @@ def build_prompts(tokenizer, source: str, tokens: int, offset: int = FOLLOW_UP_O
         "source_hash": digest_text(source),
         "first_hash": digest_text(first), "later_hash": digest_text(later),
         "first_ids": first_n, "later_ids": later_n,
+    }
+
+
+LONG_SYSTEM_HEADER = "\n\nReference notes. Read them before answering:\n"
+QUESTION_PREFACE = "Using the notes above, answer in one sentence: what does this passage say?\n\n"
+LONG_NOTES_OFFSET = 1000          # source tokens used for the long system message
+LONG_QUESTION_OFFSETS = {"A": 30000, "B": 31000}
+LONG_QUESTION_TOKENS = 48
+
+
+AGENT_PROMPT_FILE = Path(__file__).resolve().parent / "fixtures" / "agent_system_prompt.txt"
+AGENT_QUESTIONS = {
+    "A": "What does the ring buffer in this repository do?",
+    "B": "List the tests that cover the prefix cache.",
+}
+
+
+def build_agent_prompts(tokenizer, path=AGENT_PROMPT_FILE) -> dict:
+    """A realistic coding-agent system prompt (about 2K tokens) and two different short user questions.
+
+    The token counts are measured with the real chat template, and the system-message count is where the
+    first ``<|im_end|>\\n`` ends, which is where the prefix cache snapshots.
+    """
+    from macqwen.conversation import Conversation
+
+    system = Path(path).read_text().strip()
+    marker = tokenizer.encode("<|im_end|>\n", add_special_tokens=False)
+    counts = {}
+    for name, question in AGENT_QUESTIONS.items():
+        conversation = Conversation(tokenizer)
+        conversation.open_conversation(system, question, enable_thinking=False)
+        ids = list(conversation.pending)
+        boundary = next(i + len(marker) for i in range(len(ids)) if ids[i:i + len(marker)] == marker)
+        counts[name] = {"prompt_tokens": len(ids), "system_message_tokens": boundary,
+                        "user_and_generation_tokens": len(ids) - boundary}
+    return {
+        "system": system, "questions": dict(AGENT_QUESTIONS), "system_hash": digest_text(system),
+        "question_hashes": {k: digest_text(v) for k, v in AGENT_QUESTIONS.items()},
+        "token_counts": counts, "system_words": len(system.split()),
+    }
+
+
+def build_long_prompts(tokenizer, source: str, tokens: int = 1025) -> dict:
+    """A long system message (about ``tokens`` minus the question) and two different short questions.
+
+    Lets one system prompt be reused across requests. The system text is the standard short sentence plus
+    reference notes cut from the fixed source text, sized so that the first request is close to ``tokens``
+    after the chat template. Token counts are measured with the real template, never assumed.
+    """
+    from macqwen.conversation import Conversation
+
+    ids = tokenizer.encode(source)
+    needed = max(LONG_QUESTION_OFFSETS.values()) + LONG_QUESTION_TOKENS
+    if len(ids) < needed:
+        raise ValueError("source text is too short for the long-system prompts")
+    questions = {name: QUESTION_PREFACE + tokenizer.decode(ids[offset:offset + LONG_QUESTION_TOKENS])
+                 for name, offset in LONG_QUESTION_OFFSETS.items()}
+
+    def system_for(count: int) -> str:
+        return SYSTEM_TEXT + LONG_SYSTEM_HEADER + tokenizer.decode(ids[LONG_NOTES_OFFSET:LONG_NOTES_OFFSET + count])
+
+    def measure(system: str, question: str) -> int:
+        conversation = Conversation(tokenizer)
+        return int(conversation.open_conversation(system, question, enable_thinking=False))
+
+    count = max(16, tokens - TEMPLATE_OVERHEAD_FIRST - LONG_QUESTION_TOKENS - 24)
+    for _ in range(4):                                  # converge on the requested size
+        got = measure(system_for(count), questions["A"])
+        if got == tokens:
+            break
+        count += tokens - got
+    system = system_for(count)
+    return {
+        "system": system, "questions": questions, "system_hash": digest_text(system),
+        "question_hashes": {k: digest_text(v) for k, v in questions.items()},
+        "tokens": {k: measure(system, v) for k, v in questions.items()},
+        "notes_tokens": count,
     }
 
 
@@ -440,6 +583,8 @@ class Watchdog:
         if policy.final:
             if source != "ac":
                 return "a final run needs AC power"
+            if sample.get("battery_state") == "discharging":
+                return "AC is reported but the battery is discharging; final-run power is ambiguous"
             if sample.get("low_power") is None:
                 return "Low Power Mode state is unreadable in a final run"
         if level is not None and level >= policy.pressure_stop_level:

@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
 import json
+import os
 import re
+import select
+import socket
+import sys
+import threading
 import time
 import uuid
 from urllib.parse import urlsplit
@@ -21,10 +26,17 @@ from macqwen.conversation import (
     reasoning_system_text,
     split_content_slots,
 )
+from macqwen import context_budget
 from macqwen.profiles import system_prompt
+from macqwen.scheduler import Busy, ClientGone, Scheduler
+from macqwen.sessions import SessionRegistry, derive_key, explicit_id
 
 
 MAX_BODY = 16 * 1024 * 1024
+# Tokens always kept free for the answer. A prompt that leaves less is refused rather than answered with a stub.
+MIN_OUTPUT_RESERVE = context_budget.MIN_OUTPUT_RESERVE
+GONE_CHECK_SECONDS = 1.0
+SSE_KEEPALIVE_SECONDS = float(os.environ.get("VEYSTRIX_SSE_KEEPALIVE_SECONDS", "15"))
 TOOL_CALL = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
 XML_FUNCTION = re.compile(
     r"\s*<function=([^>\s]+)>(.*?)(?:</function>|</>)?\s*$", re.DOTALL
@@ -35,9 +47,33 @@ XML_PARAMETER = re.compile(
 
 
 class RequestError(ValueError):
-    def __init__(self, message: str, status: int = 400):
+    kind: str | None = None             # explicit OpenAI error type; None derives it from the status
+
+    def __init__(self, message: str, status: int = 400, code: str | None = None):
         super().__init__(message)
         self.status = status
+        self.code = code
+
+
+class ContextLimitError(RequestError):
+    """The prompt does not fit the configured context limit. Nothing is truncated and live state is kept."""
+
+    def __init__(self, message: str, status: int = 400, code: str | None = "context_length_exceeded"):
+        super().__init__(message, status, code)
+
+
+class ModelToolCallError(RequestError):
+    """The MODEL produced a tool call that is malformed or breaks the client's declared schema.
+
+    Not the client's mistake and not an API serialization failure, so it is a ``server_error``, not an
+    ``invalid_request_error``. It stays a non-retryable 4xx on purpose: a client that auto-retries 5xx would repeat a
+    full (slow) generation that is likely to fail the same way. A harness can feed the message back to the model.
+    """
+
+    kind = "server_error"
+
+    def __init__(self, message: str):
+        super().__init__(message, 422, "model_tool_call_invalid")
 
 
 @dataclass
@@ -47,17 +83,24 @@ class Completion:
     stats: object
 
 
-def _text_content(content) -> str:
-    if isinstance(content, str):
-        return content
+TEXT_PARTS = ("text", "input_text", "output_text")
+
+
+def _text_content(content, where: str = "content") -> str:
+    """Join text parts. A part that is not text is an error, never dropped."""
+    if content is None or isinstance(content, str):
+        return content or ""
     if not isinstance(content, list):
-        return ""
+        raise RequestError(f"{where} must be a string or a list of text parts")
     parts = []
     for block in content:
-        if not isinstance(block, dict):
-            continue
-        if block.get("type") in ("text", "input_text", "output_text"):
-            parts.append(str(block.get("text", "")))
+        if not isinstance(block, dict) or block.get("type") not in TEXT_PARTS:
+            kind = block.get("type") if isinstance(block, dict) else type(block).__name__
+            raise RequestError(
+                f"{where} has a {kind!r} part; this server is text-only and "
+                "will not discard it"
+            )
+        parts.append(str(block.get("text", "")))
     return "".join(parts)
 
 
@@ -82,22 +125,80 @@ def _openai_tools(tools) -> list[dict]:
     return result
 
 
+# Message fields the server understands. Anything else with a value is an
+# error: a field that changes what the model sees must not be dropped quietly.
+MESSAGE_FIELDS = {"role", "content", "tool_calls", "tool_call_id", "reasoning_content"}
+TOOL_ONLY_FIELDS = {"name"}  # the tool's name; tool_call_id already carries the link
+IGNORABLE_EMPTY = {"refusal", "audio", "annotations", "function_call"}
+
+
+def _template_tool_call(call, where: str) -> dict:
+    """One OpenAI tool call in the shape the Qwen template renders.
+
+    The wire format carries arguments as a JSON string; the template iterates
+    a mapping. Arguments that are not a JSON object are an error.
+    """
+    if not isinstance(call, dict):
+        raise RequestError(f"{where}: a tool call must be an object")
+    function = call.get("function")
+    if not isinstance(function, dict):
+        raise RequestError(f"{where}: tool call has no function object")
+    name = function.get("name")
+    if not isinstance(name, str) or not name:
+        raise RequestError(f"{where}: tool call has no function name")
+    arguments = function.get("arguments", "")
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments) if arguments.strip() else {}
+        except ValueError:
+            raise RequestError(
+                f"{where}: arguments of tool call {name!r} are not valid JSON"
+            ) from None
+    if not isinstance(arguments, dict):
+        raise RequestError(
+            f"{where}: arguments of tool call {name!r} must be a JSON object"
+        )
+    extra = sorted(set(call) - {"id", "type", "function"})
+    if extra:
+        raise RequestError(f"{where}: unsupported tool call fields {extra}")
+    item = {"type": "function", "function": {"name": name, "arguments": arguments}}
+    if call.get("id"):
+        item["id"] = call["id"]
+    return item
+
+
 def _normalize_messages(messages) -> list[dict]:
     if not isinstance(messages, list) or not messages:
         raise RequestError("messages must be a non-empty list")
     normalized = []
-    for message in messages:
+    for index, message in enumerate(messages):
+        where = f"messages[{index}]"
         if not isinstance(message, dict):
             raise RequestError("each message must be an object")
         role = message.get("role")
         if role not in ("system", "developer", "user", "assistant", "tool"):
             raise RequestError(f"unsupported message role: {role}")
+        for key, value in message.items():
+            if key in MESSAGE_FIELDS or (key in TOOL_ONLY_FIELDS and role == "tool"):
+                continue
+            if key in IGNORABLE_EMPTY and value in (None, "", [], {}):
+                continue
+            raise RequestError(f"{where}: unsupported message field {key!r}")
         item = {"role": "system" if role == "developer" else role,
-                "content": _text_content(message.get("content", ""))}
+                "content": _text_content(message.get("content", ""), f"{where}.content")}
         if message.get("tool_calls"):
-            item["tool_calls"] = message["tool_calls"]
+            if role != "assistant":
+                raise RequestError(f"{where}: only assistant messages carry tool_calls")
+            if not isinstance(message["tool_calls"], list):
+                raise RequestError(f"{where}: tool_calls must be a list")
+            item["tool_calls"] = [
+                _template_tool_call(call, f"{where}.tool_calls[{number}]")
+                for number, call in enumerate(message["tool_calls"])
+            ]
         if message.get("tool_call_id"):
             item["tool_call_id"] = message["tool_call_id"]
+        if isinstance(message.get("reasoning_content"), str):
+            item["reasoning_content"] = message["reasoning_content"]
         normalized.append(item)
     return normalized
 
@@ -188,15 +289,74 @@ def _coerce_argument(value: str, kind: str | None, *, tool="", key="parameter"):
     # escaping exactly once. String payloads keep their bytes; only
     # typed scalar conversion normalizes whitespace. Bad typed values
     # raise ToolCallValidationError for the caller to report.
+    # Arrays and objects arrive as JSON text and must parse to that type.
+    if kind in ("array", "object"):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            parsed = None
+        if not isinstance(parsed, list if kind == "array" else dict):
+            raise ToolCallValidationError(
+                f"tool {tool!r} parameter {key!r} expects a JSON {kind}, got {value!r}"
+            )
+        return parsed
     return coerce_scalar(value, kind, tool=tool, key=key)
+
+
+def _validate_call(name: str, arguments, schema: dict | None) -> None:
+    """Check one call against the schema the client declared.
+
+    Nothing is repaired or dropped: an unknown tool, an unknown or missing
+    parameter, a value outside an enum, or a wrongly typed value raises with
+    the offender named so the harness can return it to the model.
+    """
+    if schema is None:
+        raise ModelToolCallError(f"model called tool {name!r}, which this request did not declare")
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments) if arguments.strip() else {}
+        except ValueError:
+            raise ModelToolCallError(f"tool {name!r} arguments are not valid JSON") from None
+    if not isinstance(arguments, dict):
+        raise ModelToolCallError(f"tool {name!r} arguments must be a JSON object")
+    properties = schema.get("properties", {}) or {}
+    if schema.get("additionalProperties") is not True:
+        unknown = sorted(set(arguments) - set(properties))
+        if unknown:
+            raise ModelToolCallError(
+                f"tool {name!r} has no parameter {unknown[0]!r}; "
+                f"accepted: {sorted(properties)}"
+            )
+    missing = [key for key in schema.get("required", []) if key not in arguments]
+    if missing:
+        raise ModelToolCallError(f"tool {name!r} is missing required parameter {missing[0]!r}")
+    kinds = {"string": str, "boolean": bool, "array": list, "object": dict}
+    for key, value in arguments.items():
+        spec = properties.get(key, {})
+        allowed = spec.get("enum")
+        if allowed is not None and value not in allowed:
+            raise ModelToolCallError(
+                f"tool {name!r} parameter {key!r} must be one of {allowed}, got {value!r}"
+            )
+        kind = spec.get("type")
+        if kind in ("integer", "number"):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ModelToolCallError(f"tool {name!r} parameter {key!r} expects {kind}, got {value!r}")
+            if kind == "integer" and isinstance(value, float) and not value.is_integer():
+                raise ModelToolCallError(f"tool {name!r} parameter {key!r} expects integer, got {value!r}")
+        elif kind in kinds and not isinstance(value, kinds[kind]):
+            raise ModelToolCallError(f"tool {name!r} parameter {key!r} expects {kind}, got {value!r}")
 
 
 def _parse_tool_calls(text: str, tools=None) -> tuple[str, list[dict]]:
     calls = []
     schemas = {}
+    declared = {}
     for tool in _openai_tools(tools):
         function = tool["function"]
-        properties = function.get("parameters", {}).get("properties", {})
+        parameters = function.get("parameters", {}) or {}
+        properties = parameters.get("properties", {}) or {}
+        declared[function["name"]] = parameters
         schemas[function["name"]] = {
             name: value.get("type") for name, value in properties.items()
         }
@@ -226,7 +386,7 @@ def _parse_tool_calls(text: str, tools=None) -> tuple[str, list[dict]]:
                 # The model sent a typed value its schema rejects. Fail
                 # the request with the parameter named so the client
                 # harness can feed the message back and the model retries.
-                raise RequestError(str(exc)) from None
+                raise ModelToolCallError(str(exc)) from None
             calls.append({"id": f"call_{uuid.uuid4().hex}", "name": name,
                           "arguments": json.dumps(arguments)})
         else:
@@ -239,6 +399,9 @@ def _parse_tool_calls(text: str, tools=None) -> tuple[str, list[dict]]:
                 "name": name,
                 "arguments": arguments if isinstance(arguments, str) else json.dumps(arguments),
             })
+    if tools:
+        for call in calls:
+            _validate_call(call["name"], call["arguments"], declared.get(call["name"]))
     clean = text.rsplit("<tool_call>", 1)[0] if fallback else TOOL_CALL.sub("", text)
     return clean.strip(), calls
 
@@ -352,6 +515,9 @@ def _tokenizer_windows(tokenizer):
 
 
 def _context_window_for(service) -> int:
+    configured = getattr(service, "context_limit", None)
+    if isinstance(configured, int) and not isinstance(configured, bool) and configured > 0:
+        return configured
     backend = _service_backend(service)
     if backend is not None:
         found = _window_from_object(backend)
@@ -452,6 +618,76 @@ def model_card(service) -> dict:
     }
 
 
+_STARTED = int(time.time())
+
+
+def model_entry(card: dict, service) -> dict:
+    """The OpenAI-shaped model object. ``context_window`` is what this server will accept, not the model's maximum."""
+    limit = getattr(service, "context_limit", None)
+    enforced = isinstance(limit, int) and not isinstance(limit, bool) and limit > 0
+    return {
+        "id": card["slug"],
+        "object": "model",
+        "created": _STARTED,
+        "owned_by": "macqwen",
+        "context_window": card["context_window"],
+        "context_limit_enforced": enforced,
+        "max_output_tokens": max(1, card["context_window"] - MIN_OUTPUT_RESERVE) if enforced else None,
+        # What to configure as the CLIENT's context window: this window plus the client's own hard-coded reserve
+        # (DeepSeek Harness subtracts 4096 before computing max_completion_tokens). See macqwen/context_budget.py.
+        "suggested_client_context_window": (context_budget.suggested_client_window(card["context_window"])
+                                            if enforced else None),
+        "client_safety_tokens_assumed": context_budget.CLIENT_SAFETY_TOKENS if enforced else None,
+        # The four different numbers, kept apart. Only the server limit and the admitted tier are enforced; a native
+        # capability or a configured 262144 never means the machine can run it.
+        "context": _context_report(service, limit, enforced),
+        "reasoning": {
+            "efforts": ["low", "medium", "high", "xhigh"],
+            "max": "accepted and clamped to xhigh (no distinct level on this checkpoint)",
+            "off": "reasoning.effort=none, reasoning.enabled=false or chat_template_kwargs.enable_thinking=false",
+            "wire": ["reasoning.effort", "reasoning_effort", "chat_template_kwargs.enable_thinking", "enable_thinking"],
+            "default": "thinking off, effort medium (when the request carries no reasoning field)",
+            "applied_to": "the request that carries it; nothing is stored on the server or the session",
+            "decoder_thinking_budget": False,
+            "response_header": "X-Veystrix-Reasoning",
+        },
+    }
+
+
+def _context_report(service, limit, enforced) -> dict:
+    backend = _service_backend(service)
+    native = context_budget.native_context_window(getattr(backend, "model_path", None)) if backend is not None else None
+    cold = getattr(service, "max_cold_prefill", None)
+    return {
+        "native_positional_capability": native,
+        "configured_server_limit": limit if enforced else None,
+        "memory_admitted_max_cold_prefill": cold,
+        "validated_on_this_machine": dict(context_budget.VALIDATION),
+        "overflow": "a prompt over the configured limit is refused with HTTP 400 context_length_exceeded; nothing is truncated",
+    }
+
+
+def health(service, scheduler) -> dict:
+    """Liveness plus readiness. ``ready`` is false after a GPU lifecycle fault (the process must be restarted)."""
+    try:
+        from models.flashnext import pool_lifecycle
+
+        fault = pool_lifecycle.lifecycle_fault()
+    except Exception:
+        fault = None
+    loaded = _service_backend(service) is not None
+    ready = loaded and not fault
+    report = {"status": "ok" if ready else "unavailable", "ready": ready, "model": getattr(service, "model", ""),
+              "busy": scheduler.busy, "queue": scheduler.snapshot(),
+              "context_limit": getattr(service, "context_limit", None)}
+    if fault:
+        report["fault"] = str(fault)
+    state = getattr(service, "cache_state", None)
+    if callable(state):
+        report["cache"] = state()
+    return report
+
+
 def _anthropic_stop(result) -> str:
     if getattr(getattr(result, "stats", None), "finish", None) == "length":
         return "max_tokens"
@@ -460,14 +696,100 @@ def _anthropic_stop(result) -> str:
     return "end_turn"
 
 
+def _log_request(backend, stats, wall: float, first_piece, calls: int, started: float, text=None, extra=None) -> None:
+    """Opt-in per-request record (MACQWEN_REQUEST_LOG=1 for stderr, or a JSONL path)."""
+    target = os.environ.get("MACQWEN_REQUEST_LOG")
+    if not target:
+        return
+    prefix = getattr(backend, "last_prefix", None)
+    row = {
+        "time": time.time(), "wall_seconds": round(wall, 3),
+        "ttft_seconds": None if first_piece is None else round(first_piece - started, 3),
+        "prompt_tokens": getattr(stats, "prompt_tokens", None),
+        "prefill_seconds": round(getattr(stats, "prefill_seconds", 0.0), 3),
+        "prefill_tokens_per_second": round(getattr(stats, "prompt_rate", 0.0), 2),
+        "completion_tokens": getattr(stats, "tokens", None),
+        "decode_seconds": round(getattr(stats, "seconds", 0.0), 3),
+        "decode_tokens_per_second": round(getattr(stats, "rate", 0.0), 3),
+        "finish": getattr(stats, "finish", None), "tool_calls": calls,
+        "prefix": prefix.as_dict() if hasattr(prefix, "as_dict") else prefix,
+    }
+    if text is not None:
+        row["raw_output"] = text[:8000]          # what the model generated, before any parsing (diagnosis of tool calls)
+    if extra:
+        row.update(extra)
+    line = json.dumps(row, default=str)
+    if target == "1":
+        print("request " + line, file=sys.stderr, flush=True)
+        return
+    with open(target, "a") as handle:
+        handle.write(line + "\n")
+
+
+def _memory_ledger():
+    """The staged memory controller's counters (swap at launch, peak swap increase, recoveries); None when no guard runs."""
+    try:
+        from models.flashnext import memory_controller
+        return memory_controller.ledger()
+    except Exception:
+        return None
+
+
 class ModelService:
     """Own one loaded model and serve requests from one warm cache."""
 
-    def __init__(self, session):
+    def __init__(self, session, context_limit=None, max_cold_prefill=None):
         self.session = session
         self.model = f"macqwen-{session.preferences['model']}"
         self.reused = 0
         self.rebuilt = 0
+        self.evictions = 0                  # live states replaced by a request that did not extend them
+        self.refused_cold_prefill = 0
+        self._request = threading.local()   # per-request controls (reasoning), set by the handler thread before complete()
+        self.last_reasoning = None          # macqwen.reasoning.Reasoning of the last request that reached the model
+        # Tokens a prompt may hold. None keeps the model's advertised window (nothing validated).
+        self.context_limit = context_limit
+        # Largest single prefill (a cold rebuild, or the new tokens of a continuation) that the admitted memory tier
+        # allows. None means no tier limit. Requests above it are refused before any state changes.
+        self.max_cold_prefill = max_cold_prefill
+        self.last_prompt_tokens = None
+        self.last_divergence = None         # why the last request could not reuse the live tape (see _adopt)
+        self.last_budget = None             # context_budget.Budget (as dict) of the last request that reached the model
+        self.sessions = SessionRegistry()
+        self.session_hint = None            # set by the HTTP layer for the request being served
+
+    def warm_tokens(self) -> int:
+        backend = getattr(self.session, "backend", None)
+        try:
+            return len(getattr(backend, "tape", ()) or ()) if backend is not None else 0
+        except TypeError:
+            return 0
+
+    def cache_state(self) -> dict:
+        return {"reused": self.reused, "rebuilt": self.rebuilt, "evictions": self.evictions,
+                "refused_cold_prefill": self.refused_cold_prefill, "warm_tokens": self.warm_tokens(),
+                "max_cold_prefill": self.max_cold_prefill, "sessions": self.sessions.snapshot(),
+                "last_budget": self.last_budget, "last_divergence": self.last_divergence,
+                "memory_controller": _memory_ledger()}
+
+    def _check_context(self, tokens: int) -> None:
+        self.last_prompt_tokens = tokens
+        limit = self.context_limit
+        if limit and tokens + MIN_OUTPUT_RESERVE > limit:
+            raise ContextLimitError(
+                "context limit exceeded: " + context_budget.overflow_guidance(tokens, limit)
+                + " Nothing was truncated and nothing was dropped.")
+
+    def _check_prefill(self, tokens: int) -> None:
+        """Refuse a prefill larger than the memory tier this server was admitted for. Runs before any state changes."""
+        limit = self.max_cold_prefill
+        if limit and tokens > limit:
+            self.refused_cold_prefill += 1
+            raise ContextLimitError(
+                f"this request needs {tokens} tokens prefilled but this server was admitted for at most {limit} per "
+                "prefill under the memory available at startup. Nothing was truncated, dropped or run; the live state "
+                "is unchanged. Shorten the conversation, or restart when more memory is free.",
+                code="prefill_budget_exceeded")
 
     @staticmethod
     def _substitute_slots(normalized, tokenizer):
@@ -529,7 +851,8 @@ class ModelService:
         A client resends the whole conversation on every call. When the new
         prompt extends what the cache already holds, only the new tokens need
         a prefill. When it diverges the cache has to go: the recurrent layers
-        carry state that cannot be rewound.
+        carry state that cannot be rewound. The prefill size is checked against
+        the admitted tier BEFORE anything is reset, so a refusal keeps the live state.
         """
         session = self.session
         backend = session.backend
@@ -542,7 +865,28 @@ class ModelService:
             return False
         if ids is None:
             ids = encode(rendered)
-        if getattr(backend, "_replay_needed", False):
+        self._check_context(len(ids))
+        replay = bool(getattr(backend, "_replay_needed", False))
+        shared = 0
+        extends = False
+        if not replay and not backend.pending and backend.tape:
+            shared = common_prefix(ids)
+            extends = shared == len(backend.tape) and shared < len(ids)
+        self._check_prefill(len(ids) - shared if extends else len(ids))
+        if self.warm_tokens() and not extends:
+            self.evictions += 1
+            # Diagnostic only. A rebuild of a long conversation is expensive (12K tokens of prefill) and the cause is
+            # invisible from outside: either another conversation took the state, or the client's history re-encodes
+            # differently from the tokens the model really generated (thinking text not echoed back, a non-canonical
+            # BPE split). Record where the two sequences first differ so a real run can tell which.
+            tape = list(getattr(backend, "tape", ()) or ())
+            if tape and not replay and not backend.pending:
+                where = shared
+                window = lambda seq: [int(t) for t in seq[max(0, where - 3):where + 4]]   # noqa: E731
+                self.last_divergence = {"tape_tokens": len(tape), "prompt_tokens": len(ids), "first_difference": where,
+                                        "tape_window": window(tape), "prompt_window": window(ids),
+                                        "tape_is_prefix_of_prompt": False}
+        if replay:
             # The transcript may still be a prefix, but the live cache is
             # deliberately invalid. Reusing it would make a tool result
             # appear incremental while the backend silently re-prefills the
@@ -551,20 +895,33 @@ class ModelService:
             backend.append_tokens(ids)
             self.rebuilt += 1
             return False
-        if not backend.pending and backend.tape:
-            shared = common_prefix(ids)
-            if shared == len(backend.tape) and shared < len(ids):
-                backend.append_tokens(ids[shared:])
-                self.reused += 1
-                return True
+        if extends:
+            backend.append_tokens(ids[shared:])
+            self.reused += 1
+            return True
         session.reset()
         backend.append_tokens(ids)
         self.rebuilt += 1
         return False
 
-    def complete(self, messages, tools, max_tokens, on_text=None) -> Completion:
+    def request_reasoning(self):
+        """The reasoning controls of the request this thread is serving, or the server defaults (never stored on the session)."""
+        from macqwen import reasoning as R
+
+        current = getattr(self._request, "reasoning", None)
+        if current is not None:
+            return current
+        prefs = self.session.preferences
+        return R.resolve({}, prefs["thinking_enabled"], prefs["effort"])
+
+    def complete(self, messages, tools, max_tokens, on_text=None, gone=None) -> Completion:
         session = self.session
         backend = session.backend
+        reasoning = self.request_reasoning()
+        self.last_reasoning = reasoning
+        hint, self.session_hint = self.session_hint, None
+        had_state = self.warm_tokens() > 0
+        key = None
         try:
             normalized = _normalize_messages(messages)
             system_index = next(
@@ -585,8 +942,9 @@ class ModelService:
                 system_index = 0
             system_text, template_effort = reasoning_system_text(
                 normalized[system_index]["content"],
-                session.preferences["effort"],
+                reasoning.effort,
             )
+            key = derive_key(normalized, hint)
             normalized[system_index] = dict(normalized[system_index], content=system_text)
             tokenizer = _model_tokenizer(backend)
             render_messages, slot_texts = self._substitute_slots(
@@ -597,31 +955,53 @@ class ModelService:
                 tools=_openai_tools(tools) or None,
                 add_generation_prompt=True,
                 tokenize=False,
-                enable_thinking=session.preferences["thinking_enabled"],
+                enable_thinking=reasoning.thinking,
                 reasoning_effort=template_effort,
             )
             if slot_texts:
+                before = self.reused
                 if not self._adopt_split(rendered, slot_texts, tokenizer):
                     raise RequestError(
                         "unable to safely encode content placeholders"
                     )
             else:
+                before = self.reused
                 self._adopt(rendered)
+            self.sessions.activate(key, prompt_tokens=self.last_prompt_tokens or 0, reused=self.reused > before,
+                                   had_state=had_state)
             thinking = ThinkingStreamFilter(
-                session.preferences["thinking_enabled"], False
+                reasoning.thinking, False
             )
             words = CompletedTextBuffer()
             hold = bool(tools)
 
+            began = time.perf_counter()
+            first = []
+
+            checked = [time.perf_counter()]
+
             def streamed(piece: str) -> None:
+                if not first:
+                    first.append(time.perf_counter())
+                if gone is not None:                # a closed client ends the generation instead of finishing it unseen
+                    now = time.perf_counter()
+                    if now - checked[0] >= GONE_CHECK_SECONDS:
+                        checked[0] = now
+                        if gone():
+                            raise ClientGone("client disconnected during generation")
                 visible = thinking.feed(piece)
                 for complete in words.feed(visible):
                     if on_text is not None:
                         on_text(None if hold else complete)
 
+            requested_output = max_tokens
+            if self.context_limit and self.last_prompt_tokens:
+                max_tokens = max(1, min(max_tokens, self.context_limit - self.last_prompt_tokens))
+            budget = context_budget.evaluate(self.context_limit, self.last_prompt_tokens or 0, requested_output)
+            self.last_budget = budget.as_dict()
             text, stats = backend.generate(
                 max_tokens=max_tokens,
-                out=streamed if on_text is not None else None,
+                out=streamed if (on_text is not None or gone is not None) else None,
             )
             if on_text is not None:
                 tail = thinking.finish()
@@ -629,26 +1009,91 @@ class ModelService:
                     on_text(None if hold else complete)
 
             final_filter = ThinkingStreamFilter(
-                session.preferences["thinking_enabled"], False
+                reasoning.thinking, False
             )
             visible = final_filter.feed(text) + final_filter.finish()
+            _log_request(backend, stats, time.perf_counter() - began,
+                         first[0] if first else None, text.count("<tool_call>"), began, text=text,
+                         extra={"context_budget": self.last_budget, "divergence": self.last_divergence,
+                                "reused": self.reused, "rebuilt": self.rebuilt, "evictions": self.evictions,
+                                "turn_memory": getattr(backend, "last_turn_memory", None),
+                                "reasoning": reasoning.as_dict()})
+            raw_visible = visible
             visible, calls = _parse_tool_calls(visible, tools)
+            if (tools and not calls and getattr(stats, "finish", None) == "length"
+                    and raw_visible.rfind("<tool_call>") > raw_visible.rfind("</tool_call>")):
+                # The model began a tool call and the output limit ended it. Handing the client the raw marker as
+                # ordinary text would look like an answer; nothing was executed and no call is invented.
+                raise ModelToolCallError(
+                    f"the model began a tool call but the output limit of {max_tokens} tokens ended it first; "
+                    "no tool was called. Raise max_tokens / max_completion_tokens (the client may be computing "
+                    "it from a context window that leaves too little room).")
             if hold and on_text is not None and visible:
                 final_words = CompletedTextBuffer()
                 for complete in final_words.feed(visible) + final_words.finish():
                     on_text(complete)
             return Completion(visible, calls, stats)
+        except ContextLimitError:
+            raise
         except BaseException:
             session.reset()
+            self.sessions.dropped()
             raise
 
 
-class MacqwenHTTPServer(HTTPServer):
-    def __init__(self, address, service, api_key=None, allowed_origins=()):
+# Chat Completions request fields. Honoured ones are consumed by the server;
+# ACCEPTED ones are harmless to the result and carry no model-visible meaning;
+# IGNORED ones are sampling controls the server fixes per process (see
+# --temperature), so they are listed in the X-Veystrix-Ignored-Fields header
+# instead of vanishing. Everything else is refused by name.
+CHAT_HONOURED = {"model", "messages", "stream", "stream_options", "max_tokens",
+                 "max_completion_tokens", "tools",
+                 # per-request reasoning controls, see macqwen/reasoning.py (applied to this request only)
+                 "reasoning", "reasoning_effort", "chat_template_kwargs", "enable_thinking"}
+CHAT_ACCEPTED = {"store", "user", "metadata"}
+CHAT_IGNORED = {"temperature", "top_p", "presence_penalty", "frequency_penalty",
+                "seed", "parallel_tool_calls"}
+
+
+def _check_chat_fields(payload: dict) -> list[str]:
+    """Refuse fields the server cannot honour; return the ones it ignores."""
+    ignored = []
+    for key, value in payload.items():
+        if key in CHAT_HONOURED or key in CHAT_ACCEPTED or value is None:
+            continue
+        if key in CHAT_IGNORED:
+            ignored.append(key)
+        elif key == "tool_choice" and value == "auto":
+            continue
+        elif key == "n" and value == 1:
+            continue
+        else:
+            raise RequestError(
+                f"request field {key!r} is not supported by this server and "
+                "was not applied"
+            )
+    stream_options = payload.get("stream_options")
+    if stream_options is not None:
+        if not isinstance(stream_options, dict):
+            raise RequestError("stream_options must be an object")
+        extra = sorted(set(stream_options) - {"include_usage"})
+        if extra:
+            raise RequestError(f"stream_options field {extra[0]!r} is not supported")
+    return sorted(ignored)
+
+
+class MacqwenHTTPServer(ThreadingHTTPServer):
+    """Connections are handled by threads; inference is serialized by ``scheduler`` (see macqwen/scheduler.py)."""
+
+    daemon_threads = True
+    request_queue_size = 16
+
+    def __init__(self, address, service, api_key=None, allowed_origins=(), scheduler=None):
         super().__init__(address, MacqwenHandler)
         self.service = service
         self.api_key = api_key
         self.allowed_origins = tuple(allowed_origins)
+        self.scheduler = scheduler or Scheduler()
 
 
 class MacqwenHandler(BaseHTTPRequestHandler):
@@ -700,6 +1145,9 @@ class MacqwenHandler(BaseHTTPRequestHandler):
         return False
 
     def _headers(self, status=200, content_type="application/json"):
+        from models.flashnext import progress
+
+        progress.PROGRESS.response_started()
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         origin = self._allowed_origin()
@@ -708,16 +1156,44 @@ class MacqwenHandler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Headers", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        ignored = getattr(self, "_ignored_fields", None)
+        if ignored:
+            self.send_header("X-Veystrix-Ignored-Fields", ",".join(ignored))
+        applied = getattr(self, "_reasoning", None)
+        if applied is not None:
+            self.send_header("X-Veystrix-Reasoning", applied.header())
 
-    def _json(self, value, status=200):
+    def _json(self, value, status=200, headers=None):
         body = json.dumps(value).encode()
         self._headers(status)
         self.send_header("Content-Length", str(len(body)))
+        for name, text in (headers or {}).items():
+            self.send_header(name, str(text))
         self.end_headers()
         self.wfile.write(body)
 
-    def _error(self, message, status=400):
-        self._json({"error": {"message": str(message), "type": "invalid_request_error"}}, status)
+    ERROR_TYPES = {400: "invalid_request_error", 404: "invalid_request_error", 405: "invalid_request_error",
+                   409: "invalid_request_error", 413: "invalid_request_error", 401: "authentication_error",
+                   403: "permission_error", 429: "rate_limit_error"}
+
+    def _error(self, message, status=400, code=None, headers=None, kind=None):
+        """OpenAI error object: message, type, param and code are always present."""
+        kind = kind or self.ERROR_TYPES.get(status, "server_error" if status >= 500 else "invalid_request_error")
+        self._json({"error": {"message": str(message), "type": kind, "param": None, "code": code}}, status, headers)
+
+    def _busy(self, exc):
+        self._error(exc, 503, "server_busy", {"Retry-After": exc.retry_after})
+
+    def _client_gone(self) -> bool:
+        """True when the peer has closed its end. Never consumes data."""
+        try:
+            sock = self.connection
+            readable, _, _ = select.select([sock], [], [], 0)
+            return bool(readable) and sock.recv(1, socket.MSG_PEEK) == b""
+        except BlockingIOError:
+            return False
+        except (OSError, ValueError):
+            return True
 
     def _payload(self) -> dict:
         try:
@@ -743,17 +1219,50 @@ class MacqwenHandler(BaseHTTPRequestHandler):
 
     def _sse(self, value, event=None):
         prefix = f"event: {event}\n" if event else ""
-        self.wfile.write((prefix + "data: " + json.dumps(value) + "\n\n").encode())
-        self.wfile.flush()
+        with self._write_lock():
+            self.wfile.write((prefix + "data: " + json.dumps(value) + "\n\n").encode())
+            self.wfile.flush()
 
     def _heartbeat(self):
-        self.wfile.write(b": generating\n\n")
-        self.wfile.flush()
+        with self._write_lock():
+            self.wfile.write(b": generating\n\n")
+            self.wfile.flush()
+
+    def _write_lock(self):
+        lock = self.__dict__.get("_sse_lock")
+        if lock is None:
+            lock = self.__dict__.setdefault("_sse_lock", threading.Lock())
+        return lock
+
+    def _complete_with_keepalive(self, service, messages, tools, max_tokens, on_text):
+        """``service.complete`` while a side thread keeps the SSE stream alive.
+
+        A cold prefill can take many minutes and produces no token, so without this the stream is silent from the first
+        role chunk until the first decoded token and a client idle timeout (Qwen Code's ``streamIdleTimeoutMs``) measures
+        the prefill, not the connection. The comment line is invisible to SSE parsers. A failed write only ends the
+        keep-alive: the cancellation checks still decide whether the work stops."""
+        stop = threading.Event()
+
+        def beat():
+            while not stop.wait(SSE_KEEPALIVE_SECONDS):
+                try:
+                    self._heartbeat()
+                except (OSError, ValueError):
+                    return
+
+        ticker = threading.Thread(target=beat, name="sse-keepalive", daemon=True)
+        ticker.start()
+        try:
+            return service.complete(messages, tools, max_tokens, on_text, gone=self._client_gone)
+        finally:
+            stop.set()
+            ticker.join(timeout=2.0)
 
     def _sse_chat_error(self, message):
         try:
             self._sse({"error": {"message": str(message),
-                                 "type": "server_error"}})
+                                 "type": getattr(message, "kind", None) or "server_error",
+                                 "param": None, "code": getattr(message, "code", None)}})
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
@@ -787,53 +1296,93 @@ class MacqwenHandler(BaseHTTPRequestHandler):
         if self._reject_foreign_origin():
             return
         if not self._authorized():
-            self._error("invalid API key", 401)
+            self._error("invalid API key", 401, "invalid_api_key")
             return
         path = urlsplit(self.path).path
+        service = self.server.service
         if path == "/health":
-            self._json({"status": "ok", "model": self.server.service.model})
+            self._json(health(service, self.server.scheduler))
+        elif path == "/ready":
+            report = health(service, self.server.scheduler)
+            self._json(report, 200 if report["ready"] else 503)
         elif path == "/v1/models":
-            card = model_card(self.server.service)
-            self._json({"object": "list", "data": [{
-                "id": card["slug"],
-                "object": "model",
-                "owned_by": "macqwen",
-            }], "models": [card]})
+            card = model_card(service)
+            self._json({"object": "list", "data": [model_entry(card, service)], "models": [card]})
+        elif path.startswith("/v1/models/"):
+            card = model_card(service)
+            wanted = path[len("/v1/models/"):]
+            if wanted == card["slug"]:
+                self._json(model_entry(card, service))
+            else:
+                self._error(f"the model {wanted!r} does not exist", 404, "model_not_found")
         else:
-            self._error("route not found", 404)
+            self._error("route not found", 404, "not_found")
+
+    ROUTES = ("/v1/chat/completions", "/v1/messages", "/v1/responses")
 
     def do_POST(self):
         if self._reject_foreign_origin():
             return
         if not self._authorized():
-            self._error("invalid API key", 401)
+            self._error("invalid API key", 401, "invalid_api_key")
             return
         self._sse_open = False
+        self._ignored_fields = None
+        self._reasoning = None
+        path = urlsplit(self.path).path
+        if path not in self.ROUTES:
+            self._error("route not found", 404, "not_found")
+            return
         try:
             payload = self._payload()
-            path = urlsplit(self.path).path
+        except RequestError as exc:
+            self._error(exc, exc.status, exc.code, kind=exc.kind)
+            return
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        try:
+            self.server.scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
+        except Busy as exc:
+            try:
+                self._busy(exc)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        except ClientGone:
+            pass
+
+    def _handle_post(self, path, payload):
+        """Runs on the inference thread, one request at a time."""
+        from models.flashnext import progress
+
+        try:
+            self.server.service.session_hint = explicit_id(self.headers, payload)
+        except Exception:
+            pass
+
+        progress.PROGRESS.request_begin(getattr(self, "connection", None), path)
+        try:
             if path == "/v1/chat/completions":
                 self._chat(payload)
             elif path == "/v1/messages":
                 self._anthropic(payload)
-            elif path == "/v1/responses":
-                self._responses(payload)
             else:
-                self._error("route not found", 404)
+                self._responses(payload)
         except RequestError as exc:
             if not getattr(self, "_sse_open", False):
                 try:
-                    self._error(exc, exc.status)
+                    self._error(exc, exc.status, exc.code, kind=exc.kind)
                 except (BrokenPipeError, ConnectionResetError):
                     pass
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ClientGone):
             pass
         except Exception as exc:
             if not getattr(self, "_sse_open", False):
                 try:
-                    self._error(str(exc), 500)
+                    self._error(str(exc), 500, "internal_error")
                 except (BrokenPipeError, ConnectionResetError):
                     pass
+        finally:
+            progress.PROGRESS.request_end()
 
     def _limit(self, payload, default=4096):
         value = payload.get(
@@ -846,8 +1395,35 @@ class MacqwenHandler(BaseHTTPRequestHandler):
 
     def _chat(self, payload):
         service = self.server.service
+        self._ignored_fields = _check_chat_fields(payload)
+        self._reasoning = self._resolve_reasoning(payload)
+        local = getattr(service, "_request", None)
+        if local is None:                       # a minimal stand-in service (tests): give it the per-request slot
+            local = service._request = threading.local()
+        local.reasoning = self._reasoning
+        try:
+            return self._chat_body(payload, service)
+        finally:
+            local.reasoning = None
+
+    def _resolve_reasoning(self, payload):
+        from macqwen import reasoning as R
+
+        service = self.server.service
+        prefs = getattr(getattr(service, "session", None), "preferences", None) or {}
+        try:
+            return R.resolve(payload, bool(prefs.get("thinking_enabled", False)), prefs.get("effort", "medium"))
+        except R.ReasoningError as exc:
+            raise RequestError(str(exc), 400, "unsupported_reasoning_effort")
+
+    def _chat_body(self, payload, service):
         messages = _normalize_messages(payload.get("messages"))
         tools = payload.get("tools") or []
+        cap = payload.get("max_completion_tokens", payload.get("max_tokens"))
+        if isinstance(cap, int) and not isinstance(cap, bool):
+            message = context_budget.too_small_for_tools(cap, bool(tools))
+            if message:
+                raise RequestError(message, 400, "max_tokens_too_small")
         ident = f"chatcmpl-{uuid.uuid4().hex}"
         created = int(time.time())
         if payload.get("stream"):
@@ -867,21 +1443,29 @@ class MacqwenHandler(BaseHTTPRequestHandler):
                 def on_text(text):
                     self._heartbeat() if text is None else chunk({"content": text})
 
-                result = service.complete(messages, tools, max_tokens, on_text)
+                result = self._complete_with_keepalive(service, messages, tools, max_tokens, on_text)
                 for index, call in enumerate(result.tool_calls):
                     chunk({"tool_calls": [{
                         "index": index, "id": call["id"], "type": "function",
                         "function": {"name": call["name"], "arguments": call["arguments"]},
                     }]})
                 chunk({}, "tool_calls" if result.tool_calls else result.stats.finish)
+                if (payload.get("stream_options") or {}).get("include_usage"):
+                    self._sse({
+                        "id": ident, "object": "chat.completion.chunk", "created": created,
+                        "model": service.model, "choices": [],
+                        "usage": {"prompt_tokens": result.stats.prompt_tokens,
+                                  "completion_tokens": result.stats.tokens,
+                                  "total_tokens": result.stats.prompt_tokens + result.stats.tokens},
+                    })
                 self.wfile.write(b"data: [DONE]\n\n")
                 self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ClientGone):
                 pass
             except Exception as exc:
                 self._sse_chat_error(exc)
             return
-        result = service.complete(messages, tools, self._limit(payload))
+        result = service.complete(messages, tools, self._limit(payload), gone=self._client_gone)
         message = {"role": "assistant", "content": result.text or None}
         if result.tool_calls:
             message["tool_calls"] = [{
@@ -927,7 +1511,7 @@ class MacqwenHandler(BaseHTTPRequestHandler):
                                "delta": {"type": "text_delta", "text": text}},
                               "content_block_delta")
 
-                result = service.complete(messages, tools, max_tokens, on_text)
+                result = self._complete_with_keepalive(service, messages, tools, max_tokens, on_text)
                 index = 0
                 if text_open[0]:
                     self._sse({"type": "content_block_stop", "index": 0}, "content_block_stop")
@@ -949,12 +1533,12 @@ class MacqwenHandler(BaseHTTPRequestHandler):
                            "stop_sequence": None}, "usage": {"output_tokens": result.stats.tokens}},
                           "message_delta")
                 self._sse({"type": "message_stop"}, "message_stop")
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ClientGone):
                 pass
             except Exception as exc:
                 self._sse_anthropic_error(exc)
             return
-        result = service.complete(messages, tools, self._limit(payload))
+        result = service.complete(messages, tools, self._limit(payload), gone=self._client_gone)
         content = []
         if result.text:
             content.append({"type": "text", "text": result.text})
@@ -1012,7 +1596,7 @@ class MacqwenHandler(BaseHTTPRequestHandler):
                     event("response.output_text.delta", item_id=item_id,
                           output_index=0, content_index=0, delta=text)
 
-                result = service.complete(messages, tools, max_tokens, on_text)
+                result = self._complete_with_keepalive(service, messages, tools, max_tokens, on_text)
                 output = []
                 if result.text:
                     message = {"id": item_id, "type": "message", "status": "completed",
@@ -1041,12 +1625,12 @@ class MacqwenHandler(BaseHTTPRequestHandler):
                                         "output_tokens": result.stats.tokens,
                                         "total_tokens": result.stats.prompt_tokens + result.stats.tokens})
                 event("response.completed", response=completed)
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ClientGone):
                 pass
             except Exception as exc:
                 self._sse_responses_error(exc, ident)
             return
-        result = service.complete(messages, tools, self._limit(payload))
+        result = service.complete(messages, tools, self._limit(payload), gone=self._client_gone)
         output = []
         if result.text:
             output.append({"id": f"msg_{uuid.uuid4().hex}", "type": "message",
@@ -1067,20 +1651,39 @@ class MacqwenHandler(BaseHTTPRequestHandler):
 
 
 def serve(session, host: str, port: int, api_key: str | None = None,
-          allowed_origins=()) -> None:
-    """Reset the model when the server starts and when it stops."""
+          allowed_origins=(), context_limit=None, max_cold_prefill=None,
+          scheduler=None) -> None:
+    """Reset the model when the server starts and when it stops.
+
+    HTTP is served from a background thread; this thread runs the inference jobs, so everything bound to the
+    inference thread stays on it.
+    """
     session.reset()
     server = MacqwenHTTPServer(
-        (host, port), ModelService(session), api_key, allowed_origins)
+        (host, port), ModelService(session, context_limit, max_cold_prefill), api_key, allowed_origins,
+        scheduler)
     print(f"server ready at http://{host}:{server.server_port}")
     if allowed_origins:
         print(f"browser origins allowed: {', '.join(allowed_origins)}")
+    if context_limit:
+        print(f"context limit: {context_limit} tokens (longer prompts are refused, never truncated)")
+    if max_cold_prefill:
+        print(f"memory tier: single prefills up to {max_cold_prefill} tokens (larger ones are refused, never truncated)")
+    print(f"one request runs at a time; up to {server.scheduler.max_waiting} wait at most "
+          f"{server.scheduler.max_wait:g}s, then get 503 server_busy")
     print("OpenAI: /v1/chat/completions and /v1/responses")
     print("Anthropic: /v1/messages")
+    print("Status: /health, /ready, /v1/models")
+    stop = threading.Event()
+    listener = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.2},
+                                name="http-listener", daemon=True)
+    listener.start()
     try:
-        server.serve_forever()
+        server.scheduler.serve_jobs(stop)
     except KeyboardInterrupt:
         print("\nserver stopped")
     finally:
+        stop.set()
+        server.shutdown()
         server.server_close()
         session.reset()

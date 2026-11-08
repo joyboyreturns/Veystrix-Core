@@ -765,6 +765,19 @@ class ScratchCleanupTests(ScratchBase):
 
 
 class ScratchGpuSafetyTests(ScratchBase):
+    def test_failed_fence_retains_scratch_pool(self):
+        with self.assertRaisesRegex(RuntimeError, "fence failed"):
+            with prefill_ring.session(self.language, 1024) as state:
+                state._synchronize = mock.Mock(side_effect=RuntimeError("fence failed"))
+        self.assertFalse(state.disposed)
+        self.assertIn(state, prefill_ring._RETAINED)
+        from models.flashnext import pool_lifecycle
+        self.assertIn("fence failed", pool_lifecycle.lifecycle_fault())
+        pool_lifecycle._LIFECYCLE_FAULT[0] = None
+        state._synchronize = lambda: None
+        prefill_ring._RETAINED.remove(state)
+        self.assertTrue(state.dispose())
+
     def test_a_release_with_gpu_work_in_flight_never_loses_the_data(self):
         x, indices = self.inputs()
         reference = self.run_layers(x, indices)

@@ -150,13 +150,14 @@ class MemoryTracer:
 
     def __init__(self, probe, path, *, interval: float = 1.0, phase=None, store=None,
                  guard=None, on_guard=None, metal_limit=None, fast_interval: float | None = None,
-                 compressor_warn_mib: float | None = None,
+                 compressor_warn_mib: float | None = None, strict_readings: bool = False,
                  clock=time.monotonic, sleep=time.sleep):
         self.probe, self.path, self.interval = probe, Path(path), interval
         # During prefill the tracer samples every ``fast_interval`` seconds with the cheap readings
         # only (MLX, one vm_stat read: about 2 ms); RSS, swap and pressure keep the ``interval`` cadence.
         self.fast_interval = fast_interval
         self.compressor_warn_mib = compressor_warn_mib
+        self.strict_readings = strict_readings
         self._warned = False
         self._last_full: float | None = None
         self.phase = phase or Phase()
@@ -226,8 +227,8 @@ class MemoryTracer:
             self.event("compressor_warning", growth_mb=growth, limit_mb=self.compressor_warn_mib,
                        available_mb=machine.get("available_mb"))
         if self.guard is not None:
-            reason = self.guard({**row, "mlx_active": row["mlx_active"] or 0,
-                                 "mlx_cache": row["mlx_cache"] or 0,
+            reason = self.guard({**row, "mlx_active": row["mlx_active"] if self.strict_readings else row["mlx_active"] or 0,
+                                 "mlx_cache": row["mlx_cache"] if self.strict_readings else row["mlx_cache"] or 0,
                                  "metal_limit_bytes": self.metal_limit})
             if reason and self.guard_reason is None:
                 self.guard_reason = reason
@@ -485,7 +486,9 @@ def run_turn(backend, probe, instrument, store, name: str, feed, decode: int,
         if marks.get("first_token") is None:
             marks["first_token"] = int(value)
 
+    began = probe.now()
     _text, stats = backend.generate(decode, on_prefilled=on_prefilled, on_decode_token=on_token)
+    generate_wall = probe.now() - began
     _set_phase(instrument, "turn-end")
     end_mem = probe.memory()
     ids = list(backend.tape[-stats.tokens:]) if stats.tokens else []
@@ -508,13 +511,18 @@ def run_turn(backend, probe, instrument, store, name: str, feed, decode: int,
         "pool_start": start_pool, "pool_end_prefill": marks["pool"], "pool_end": after_pool,
         "pool_hits_decode": (after_pool.get("hits", 0) - marks["pool"].get("hits", 0)),
         "pool_misses_decode": (after_pool.get("misses", 0) - marks["pool"].get("misses", 0)),
+        "pool_release": getattr(backend, "last_pool_release", None),
+        "memory_report": getattr(backend, "last_memory_report", None),
+        "memory_after": getattr(backend, "last_memory_after", None),
         "ring_acquired": instrument.acquired, "ring_reason": instrument.reason,
         "ring": instrument.ring_stats,
         "scratch": {"acquire_s": instrument.acquire_s, "dispose_s": instrument.dispose_s,
                     "acquire_faults": instrument.acquire_faults},
+        "generate_wall_s": generate_wall,
         "first_token": marks.get("first_token"),
         "kv_hash": marks.get("kv_hash"),
         "digest": H.digest_ids(ids[:decode]),
+        "generated_ids": [int(i) for i in ids[:decode]],
         "generated_tokens": stats.tokens,
         "decode": {
             "tokens": stats.tokens,
@@ -530,6 +538,198 @@ def run_turn(backend, probe, instrument, store, name: str, feed, decode: int,
         "free_mb_before": free_before,
         "finish": stats.finish,
     }
+
+
+def dump_cache(caches, language, path: Path) -> None:
+    """Every array of the live cache plus the language model's position state, for offline comparison."""
+    import mlx.core as mx
+
+    from models.flashnext import prefix_cache as P
+
+    tensors = {}
+    for index, cache in enumerate(caches):
+        if P.kind_of(cache) == "arrays":
+            for slot, value in enumerate(cache.cache):
+                if value is not None:
+                    tensors[f"l{index}.s{slot}"] = value
+        else:
+            n = int(cache.offset)
+            tensors[f"l{index}.keys"] = cache.keys[..., :n, :]
+            tensors[f"l{index}.values"] = cache.values[..., :n, :]
+            tensors[f"l{index}.index_keys"] = cache.index_keys
+            tensors[f"l{index}.index_position_ids"] = cache.index_position_ids
+    for name, attr in P.LANG_FIELDS:
+        value = getattr(language, attr, None)
+        if value is not None:
+            tensors[f"lang.{name}"] = value
+    mx.eval(list(tensors.values()))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mx.save_safetensors(str(path), tensors)
+
+
+def dumping_hasher(backend, directory, label: str):
+    """The KV hasher, plus a dump of the cache when ``directory`` is set."""
+    def hasher(cache):
+        value = kv_digest(cache)
+        if directory:
+            dump_cache(cache, backend.language, Path(directory) / f"{label}.safetensors")
+        return value
+    return hasher
+
+
+def store_checksums(session) -> dict:
+    """SHA-256 of every array of every RAM entry in the prefix cache (to prove nothing mutated them)."""
+    import mlx.core as mx
+    import numpy as np
+
+    out = {}
+    for key, entry in list(session.store()._ram.items()):
+        digest = hashlib.sha256()
+        for layer in entry.layers:
+            for value in (*layer.states, *layer.kv.values()):
+                if value is not None:
+                    digest.update(np.array(value.view(mx.uint8) if value.dtype != mx.uint8 else value).tobytes())
+        for name in sorted(entry.lang):
+            digest.update(np.array(entry.lang[name].view(mx.uint8)).tobytes())
+        out[key] = digest.hexdigest()[:16]
+    return out
+
+
+def request_text(spec: str, prompts: dict, long_prompts: dict | None, agent_prompts: dict | None = None):
+    """(system, user) for one request spec."""
+    if spec == "ref":
+        return prompts["system"], prompts["first"]
+    if spec == "later":     # the same system message with a different question
+        return prompts["system"], prompts["later"]
+    kind, _, name = spec.partition(":")
+    chosen = {"long": long_prompts, "agent": agent_prompts}.get(kind)
+    if chosen is None or name not in chosen["questions"]:
+        raise ValueError(f"unknown request {spec!r}")
+    return chosen["system"], chosen["questions"][name]
+
+
+class ChunkRecorder:
+    """Records the real token count of every chunk the prefill runs (what actually executed, not the plan)."""
+
+    def __init__(self):
+        self.spans = []
+        self.seconds = []
+
+    def __enter__(self):
+        from models.flashnext import prefill
+
+        self._prefill = prefill
+        self._saved = {name: getattr(prefill, name) for name in ("_prefill_chunk", "_prefill_target")}
+
+        def wrap(name):
+            original = self._saved[name]
+
+            def run(language, ids, *args, **kwargs):
+                self.spans.append(int(ids.shape[1]))
+                started = time.perf_counter()
+                try:
+                    return original(language, ids, *args, **kwargs)
+                finally:
+                    self.seconds.append(time.perf_counter() - started)
+            return run
+
+        for name in self._saved:
+            setattr(prefill, name, wrap(name))
+        return self
+
+    def __exit__(self, *exc):
+        for name, original in self._saved.items():
+            setattr(self._prefill, name, original)
+        return False
+
+    def edges(self, offset: int = 0) -> list:
+        """Absolute end position of each chunk."""
+        total, out = offset, []
+        for width in self.spans:
+            total += width
+            out.append(total)
+        return out
+
+
+def prefix_report(backend) -> dict | None:
+    """The backend's last prefix-cache report as a plain dict (the real one is a ``Report`` object, a
+    test double may already be a dict), so it can be logged and written to JSON."""
+    report = getattr(backend, "last_prefix", None)
+    if report is None:
+        return None
+    return report.as_dict() if hasattr(report, "as_dict") else dict(report)
+
+
+def run_prefix_requests(backend, probe, instrument, store, prompts, long_prompts, requests, decode,
+                        dump_dir, event=lambda *a, **k: None, save=lambda turns: None,
+                        agent_prompts=None) -> tuple[list, dict]:
+    """Each request is a fresh conversation (reset, then open), as the server does for a request that is
+    not an extension. Returns the turns and the cache-integrity evidence."""
+    from models.flashnext import prefix_session
+
+    turns, evidence = [], {"checksums": []}
+    for index, spec in enumerate(requests):
+        if index:
+            backend.reset()
+        system, user = request_text(spec, prompts, long_prompts, agent_prompts)
+        label = f"{index + 1}-{spec.replace(':', '_')}"
+        with ChunkRecorder() as chunks:
+            turn = run_turn(
+                backend, probe, instrument, store, label,
+                lambda: backend.open_conversation(system, user, enable_thinking=False), decode,
+                dumping_hasher(backend, dump_dir, f"{evidence.get('arm', 'arm')}-{label}"))
+        turn["chunk_tokens_run"] = list(chunks.spans)
+        turn["chunk_seconds"] = [round(x, 3) for x in chunks.seconds]
+        turns.append(turn)
+        save(turns)             # the measured turn (output digest, KV hash, speeds) is on disk before any extras
+        try:
+            prompt_ids = list(backend.tape[:turn["pending_tokens"]])
+            prefix = prefix_report(backend)
+            turn["chunk_end_positions"] = chunks.edges((prefix or {}).get("hit_tokens", 0))
+            session_ = getattr(backend, "_prefix", None)
+            if session_ is not None:
+                turn["system_boundary_tokens"] = session_.system_boundary(prompt_ids)
+            turn.update({"request": spec, "prefix": prefix,
+                         "prompt_digest": H.digest_ids(prompt_ids), "prompt_tokens": len(prompt_ids)})
+            session = getattr(backend, "_prefix", None)
+            if session is not None and session._store is not None:
+                evidence["checksums"].append({"after": label, "entries": store_checksums(session)})
+            event("prefix_request", request=label, hit=(prefix or {}).get("hit_tokens"))
+        except Exception as error:      # reporting must never lose a measured turn
+            turn["report_error"] = f"{type(error).__name__}: {error}"
+        save(turns)
+    sums = evidence["checksums"]
+    # An entry present at several checkpoints must hash identically at each (nothing mutated it).
+    changed = {}
+    for earlier, later in zip(sums, sums[1:]):
+        for key, digest in earlier["entries"].items():
+            if key in later["entries"] and later["entries"][key] != digest:
+                changed[key] = (earlier["after"], later["after"])
+    evidence["entries_changed_between_requests"] = changed
+    session = getattr(backend, "_prefix", None)
+    if session is not None and session._store is not None:
+        store_ = session.store()
+        evidence["store_usage"] = store_.usage()
+        evidence["store_stats"] = dict(store_.stats.__dict__)
+    return turns, evidence
+
+
+def run_quality(backend, suite, event=lambda *a, **k: None, save=lambda results: None) -> dict:
+    """The task-level quality suite (quality_suite.py) on the loaded backend: each case a fresh conversation,
+    greedy decoding, thinking off. ``suite`` is smoke, full, or comma-separated case ids. The memory guards
+    keep running underneath; results are saved after every case so a guard stop keeps what finished."""
+    from models.flashnext.tests.bench import quality_suite as Q
+
+    cases = Q.build_cases()
+    ids = [i for i in suite.split(",") if i] if suite not in ("smoke", "full") else None
+    chosen = Q.select(cases, tier=suite if ids is None else "smoke", ids=ids)
+    systems = Q.system_prompts()
+    began = time.perf_counter()
+    results = Q.run_suite(backend, chosen, systems, event=event, save=lambda r: save(r),
+                          prefix_report=prefix_report)
+    return {"suite": suite, "systems": Q.describe(systems, getattr(backend, "tokenizer", None)),
+            "cases": results, "passed": sum(1 for r in results if r["passed"]), "total": len(results),
+            "wall_s": time.perf_counter() - began}
 
 
 def run_scenario(backend, probe, instrument, store, cond: H.Condition, prompts: dict,
@@ -583,6 +783,15 @@ def child_main(args) -> int:
     from models.flashnext import prefill_ring as _ring_flags
 
     extra = {} if ring_min is None else {_ring_flags.FLAG_MIN_TOKENS: str(ring_min)}
+    if cond.prefix_cache:
+        from models.flashnext import prefix_session as _prefix
+
+        if not getattr(args, "prefix_dir", None):
+            raise SystemExit("F2P needs --prefix-dir")
+        extra.update({_prefix.FLAG_DIR: str(args.prefix_dir),
+                      _prefix.FLAG_MIN_TOKENS: str(args.prefix_min_tokens),
+                      _prefix.FLAG_RAM_GB: f"{args.prefix_ram_gb:g}",
+                      _prefix.FLAG_DISK_GB: f"{args.prefix_disk_gb:g}"})
     H.apply_overlay(os.environ, extra)
     target = output_path("flashnext", "prefill-memory", f"arm-{args.condition}.json", args.json)
     pins = target.parent / "pins"
@@ -670,9 +879,49 @@ def child_main(args) -> int:
     target.write_text(json.dumps(evidence, indent=1) + "\n")
     with Instrument(probe, prefill, prefill_ring, backend.language,
                     phase=phase, events=tracer.event) as instrument:
-        evidence["turns"] = run_scenario(
-            backend, probe, instrument, store, cond, prompts, args.decode, os.environ,
-            extra=extra)
+        if getattr(args, "suite", None):
+            H.apply_overlay(os.environ, H.condition_overlay(cond))
+            H.apply_overlay(os.environ, extra)
+            evidence["quality_suite"] = args.suite
+            evidence["prefix_settings"] = {k: os.environ.get(k) for k in sorted(os.environ)
+                                           if k.startswith(("FLASHNEXT_PREFIX_CACHE", "FLASHNEXT_PREFILL"))}
+
+            def save_quality(results):
+                evidence["quality"] = {"suite": args.suite, "cases": list(results), "partial": True}
+                target.write_text(json.dumps(evidence, indent=1, default=str) + "\n")
+
+            evidence["quality"] = run_quality(backend, args.suite, event=tracer.event, save=save_quality)
+        elif cond.prefix_cache:
+            requests = [r for r in str(getattr(args, "requests", "ref")).split(",") if r]
+            long_prompts = None
+            if any(r.startswith("long") for r in requests):
+                long_prompts = H.build_long_prompts(backend.tokenizer, SOURCE_TEXT.read_text())
+                evidence["long_prompts"] = {k: v for k, v in long_prompts.items() if k not in ("system", "questions")}
+            agent_prompts = None
+            if any(r.startswith("agent") for r in requests):
+                agent_prompts = H.build_agent_prompts(backend.tokenizer)
+                evidence["agent_prompts"] = {k: v for k, v in agent_prompts.items() if k not in ("system", "questions")}
+            H.apply_overlay(os.environ, H.condition_overlay(cond))
+            H.apply_overlay(os.environ, extra)
+            evidence["requests"] = requests
+            evidence["prefix_settings"] = {k: os.environ.get(k) for k in sorted(os.environ)
+                                           if k.startswith("FLASHNEXT_PREFIX_CACHE")}
+            evidence["arm"] = args.arm_id or f"{args.size}-{args.condition}"
+            def save_turns(turns):
+                evidence["turns"] = list(turns)
+                target.write_text(json.dumps(evidence, indent=1, default=str) + "\n")
+
+            evidence["turns"], extra_evidence = run_prefix_requests(
+                backend, probe, instrument, store, prompts, long_prompts, requests, args.decode,
+                getattr(args, "dump_dir", None), event=tracer.event, save=save_turns,
+                agent_prompts=agent_prompts)
+            evidence["prefix_integrity"] = extra_evidence
+        else:
+            hasher = dumping_hasher(backend, getattr(args, "dump_dir", None),
+                                    args.arm_id or f"{args.size}-{args.condition}")
+            evidence["turns"] = run_scenario(
+                backend, probe, instrument, store, cond, prompts, args.decode, os.environ,
+                hasher=hasher, extra=extra)
     phase.set("done")
     if uncached is not None:
         report = uncached_report(store)
@@ -810,8 +1059,11 @@ def check_ready(args, *, sampler=None, preflight_module=None, tokenizer_loader=N
     reason = H.Watchdog(H.SafetyPolicy(
         final=bool(getattr(args, "final", False)),
         min_available_gb=getattr(args, "min_available_gb", H.MIN_AVAILABLE_GB)), sample).check(sample)
+    reason = reason or start_gate_reason(sample, getattr(args, "start_available_gb", None))
+    avail_mb = sample.get("available_mb")
+    avail_str = f"{avail_mb / 1000:.2f} GB available" if avail_mb is not None else ""
     report.add("machine state", pf.FAIL if reason else pf.PASS,
-               reason or f"battery {sample.get('battery_percent')}% on {sample.get('power_source')}, "
+               reason or f"{avail_str + ', ' if avail_str else ''}battery {sample.get('battery_percent')}% on {sample.get('power_source')}, "
                          f"Low Power Mode {sample.get('low_power')}, pressure level {sample.get('pressure_level')}, "
                          f"swap used {sample.get('swap_used_mb')} MB")
     if sample.get("power_source") != "ac":
@@ -826,11 +1078,22 @@ def check_ready(args, *, sampler=None, preflight_module=None, tokenizer_loader=N
                f"set in this shell, overriding the production chat defaults: {sorted(leaked)}" if leaked
                else "no FLASHNEXT_* variables set in this shell (the baseline is the production chat environment)")
     overrides = diagnostic_overrides(args)
+    start_gb = overrides.get("start_available_gb")
+    min_gb = overrides.get("min_available_gb", H.MIN_AVAILABLE_GB)
+    thresholds_desc = (
+        f"launch gate: {start_gb:g} GiB available memory; child runtime stop floor: {min_gb:g} x 1000 MiB available memory"
+        if start_gb is not None else
+        f"child runtime stop floor: {min_gb:g} GB available memory"
+    )
     active = {k: v for k, v in overrides.items() if k in ("expert_pool_gb", "ring_min_tokens") and v is not None}
     if active:
         report.add("diagnostic overrides", pf.INFO,
                    f"{active}: decode pool and ring threshold only; Q4 weights and routing are unchanged; "
-                   f"the child stops below {overrides['min_available_gb']:g} GB available memory",
+                   f"{thresholds_desc}",
+                   **overrides)
+    elif start_gb is not None:
+        report.add("memory thresholds", pf.INFO,
+                   thresholds_desc,
                    **overrides)
     ring_floor = overrides["ring_min_tokens"] if overrides["ring_min_tokens"] is not None else PRODUCTION_RING_MIN_TOKENS
     if any(H.ALL_CONDITIONS[name].ring_on for name in args.conditions):
@@ -893,19 +1156,33 @@ def diagnostic_args(args) -> list[str]:
         out += ["--expert-pool-gb", f"{args.expert_pool_gb:g}"]
     if getattr(args, "ring_min_tokens", None) is not None:
         out += ["--ring-min-tokens", str(args.ring_min_tokens)]
+    out += ["--requests", getattr(args, "requests", "ref"),
+            "--prefix-min-tokens", str(getattr(args, "prefix_min_tokens", 16)),
+            "--prefix-ram-gb", f"{getattr(args, 'prefix_ram_gb', 0.75):g}",
+            "--prefix-disk-gb", f"{getattr(args, 'prefix_disk_gb', 5.0):g}"]
+    for name in ("prefix_dir", "dump_dir", "suite"):
+        if getattr(args, name, None):
+            out += [f"--{name.replace('_', '-')}", str(getattr(args, name))]
     return out
 
 
 def diagnostic_overrides(args) -> dict:
     return {"expert_pool_gb": getattr(args, "expert_pool_gb", None),
             "ring_min_tokens": getattr(args, "ring_min_tokens", None),
+            "start_available_gb": getattr(args, "start_available_gb", None),
             "min_available_gb": getattr(args, "min_available_gb", H.MIN_AVAILABLE_GB),
             "max_compressor_growth_gib": getattr(args, "max_compressor_growth_gib",
                                                  H.MAX_COMPRESSOR_GROWTH_GIB),
             "compressor_stop_available_gib": getattr(args, "compressor_stop_available_gib",
                                                      H.COMPRESSOR_STOP_AVAILABLE_GIB),
             "trace_interval_s": getattr(args, "trace_interval", 1.0),
-            "fast_trace_interval_s": getattr(args, "fast_trace_interval", H.FAST_TRACE_SECONDS)}
+            "fast_trace_interval_s": getattr(args, "fast_trace_interval", H.FAST_TRACE_SECONDS),
+            "requests": getattr(args, "requests", "ref"),
+            "prefix_dir": getattr(args, "prefix_dir", None), "dump_dir": getattr(args, "dump_dir", None),
+            "suite": getattr(args, "suite", None),
+            "prefix_min_tokens": getattr(args, "prefix_min_tokens", 16),
+            "prefix_ram_gb": getattr(args, "prefix_ram_gb", 0.75),
+            "prefix_disk_gb": getattr(args, "prefix_disk_gb", 5.0)}
 
 
 def _available_mb() -> float | None:
@@ -964,6 +1241,18 @@ def validate_arms(arms: list[dict]) -> dict:
     return report
 
 
+def start_gate_reason(sample: dict, start_gb) -> str | None:
+    """The launch gate (memory required BEFORE an arm starts). It is not the child's stop floor: loading the weights
+    alone takes about 3 GB of available memory, so a floor equal to the launch gate stops every arm at load time
+    (that is what happened to the first F2Bm launch, 2026-11-08, with --min-available-gb 9)."""
+    available = sample.get("available_mb")
+    if start_gb and available is None:
+        return "available memory is unavailable; launch gate cannot be checked"
+    if start_gb and available < start_gb * 1024:
+        return f"available memory {available / 1024:.2f} GiB is below the {start_gb:g} GiB launch gate"
+    return None
+
+
 def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) -> int:
     from macqwen.measurement import MeasurementRun
 
@@ -978,7 +1267,7 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
                                               H.COMPRESSOR_STOP_AVAILABLE_GIB) * 1024)
     start = sampler.sample()
     watchdog = H.Watchdog(policy, start)
-    refusal = watchdog.check(start)
+    refusal = watchdog.check(start) or start_gate_reason(start, getattr(args, "start_available_gb", None))
     records = output_path("flashnext", "prefill-memory", "records.jsonl", args.record)
     run = MeasurementRun(records, runtime="flashnext", experiment="prefill-memory", metadata={
         "plan": "docs/flashnext/prefetch-integration.md section 14",
@@ -1052,7 +1341,9 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
                 kind = " (diagnostic stop, not a correctness failure)" if resource_stop else ""
                 print(f"stopped at {arm.arm_id}: {outcome.message}{kind}", flush=True)
                 return 3
-            continue
+            run.finish("failed", reason=outcome.message, completed_arms=len(finished))
+            print(f"failed at {arm.arm_id}: {outcome.message}", flush=True)
+            return 1
         data = json.loads(result_path.read_text())
         data.update(arm_id=arm.arm_id, round=arm.round, reverse=arm.reverse)
         finished.append(data)
@@ -1063,6 +1354,18 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
                 samples=len(outcome.samples), result_file=str(result_path.name),
                 watchdog=H.trace_summary(outcome.trace))
         print(f"{arm.arm_id}: done", flush=True)
+        partial_report = validate_arms(finished)
+        failed_gates = [gate for gate in _gate_statuses(partial_report) if gate.get("status") == "fail"]
+        if failed_gates:
+            for key, result in partial_report["exactness"].items():
+                if result["status"] == "fail":
+                    run.validation(f"exactness-{key[0]}-{key[1]}", "fail",
+                                   mismatches=[list(m) for m in result["mismatches"]])
+            run.failure("validation failed", error_type="validation", arm_id=arm.arm_id,
+                        failures=failed_gates)
+            run.finish("failed", reason="validation failed", completed_arms=len(finished))
+            print(f"stopped after {arm.arm_id}: validation failed", flush=True)
+            return 1
         sleep(args.settle)
     report = validate_arms(finished)
     for arm in finished:
@@ -1145,6 +1448,9 @@ def main(argv=None) -> int:
                              "so a short-prompt F2 arm can activate. The memory guard still applies")
     parser.add_argument("--min-available-gb", type=float, default=H.MIN_AVAILABLE_GB,
                         help="stop when memory macOS could reuse falls below this (default %(default)s)")
+    parser.add_argument("--start-available-gb", type=float, default=None,
+                        help="launch gate in GiB: refuse to start below this much available memory. "
+                             "Unlike --min-available-gb it does not stop a running child")
     parser.add_argument("--max-compressor-growth-gib", type=float, default=H.MAX_COMPRESSOR_GROWTH_GIB,
                         help="stop when the compressor grows by this much within one arm, measured "
                              "from the arm's own start (default %(default)s)")
@@ -1156,6 +1462,21 @@ def main(argv=None) -> int:
                              "(default %(default)s)")
     parser.add_argument("--trace-interval", type=float, default=1.0,
                         help="seconds between the child's memory trace rows (default %(default)s)")
+    parser.add_argument("--requests", default="ref",
+                        help="prefix-cache arms (F2P): comma-separated requests run in one process, each a fresh "
+                             "conversation: ref (the 1K reference prompt), long:A or long:B (the same long "
+                             "system message with question A or B). Default %(default)s")
+    parser.add_argument("--prefix-dir", help="prefix-cache directory (F2P). Keep it outside results/ and the repo; "
+                                             "reuse a directory to test restoring after a restart")
+    parser.add_argument("--dump-dir", help="write the cache after each prefill here for offline comparison "
+                                           "(about 150 MB per request); keep it outside results/")
+    parser.add_argument("--suite", help="run the task-level quality suite instead of the usual requests: smoke "
+                                        "(7 cases), full (about 23) or comma-separated case ids. Greedy, thinking "
+                                        "off, one fresh conversation per case; the guards stay on")
+    parser.add_argument("--prefix-min-tokens", type=int, default=16,
+                        help="shortest system prompt worth a snapshot (default %(default)s; production 512)")
+    parser.add_argument("--prefix-ram-gb", type=float, default=0.75, help="prefix-cache RAM budget")
+    parser.add_argument("--prefix-disk-gb", type=float, default=5.0, help="prefix-cache SSD budget")
     parser.add_argument("--record", help="measurement JSONL path (inside results/)")
     parser.add_argument("--json", help="child result path (inside results/)")
     parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)

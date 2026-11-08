@@ -816,6 +816,112 @@ class ChildMainTests(unittest.TestCase):
             code = B.child_main(args)
         return code, target
 
+    def test_a_prefix_cache_arm_runs_each_request_as_a_fresh_conversation(self):
+        def reset(backend):
+            backend.tape, backend.pending = [], []
+            resets.append(1)
+
+        resets = []
+        with mock.patch.object(T.FakeBackend, "reset", reset, create=True), \
+                mock.patch.object(T.FakeBackend, "last_prefix", None, create=True):
+            code, target = self.run_child(
+                condition="F2P", requests="ref,ref,ref", prefix_dir="/cache/prefix", dump_dir=None,
+                prefix_min_tokens=16, prefix_ram_gb=0.75, prefix_disk_gb=5.0)
+        self.assertEqual(code, 0)
+        data = json.loads(target.read_text())
+        self.assertEqual(data["status"], "completed")
+        self.assertEqual(data["requests"], ["ref", "ref", "ref"])
+        self.assertEqual([t["name"] for t in data["turns"]], ["1-ref", "2-ref", "3-ref"])
+        self.assertEqual(len(resets), 2, "the conversation is reset between requests, not before the first")
+        for turn in data["turns"]:
+            self.assertEqual(turn["request"], "ref")
+            self.assertEqual(turn["prompt_tokens"], 1000)
+            self.assertEqual(len(turn["prompt_digest"]), 16)
+        self.assertEqual(os.environ["FLASHNEXT_PREFIX_CACHE"], "1")
+        self.assertEqual(os.environ["FLASHNEXT_PREFILL_CHUNK_TOKENS"], "512")
+        self.assertEqual(os.environ["FLASHNEXT_EVAL_LINEAR_STATE"], "1")
+        self.assertEqual(os.environ["FLASHNEXT_PREFIX_CACHE_DIR"], "/cache/prefix")
+        self.assertEqual(os.environ["FLASHNEXT_PREFIX_CACHE_MIN_TOKENS"], "16")
+        self.assertEqual(data["prefix_settings"]["FLASHNEXT_PREFIX_CACHE_DISK_GB"], "5")
+        self.assertEqual(data["prefix_integrity"]["entries_changed_between_requests"], {})
+
+    def test_a_real_prefix_report_object_is_logged_and_written_as_json(self):
+        # The real backend sets ``last_prefix`` to a prefix_session.Report, not a dict. A real-model run
+        # failed on this after its prefill and decode had finished, so the double must match the real type.
+        from models.flashnext.prefix_session import Report
+
+        def reset(backend):
+            backend.tape, backend.pending = [], []
+
+        report = Report(prompt_tokens=1000, hit_tokens=14, prefilled_tokens=986, tier="ram",
+                        restore_seconds=0.01, snapshots=[14])
+        with mock.patch.object(T.FakeBackend, "reset", reset, create=True), \
+                mock.patch.object(T.FakeBackend, "last_prefix", report, create=True):
+            code, target = self.run_child(
+                condition="F2P", requests="ref,ref", prefix_dir="/cache/prefix", dump_dir=None,
+                prefix_min_tokens=8, prefix_ram_gb=0.75, prefix_disk_gb=5.0)
+        self.assertEqual(code, 0)
+        data = json.loads(target.read_text())
+        self.assertEqual(data["status"], "completed")
+        for turn in data["turns"]:
+            self.assertEqual(turn["prefix"]["hit_tokens"], 14)
+            self.assertEqual(turn["prefix"]["snapshots"], [14])
+
+    def test_a_failure_in_optional_reporting_cannot_lose_the_measured_turn(self):
+        def boom(backend):
+            raise RuntimeError("reporting broke")
+
+        with mock.patch.object(B, "prefix_report", boom), \
+                mock.patch.object(T.FakeBackend, "last_prefix", None, create=True):
+            code, target = self.run_child(
+                condition="F2P", requests="ref", prefix_dir="/cache/prefix", dump_dir=None,
+                prefix_min_tokens=8, prefix_ram_gb=0.75, prefix_disk_gb=5.0)
+        self.assertEqual(code, 0)
+        data = json.loads(target.read_text())
+        turn = data["turns"][0]
+        self.assertEqual(turn["kv_hash"], "kv")
+        self.assertEqual(len(turn["digest"]), 16)
+        self.assertIsInstance(turn["generated_ids"], list)
+        self.assertIn("reporting broke", turn["report_error"])
+
+    def test_the_turn_is_on_disk_before_the_extras_run(self):
+        seen = []
+
+        path = self.root / "flashnext" / "child" / "arm-1k-F2-r1.json"
+
+        def spy(backend):
+            seen.append(json.loads(path.read_text())["turns"])
+            return None
+
+        with mock.patch.object(B, "prefix_report", spy), \
+                mock.patch.object(T.FakeBackend, "last_prefix", None, create=True):
+            code, target = self.run_child(
+                condition="F2P", requests="ref", prefix_dir="/cache/prefix", dump_dir=None,
+                prefix_min_tokens=8, prefix_ram_gb=0.75, prefix_disk_gb=5.0)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(seen[0]), 1)
+        self.assertIn("digest", seen[0][0])
+
+    def test_the_later_request_keeps_the_system_message_and_changes_the_question(self):
+        prompts = {"system": "S", "first": "Q1", "later": "Q2"}
+        self.assertEqual(B.request_text("ref", prompts, None), ("S", "Q1"))
+        self.assertEqual(B.request_text("later", prompts, None), ("S", "Q2"))
+
+    def test_prefix_report_accepts_none_dict_and_report(self):
+        from types import SimpleNamespace
+
+        from models.flashnext.prefix_session import Report
+
+        self.assertIsNone(B.prefix_report(SimpleNamespace()))
+        self.assertIsNone(B.prefix_report(SimpleNamespace(last_prefix=None)))
+        self.assertEqual(B.prefix_report(SimpleNamespace(last_prefix={"hit_tokens": 3})), {"hit_tokens": 3})
+        self.assertEqual(B.prefix_report(SimpleNamespace(last_prefix=Report(prompt_tokens=5)))["prompt_tokens"], 5)
+
+    def test_a_prefix_cache_arm_without_a_directory_refuses_to_start(self):
+        with self.assertRaises(SystemExit):
+            self.run_child(condition="F2P", requests="ref", prefix_dir=None, dump_dir=None,
+                           prefix_min_tokens=16, prefix_ram_gb=0.75, prefix_disk_gb=5.0)
+
     def test_a_normal_run_writes_the_result_and_a_trace_with_every_phase(self):
         names = []
 
@@ -1257,7 +1363,16 @@ class OptionTests(unittest.TestCase):
         out = B.diagnostic_args(self.args())
         self.assertEqual(out, ["--min-available-gb", "2", "--max-compressor-growth-gib", "2",
                                "--compressor-stop-available-gib", "3",
-                               "--trace-interval", "1", "--fast-trace-interval", "0.25"])
+                               "--trace-interval", "1", "--fast-trace-interval", "0.25",
+                               "--requests", "ref", "--prefix-min-tokens", "16",
+                               "--prefix-ram-gb", "0.75", "--prefix-disk-gb", "5"])
+
+    def test_prefix_cache_options_reach_the_child_only_when_given(self):
+        out = B.diagnostic_args(self.args(prefix_dir="/cache/d", dump_dir="/dumps", requests="long:A,long:B"))
+        self.assertEqual(out[out.index("--requests") + 1], "long:A,long:B")
+        self.assertEqual(out[out.index("--prefix-dir") + 1], "/cache/d")
+        self.assertEqual(out[out.index("--dump-dir") + 1], "/dumps")
+        self.assertNotIn("--prefix-dir", B.diagnostic_args(self.args()))
 
     def test_the_overrides_reach_the_child_command(self):
         arm = H.build_schedule(["128"], ["F0"], 1)[0]
@@ -1377,5 +1492,281 @@ class ReadinessDiagnosticsTests(unittest.TestCase):
         self.assertEqual(self.status(report, "machine state"), "FAIL")
 
 
+class PrefixConditionTests(unittest.TestCase):
+    """F2P is F2L plus 512-token chunks and the prefix cache, and only those."""
+
+    def test_f2p_overlay(self):
+        overlay = H.condition_overlay(H.ALL_CONDITIONS["F2P"])
+        self.assertEqual(overlay["FLASHNEXT_PREFILL_CHUNK_TOKENS"], "512")
+        self.assertEqual(overlay["FLASHNEXT_PREFIX_CACHE"], "1")
+        self.assertEqual(overlay["FLASHNEXT_EVAL_LINEAR_STATE"], "1")
+        self.assertEqual(overlay["FLASHNEXT_PREFILL_RING_EXPERTS"], "512")
+        self.assertEqual(overlay["FLASHNEXT_PREFILL_RING_SCRATCH"], "1")
+
+    def test_no_other_condition_turns_them_on(self):
+        for name, condition in H.ALL_CONDITIONS.items():
+            overlay = H.condition_overlay(condition)
+            for flag in ("FLASHNEXT_PREFILL_CHUNK_TOKENS", "FLASHNEXT_PREFIX_CACHE"):
+                self.assertIn(flag, overlay)
+                chunked = name in ("F2P", "F2B", "F2Pn", "F2Bn", "F2Bnr", "F2Br", "F2Pnr", "F2Bm", "F2Bmu")
+                self.assertEqual(overlay[flag] is not None, chunked, (name, flag))
+
+    def test_f2b_sets_the_balanced_2048_planner_and_only_f2b_sets_the_policy(self):
+        overlay = H.condition_overlay(H.ALL_CONDITIONS["F2B"])
+        self.assertEqual(overlay["FLASHNEXT_PREFILL_CHUNK_TOKENS"], "2048")
+        self.assertEqual(overlay["FLASHNEXT_PREFILL_CHUNK_POLICY"], "balanced")
+        self.assertEqual(overlay["FLASHNEXT_PREFIX_CACHE"], "1")
+        self.assertEqual(overlay["FLASHNEXT_PREFILL_RING_EXPERTS"], "512")
+        for name, condition in H.ALL_CONDITIONS.items():
+            value = H.condition_overlay(condition)["FLASHNEXT_PREFILL_CHUNK_POLICY"]
+            self.assertEqual(value is not None, name in ("F2B", "F2Bn", "F2Bnr", "F2Br", "F2Bm", "F2Bmu"), name)
+        self.assertIn("F2B", H.DIAGNOSTIC_CONDITIONS)
+        self.assertFalse(H.ALL_CONDITIONS["F2B"].is_baseline)
+
+    def test_same_plan_references_differ_from_cached_conditions_only_by_the_cache(self):
+        for cached, plain in (("F2P", "F2Pn"), ("F2B", "F2Bn")):
+            a = H.condition_overlay(H.ALL_CONDITIONS[plain])
+            b = H.condition_overlay(H.ALL_CONDITIONS[cached])
+            differing = {k for k in b if a.get(k) != b.get(k)}
+            self.assertEqual(differing, {"FLASHNEXT_PREFIX_CACHE_RESTORE"}, (cached, plain))
+            self.assertEqual(a["FLASHNEXT_PREFIX_CACHE"], "1")        # same session, so the same chunk plan
+            self.assertEqual(a["FLASHNEXT_PREFIX_CACHE_RESTORE"], "0")
+            self.assertIsNone(b["FLASHNEXT_PREFIX_CACHE_RESTORE"])
+            self.assertFalse(H.ALL_CONDITIONS[plain].is_baseline)
+
+    def test_only_f2bnr_releases_the_decode_pool_and_differs_from_f2bn_by_that_flag_alone(self):
+        flag = "FLASHNEXT_PREFILL_RELEASE_DECODE_POOL"
+        for name, condition in H.ALL_CONDITIONS.items():
+            overlay = H.condition_overlay(condition)
+            self.assertIn(flag, overlay, name)
+            self.assertEqual(overlay[flag] is not None, name in ("F2Bnr", "F2Br", "F2Pnr"), name)
+        a, b = H.condition_overlay(H.ALL_CONDITIONS["F2Bn"]), H.condition_overlay(H.ALL_CONDITIONS["F2Bnr"])
+        self.assertEqual({k for k in b if a.get(k) != b.get(k)}, {flag})
+        c = H.condition_overlay(H.ALL_CONDITIONS["F2Br"])               # the cached run: only the cache flag differs
+        self.assertEqual({k for k in c if b.get(k) != c.get(k)}, {"FLASHNEXT_PREFIX_CACHE_RESTORE"})
+        p = H.condition_overlay(H.ALL_CONDITIONS["F2Pnr"])               # the quality reference: 512 grid, release on
+        self.assertEqual((p["FLASHNEXT_PREFILL_CHUNK_TOKENS"], p["FLASHNEXT_PREFILL_CHUNK_POLICY"]), ("512", None))
+        self.assertEqual(b["FLASHNEXT_PREFIX_CACHE_RESTORE"], "0")     # B stays a full cold prefill, same plan
+        self.assertEqual((b["FLASHNEXT_PREFILL_CHUNK_TOKENS"], b["FLASHNEXT_PREFILL_CHUNK_POLICY"]), ("2048", "balanced"))
+        self.assertEqual((b["FLASHNEXT_PREFILL_RING_EXPERTS"], b["FLASHNEXT_PREFILL_RING_SCRATCH"]), ("512", "1"))
+
+    def test_managed_conditions_differ_from_f2b_only_by_the_manager_flags(self):
+        flags = ("FLASHNEXT_MEMORY_MANAGER", "FLASHNEXT_MEMORY_SHORT_UNCACHED")
+        for name, condition in H.ALL_CONDITIONS.items():
+            overlay = H.condition_overlay(condition)
+            for flag in flags:
+                self.assertIn(flag, overlay, name)
+            self.assertEqual(overlay[flags[0]] is not None, name in ("F2Bm", "F2Bmu"), name)
+            self.assertEqual(overlay[flags[1]] is not None, name == "F2Bmu", name)
+        base = H.condition_overlay(H.ALL_CONDITIONS["F2B"])
+        for name, extra in (("F2Bm", {flags[0]}), ("F2Bmu", set(flags))):
+            overlay = H.condition_overlay(H.ALL_CONDITIONS[name])
+            self.assertEqual({k for k in overlay if overlay.get(k) != base.get(k)}, extra, name)
+
+    def test_f2p_is_a_diagnostic_and_not_a_baseline(self):
+        self.assertIn("F2P", H.DIAGNOSTIC_CONDITIONS)
+        self.assertFalse(H.ALL_CONDITIONS["F2P"].is_baseline)
+
+
+class LongPromptTests(unittest.TestCase):
+    def test_a_fake_tokenizer_gets_a_long_system_message_and_two_questions(self):
+        class Tok:
+            def encode(self, text, add_special_tokens=False):
+                return list(range(len(text.split())))
+
+            def decode(self, ids):
+                return " ".join(f"w{i}" for i in ids)
+
+            def apply_chat_template(self, messages, **kwargs):
+                return " ".join(m["content"] for m in messages) + " <|im_start|>assistant"
+
+        source = " ".join(f"s{i}" for i in range(40_000))
+        with mock.patch("macqwen.conversation.Conversation.open_conversation", autospec=True,
+                        side_effect=lambda self, system, user, **kw: len(system.split()) + len(user.split())):
+            result = H.build_long_prompts(Tok(), source, tokens=1025)
+        self.assertEqual(set(result["questions"]), {"A", "B"})
+        self.assertNotEqual(result["questions"]["A"], result["questions"]["B"])
+        self.assertEqual(result["tokens"]["A"], 1025)
+        self.assertTrue(result["system"].startswith(H.SYSTEM_TEXT))
+
+    def test_a_source_that_is_too_short_is_refused(self):
+        class Tok:
+            def encode(self, text, add_special_tokens=False):
+                return [1] * 100
+
+        with self.assertRaises(ValueError):
+            H.build_long_prompts(Tok(), "x", tokens=1025)
+
+
+class AgentPromptTests(unittest.TestCase):
+    class Tok:
+        def __init__(self):
+            self.vocab = {}
+
+        def encode(self, text, add_special_tokens=False):
+            return [self.vocab.setdefault(w, len(self.vocab)) for w in text.split()]
+
+    def build(self):
+        tok = self.Tok()
+
+        def open_conversation(conversation, system, user, **kwargs):
+            conversation.pending = tok.encode(
+                f"<|im_start|>system {system} <|im_end|> <|im_start|>user {user} <|im_end|> <|im_start|>assistant")
+            return len(conversation.pending)
+
+        with mock.patch("macqwen.conversation.Conversation.open_conversation", autospec=True,
+                        side_effect=open_conversation):
+            return H.build_agent_prompts(tok)
+
+    def test_the_fixture_is_a_real_coding_agent_prompt_without_template_markers(self):
+        text = H.AGENT_PROMPT_FILE.read_text()
+        self.assertGreater(len(text.split()), 1400)
+        self.assertNotIn("<|", text)
+        for needle in ("tool", "git", "test", "secret"):
+            self.assertIn(needle, text.lower())
+
+    def test_counts_are_measured_per_question_and_split_at_the_system_boundary(self):
+        result = self.build()
+        system_words = len(result["system"].split())
+        for name in ("A", "B"):
+            counts = result["token_counts"][name]
+            self.assertEqual(counts["system_message_tokens"], system_words + 2)      # '<|im_start|>system' is one word here, plus the end marker
+            self.assertEqual(counts["prompt_tokens"],
+                             counts["system_message_tokens"] + counts["user_and_generation_tokens"])
+        self.assertNotEqual(result["questions"]["A"], result["questions"]["B"])
+        self.assertEqual(result["system_hash"], H.digest_text(result["system"]))
+
+    def test_agent_requests_share_the_system_message(self):
+        agent = {"system": "AS", "questions": {"A": "qa", "B": "qb"}}
+        self.assertEqual(B.request_text("agent:A", {"system": "S", "first": "U"}, None, agent), ("AS", "qa"))
+        self.assertEqual(B.request_text("agent:B", {"system": "S", "first": "U"}, None, agent), ("AS", "qb"))
+        with self.assertRaises(ValueError):
+            B.request_text("agent:A", {"system": "S", "first": "U"}, None, None)
+        with self.assertRaises(ValueError):
+            B.request_text("agent:Z", {"system": "S", "first": "U"}, None, agent)
+
+
+class RequestSpecTests(unittest.TestCase):
+    PROMPTS = {"system": "S", "first": "U"}
+    LONG = {"system": "LS", "questions": {"A": "qa", "B": "qb"}}
+
+    def test_each_spec_picks_its_system_and_question(self):
+        self.assertEqual(B.request_text("ref", self.PROMPTS, None), ("S", "U"))
+        self.assertEqual(B.request_text("long:A", self.PROMPTS, self.LONG), ("LS", "qa"))
+        self.assertEqual(B.request_text("long:B", self.PROMPTS, self.LONG), ("LS", "qb"))
+
+    def test_unknown_specs_are_refused(self):
+        for spec in ("long:C", "short", "long"):
+            with self.assertRaises(ValueError):
+                B.request_text(spec, self.PROMPTS, self.LONG)
+        with self.assertRaises(ValueError):
+            B.request_text("long:A", self.PROMPTS, None)
+
+
+class LinearStateConditionTests(unittest.TestCase):
+    """F2L is F2 plus FLASHNEXT_EVAL_LINEAR_STATE=1, and nothing else changes."""
+
+    FLAG = "FLASHNEXT_EVAL_LINEAR_STATE"
+
+    def test_only_f2l_sets_the_flag(self):
+        for name, condition in H.ALL_CONDITIONS.items():
+            overlay = H.condition_overlay(condition)
+            self.assertIn(self.FLAG, overlay, name)
+            self.assertEqual(overlay[self.FLAG], "1" if name in ("F2L", "F2P", "F2B", "F2Pn", "F2Bn", "F2Bnr", "F2Br", "F2Pnr", "F2Bm", "F2Bmu") else None, name)
+
+    def test_f2l_matches_f2_apart_from_the_flag(self):
+        f2, f2l = H.ALL_CONDITIONS["F2"], H.ALL_CONDITIONS["F2L"]
+        a, b = H.condition_overlay(f2), H.condition_overlay(f2l)
+        self.assertEqual({k: v for k, v in b.items() if k != self.FLAG},
+                         {k: v for k, v in a.items() if k != self.FLAG})
+        self.assertEqual((f2.ring, f2.scratch, f2.cache_mb, f2.turn), (f2l.ring, f2l.scratch, f2l.cache_mb, f2l.turn))
+
+    def test_f2l_is_a_diagnostic_not_part_of_the_planned_matrix(self):
+        self.assertIn("F2L", H.DIAGNOSTIC_CONDITIONS)
+        self.assertNotIn("F2L", H.CONDITIONS)
+        self.assertFalse(H.ALL_CONDITIONS["F2L"].is_baseline)
+        self.assertTrue(H.ALL_CONDITIONS["F0"].is_baseline)
+
+    def test_launch_environment_carries_the_flag_for_a_first_turn_arm(self):
+        self.assertEqual(H.launch_overlay(H.ALL_CONDITIONS["F2L"])[self.FLAG], "1")
+        self.assertIsNone(H.launch_overlay(H.ALL_CONDITIONS["F2"])[self.FLAG])
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class LaunchGateTests(unittest.TestCase):
+    """The launch gate and the child's stop floor are different numbers (the first F2Bm launch used one for both)."""
+
+    def test_the_gate_refuses_a_start_below_it_and_says_so(self):
+        from models.flashnext.tests.bench import bench_prefill_memory as B
+
+        self.assertIsNone(B.start_gate_reason({"available_mb": 9216.0}, 9))
+        self.assertIn("launch gate", B.start_gate_reason({"available_mb": 9215.0}, 9))
+        self.assertIn("cannot be checked", B.start_gate_reason({"available_mb": None}, 9))
+        self.assertIn("launch gate", B.start_gate_reason({"available_mb": 8190.0}, 9))
+        self.assertIsNone(B.start_gate_reason({"available_mb": 100.0}, None))        # no gate set: unchanged behaviour
+
+    def test_the_gate_is_not_passed_to_the_child_as_its_floor(self):
+        from models.flashnext.tests.bench import bench_prefill_memory as B
+
+        args = SimpleNamespace(min_available_gb=2.0, start_available_gb=9.0, max_compressor_growth_gib=2.0,
+                               compressor_stop_available_gib=3.0)
+        out = B.diagnostic_args(args)
+        self.assertEqual(out[out.index("--min-available-gb") + 1], "2")
+        self.assertNotIn("9", out[out.index("--min-available-gb") + 1])
+        self.assertNotIn("--start-available-gb", out)
+
+    def test_check_ready_displays_separate_startup_and_runtime_thresholds(self):
+        from models.flashnext.tests.bench import bench_prefill_memory as B
+
+        args = SimpleNamespace(
+            sizes=["1k"], conditions=["F0"], rounds=1, final=False,
+            min_available_gb=2.0, start_available_gb=9.0, expert_pool_gb=None, ring_min_tokens=None,
+            max_compressor_growth_gib=2.0, compressor_stop_available_gib=3.0,
+            trace_interval=1.0, fast_trace_interval=0.25, requests="ref",
+            prefix_min_tokens=16, prefix_ram_gb=0.75, prefix_disk_gb=5.0,
+            prefix_dir=None, dump_dir=None, suite=None
+        )
+        sampler = SimpleNamespace(sample=lambda: {"available_mb": 9500.0, "battery_percent": 100,
+                                                  "power_source": "ac", "low_power": False,
+                                                  "pressure_level": 1, "swap_used_mb": 0.0})
+        rows = [{"size": "1k", "target": 1024, "first": 1025, "later": 1024}]
+        with mock.patch.object(B, "prompt_sizes", return_value=rows), \
+                mock.patch("macqwen.checkpoints.resolve_flashnext", return_value=Path("/models/ckpt")):
+            report = B.check_ready(
+                args, sampler=sampler, preflight_module=T.ready_preflight(),
+                tokenizer_loader=lambda p: T.CharTokenizer(), contract=lambda: [], environ={}, free_gb=8.0)
+        self.assertEqual(report.verdict, "READY")
+        check_names = [c.name for c in report.checks]
+        self.assertIn("memory thresholds", check_names)
+        mem_check = next(c for c in report.checks if c.name == "memory thresholds")
+        self.assertIn("launch gate: 9 GiB", mem_check.detail)
+        self.assertIn("child runtime stop floor: 2 x 1000 MiB", mem_check.detail)
+
+    def test_check_ready_fails_when_below_startup_gate(self):
+        from models.flashnext.tests.bench import bench_prefill_memory as B
+
+        args = SimpleNamespace(
+            sizes=["1k"], conditions=["F0"], rounds=1, final=False,
+            min_available_gb=2.0, start_available_gb=9.0, expert_pool_gb=None, ring_min_tokens=None,
+            max_compressor_growth_gib=2.0, compressor_stop_available_gib=3.0,
+            trace_interval=1.0, fast_trace_interval=0.25, requests="ref",
+            prefix_min_tokens=16, prefix_ram_gb=0.75, prefix_disk_gb=5.0,
+            prefix_dir=None, dump_dir=None, suite=None
+        )
+        # 8.19 GB available (the condition that stopped the previous real-model run)
+        sampler = SimpleNamespace(sample=lambda: {"available_mb": 8190.0, "battery_percent": 100,
+                                                  "power_source": "ac", "low_power": False,
+                                                  "pressure_level": 1, "swap_used_mb": 0.0})
+        rows = [{"size": "1k", "target": 1024, "first": 1025, "later": 1024}]
+        with mock.patch.object(B, "prompt_sizes", return_value=rows), \
+                mock.patch("macqwen.checkpoints.resolve_flashnext", return_value=Path("/models/ckpt")):
+            report = B.check_ready(
+                args, sampler=sampler, preflight_module=T.ready_preflight(),
+                tokenizer_loader=lambda p: T.CharTokenizer(), contract=lambda: [], environ={}, free_gb=8.0)
+        self.assertEqual(report.verdict, "BLOCKED")
+        state_check = next(c for c in report.checks if c.name == "machine state")
+        self.assertEqual(state_check.status, "FAIL")
+        self.assertIn("below the 9 GiB launch gate", state_check.detail)

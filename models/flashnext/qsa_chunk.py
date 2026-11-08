@@ -48,7 +48,7 @@ def _pool_keys(indexer, raw_keys, position_ids, start, end):
 def _reusable_pool(indexer, cache):
     from mlx_vlm.models.qwen4_exp.language import QSAKVCache, QSAQuantizedKVCache
 
-    if type(cache) not in (QSAKVCache, QSAQuantizedKVCache):
+    if not isinstance(cache, (QSAKVCache, QSAQuantizedKVCache)):
         return None
     saved = getattr(cache, "_flashnext_pooled_keys", None)
     if saved is None:

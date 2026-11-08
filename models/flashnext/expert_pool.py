@@ -43,7 +43,18 @@ _PARTS = (
 )
 
 
+# Set only by the opt-in memory manager (memory_manager.py): the size the NEXT pool will be created with. A pool that
+# already exists keeps its size; resizing means releasing it first. None means "use FLASHNEXT_EXPERT_POOL_GB".
+_BUDGET_GB = [None]
+
+
+def set_budget_gb(value) -> None:
+    _BUDGET_GB[0] = None if value is None else max(0.0, float(value))
+
+
 def configured_gb() -> float:
+    if _BUDGET_GB[0] is not None:
+        return _BUDGET_GB[0]
     try:
         return max(0.0, float(os.environ.get(SIZE_FLAG, "0") or 0))
     except ValueError as error:
@@ -150,13 +161,109 @@ class ExpertPool:
         self._fds.clear()
 
 
+AUTO_FLAG = "FLASHNEXT_EXPERT_POOL_AUTO"
+GIB = 2 ** 30
+# The guard stops when compressor growth passes 2 GiB while available memory is under 3 GiB, so a pool is only
+# allowed if memory still stays above that line AFTER the pool is resident, plus a margin. The pool is filled by
+# the first decode tokens (first real chat 2026-11-08: available fell 4.35 to 3.21 GiB within 0.3 s of creation and
+# to 2.94 GiB by the first token, with the compressor still 3.4 GiB above its start), so the reserve is its full size.
+POOL_FLOOR_BYTES = 3 * GIB
+POOL_MARGIN_BYTES = GIB // 2
+_HEADROOM_READER = [None]      # tests inject a reader returning (available_bytes, pressure_level)
+
+
+def auto_enabled() -> bool:
+    return os.environ.get(AUTO_FLAG, "0") == "1"
+
+
+def headroom_decision(available_bytes: int, pool_bytes: int, pressure: int = 1,
+                      floor: int = POOL_FLOOR_BYTES, margin: int = POOL_MARGIN_BYTES):
+    """Return ``(allowed, reason)``. The pool is optional, so any doubt means no pool."""
+    from . import memory_controller
+
+    if memory_controller.forbid_optional():
+        return False, f"memory controller is {memory_controller.state().upper()} (no optional allocation)"
+    need = int(pool_bytes) + floor + margin
+    if pressure >= 2:
+        return False, f"memory pressure level {pressure}"
+    if available_bytes < need:
+        return False, (f"{available_bytes / GIB:.2f} GiB available, a {pool_bytes / GIB:.2f} GiB pool needs "
+                       f"{need / GIB:.2f} GiB ({floor / GIB:.0f} GiB guard floor + {margin / GIB:.1f} GiB margin)")
+    return True, f"{available_bytes / GIB:.2f} GiB available covers the {need / GIB:.2f} GiB the pool needs"
+
+
+def _read_headroom():
+    if _HEADROOM_READER[0] is not None:
+        return _HEADROOM_READER[0]()
+    from . import purge_recovery
+
+    reading = purge_recovery.read_system()
+    return reading.available, reading.pressure
+
+
+def _trim_allocator_cache() -> None:
+    """Release unused MLX allocator blocks left by the prefill before measuring headroom (idle-safe, no sync)."""
+    try:
+        import mlx.core as mx
+
+        mx.clear_cache()
+    except Exception:
+        pass
+
+
+def reset_decline(store) -> None:
+    """Forget an earlier refusal so the next request looks at memory again (deferred, per-request retry)."""
+    if store is not None and getattr(store, "_flashnext_pool_declined", None) is not None:
+        store._flashnext_pool_declined = None
+
+
+def _auto_allows(store, size_bytes: int) -> bool:
+    _trim_allocator_cache()
+    available, pressure = _read_headroom()
+    allowed, reason = headroom_decision(available, size_bytes, pressure)
+    store._flashnext_pool_decision = {"allowed": allowed, "reason": reason, "available": int(available)}
+    if not allowed:
+        store._flashnext_pool_declined = reason
+        if os.environ.get("FLASHNEXT_CHAT_GUARD") == "1":
+            print(f"FlashNext expert pool: not allocated ({reason}); decoding from SSD without a pool "
+                  f"(slower, memory-safe)", flush=True)
+    return allowed
+
+
 def for_store(store, group_size: int = 32):
-    """The process's pool for this store, created on first use."""
+    """The process's pool for this store, created on first use (``None``: run without a pool)."""
     pool = getattr(store, "_flashnext_expert_pool", None)
     if pool is None and enabled():
-        pool = ExpertPool(
-            store, int(configured_gb() * 1e9), group_size,
-            lock=os.environ.get(LOCK_FLAG, "0") == "1",
-        )
+        if getattr(store, "_flashnext_pool_declined", None) is not None:
+            return None                       # refused for this request; reset_decline() lets the next one retry
+        target_gb = configured_gb()
+        if auto_enabled() and not _auto_allows(store, int(target_gb * 1e9)):
+            return None
+        lock = os.environ.get(LOCK_FLAG, "0") == "1"
+        try:
+            pool = ExpertPool(
+                store, int(target_gb * 1e9), group_size,
+                lock=lock,
+            )
+        except (MemoryError, RuntimeError, OSError):
+            # Guarded interactive chat must report a failed allocation rather
+            # than silently running with a different pool or masking a Metal error.
+            if os.environ.get("FLASHNEXT_CHAT_GUARD") == "1":
+                raise
+            # Recovery from allocation failure: fall back to 1 GB if larger
+            if target_gb > 1.0:
+                try:
+                    pool = ExpertPool(
+                        store, int(1.0 * 1e9), group_size,
+                        lock=lock,
+                    )
+                    set_budget_gb(1.0)
+                except (MemoryError, RuntimeError, OSError):
+                    pool = None
+            else:
+                pool = None
         store._flashnext_expert_pool = pool
+        if pool is not None and os.environ.get("FLASHNEXT_CHAT_GUARD") == "1":
+            print(f"FlashNext expert pool: {len(pool._mm)} bytes "
+                  f"({pool.slots} slots; requested {target_gb:g} GB)", flush=True)
     return pool

@@ -1563,6 +1563,14 @@ class StreamingSwitchGLU(nn.Module):
 
     def _read_weights(self, projections, wanted):
         """Read ``wanted`` for every projection and wrap the rows for MLX."""
+        from . import expert_io_stats
+
+        pool = getattr(self.gate_proj.cache.store, "_flashnext_expert_pool", None)
+        if expert_io_stats.pool_reuse_enabled() and pool is not None and self.layer_id >= 0 and pool._slot_of:
+            hits = {e: pool._slot_of[(self.layer_id, e)] for e in wanted if (self.layer_id, e) in pool._slot_of}
+            if hits:
+                return self._read_weights_with_pool(projections, wanted, pool, hits)
+
         pending = submit_projection_tasks(projections, wanted)
         if _PROFILE:
             timings = []
@@ -1584,10 +1592,107 @@ class StreamingSwitchGLU(nn.Module):
         with hostwindow.window("io_await"):
             raw = _await_projection_tasks(pending)
         with hostwindow.window("to_mx_host"):
-            return [
+            weights = [
                 projection.cache.to_mx(chunks)
                 for projection, chunks in zip(projections, raw)
             ]
+        if expert_io_stats.diagnostics_enabled():
+            store = self.gate_proj.cache.store
+            total_bytes = sum(
+                store.refs[f"{p.cache.prefix}.{part}"].row_bytes * len(wanted)
+                for p in projections for part in ("weight", "scales", "biases")
+            )
+            expert_io_stats.record_request(
+                num_experts=len(wanted),
+                hits=0,
+                misses=len(wanted),
+                ssd_bytes=total_bytes
+            )
+        return weights
+
+    def _read_weights_with_pool(self, projections, wanted, pool, hits):
+        from . import expert_io_stats
+
+        misses = [e for e in wanted if e not in hits]
+        dest_indices = [wanted.index(e) for e in misses] if misses else None
+        hit_indices_and_bases = [
+            (i, 4096 + hits[expert] * pool.stride)
+            for i, expert in enumerate(wanted) if expert in hits
+        ]
+        t0 = time.perf_counter()
+
+        # Submit disk reads for misses only
+        pending = submit_projection_tasks(projections, misses) if misses else None
+
+        # Pre-allocate destination buffers for all 3 projections and parts
+        store = self.gate_proj.cache.store
+        proj_buffers = []
+        copy_bytes = 0
+
+        # Update LRU ordering once for resident hits
+        for expert in hits:
+            if (self.layer_id, expert) in pool._slot_of:
+                pool._slot_of.move_to_end((self.layer_id, expert))
+
+        for projection in projections:
+            proj_short = projection.cache.prefix.rsplit(".", 1)[-1]
+            part_buffers = []
+            for part in ("weight", "scales", "biases"):
+                name = f"{projection.cache.prefix}.{part}"
+                ref = store.refs[name]
+                row_bytes = ref.row_bytes
+                buf = store.empty_rows(name, len(wanted))
+                offset_in_slot = pool.offsets[(proj_short, part)]
+                for i, base_slot in hit_indices_and_bases:
+                    base = base_slot + offset_in_slot
+                    buf[i].view(np.uint8).reshape(-1)[:] = pool.array[base : base + row_bytes]
+                    copy_bytes += row_bytes
+                part_buffers.append(buf)
+            proj_buffers.append(part_buffers)
+
+        t_copy = time.perf_counter() - t0
+
+        t_io = 0.0
+        read_bytes = 0
+        if pending is not None:
+            began_io = time.perf_counter()
+            timings = [] if _PROFILE else None
+            with hostwindow.window("io_await"):
+                raw_misses = _await_projection_tasks(pending, timings)
+            t_io = time.perf_counter() - began_io
+
+            for p_idx, (projection, part_buffers) in enumerate(zip(projections, proj_buffers)):
+                for part_idx, (part, buf) in enumerate(zip(("weight", "scales", "biases"), part_buffers)):
+                    chunks = raw_misses[p_idx][part_idx]
+                    miss_block = chunks.buffer if isinstance(chunks, _SharedRead) else (
+                        chunks[0] if len(chunks) == 1 else np.concatenate(chunks)
+                    )
+                    read_bytes += miss_block.nbytes
+                    buf[dest_indices] = miss_block
+
+        if _PROFILE:
+            _TIMERS["io_wait"] += t_io
+            _TIMERS["io_calls"] += 1 if misses else 0
+
+        weights = []
+        with hostwindow.window("to_mx_host"):
+            for projection, part_buffers in zip(projections, proj_buffers):
+                wrapped = tuple(
+                    store.to_mx(f"{projection.cache.prefix}.{part}", buf)
+                    for part, buf in zip(("weight", "scales", "biases"), part_buffers)
+                )
+                weights.append(wrapped)
+
+        expert_io_stats.record_request(
+            num_experts=len(wanted),
+            hits=len(hits),
+            misses=len(misses),
+            ssd_bytes=read_bytes,
+            saved_bytes=copy_bytes,
+            io_s=t_io,
+            copy_s=t_copy
+        )
+        return weights
 
     def __call__(
         self, x, indices, allow_sort=True, scores=None, shared_y=None,
@@ -1624,7 +1729,7 @@ class StreamingSwitchGLU(nn.Module):
             and flat_input.shape[0] <= 8
             and self.metal_combines_scores
         )
-        if custom and self._expert_pool_on:
+        if custom and self._expert_pool_on and self._pool_usable():
             return self._pool_pass(
                 indices, routed, flat_input, scores, shared_y, shared, shared_gate,
             )
@@ -1698,6 +1803,12 @@ class StreamingSwitchGLU(nn.Module):
             self._last_fused_shared = True
         output = output.reshape(*indices.shape[:-1], output.shape[-1])
         return output if self.gate_proj.group_size == 64 else output.astype(mx.bfloat16)
+
+    def _pool_usable(self) -> bool:
+        """False when the pool was not allocated (no safe headroom): the normal read path serves this call."""
+        from .expert_pool import for_store
+
+        return for_store(self.gate_proj.cache.store, self.gate_proj.group_size) is not None
 
     def _pool_pass(
         self, indices, routed, flat_input, scores, shared_y, shared, shared_gate,

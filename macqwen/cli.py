@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from macqwen import preferences
+from models.flashnext.settings import modes
 from macqwen.checkpoints import installed_checkpoints, resolve_qwen27b
 from models.bonsai2.settings import (
     MODEL_NAME as BONSAI2,
@@ -263,9 +264,30 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     parser.add_argument("--model-path", "--checkpoint", dest="model_path")
     parser.add_argument("--preferences-file", default=preferences.DEFAULT_PATH)
     parser.add_argument("--v4", action="store_true")
+    parser.add_argument("--mode", choices=modes.MODES)
+    parser.add_argument("--pool-gb", help="auto (default), 0, or a fixed size up to 2")
+    parser.add_argument("--enable", action="append", default=[], choices=tuple(modes.EXPERIMENTAL))
+    parser.add_argument("--context-limit", type=int)
+    parser.add_argument("--prefix-dir")
+    parser.add_argument("--auto-purge", action="store_true")
+    parser.add_argument("--no-auto-purge", action="store_true",
+                        help="turn off the automatic memory preparation purge (on by default for flashnext)")
     known, remaining = parser.parse_known_args(argv)
 
     model = known.model or ("qwen27b" if build else "flashnext")
+    if known.mode and model != "flashnext":
+        raise SystemExit("--mode applies to the flashnext model only")
+    # A benchmark launch states its own conditions and must not be re-configured by a mode.
+    benchmarking = any(value.startswith("--benchmark") for value in remaining)
+    plan = None
+    if model == "flashnext" and (known.mode or not benchmarking):
+        try:
+            plan = modes.plan_mode(
+                known.mode or modes.CHAT, pool_gb=known.pool_gb, enable=known.enable,
+                prefix_dir=known.prefix_dir, context_limit=known.context_limit,
+                serve="--server" in remaining)
+        except modes.ModeError as exc:
+            raise SystemExit(f"veystrix: {exc}") from exc
     interpreter = _interpreter(model)
 
     chat_args = [
@@ -273,8 +295,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         "--model", model,
         "--preferences-file", known.preferences_file,
     ]
-    if known.profile:
-        chat_args += ["--profile", known.profile]
+    if known.profile or plan:
+        chat_args += ["--profile", known.profile or plan.profile]
     if model == "qwen27b":
         model_path = _qwen27b_path(known.model_path, build)
         chat_args += [
@@ -295,8 +317,19 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     if os.environ.get("PAGED") == "1" and "--paged" not in remaining:
         chat_args.append("--paged")
     chat_args.extend(remaining)
+    if plan and plan.mode == modes.AGENTIC and "--server" not in chat_args:
+        chat_args.append("--server")
 
     environment = dict(os.environ)
+    if plan:
+        modes.apply_mode(environment, plan)
+    if known.auto_purge:
+        environment["FLASHNEXT_AUTO_PURGE"] = "1"
+    elif model == "flashnext" and not known.no_auto_purge and "FLASHNEXT_AUTO_PURGE" not in environment:
+        # Autonomous memory preparation: a conditional, authorized file-cache purge is part of normal startup. It never
+        # runs during a load or a request, needs sudo -n permission, and backs off; FLASHNEXT_AUTO_PURGE=0 or
+        # --no-auto-purge turns it off.
+        environment["FLASHNEXT_AUTO_PURGE"] = "1"
     if model == "flashnext":
         from models.flashnext.settings.launch import apply_chat_environment
 

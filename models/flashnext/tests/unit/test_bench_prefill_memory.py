@@ -308,6 +308,7 @@ class WatchdogTests(unittest.TestCase):
 
     def test_final_runs_need_ac_and_a_readable_power_mode(self):
         self.assertIn("AC", self.dog(final=True).check(good_sample(power_source="battery")))
+        self.assertIn("discharging", self.dog(final=True).check(good_sample(battery_state="discharging")))
         self.assertIn("AC", self.dog(final=True).check(good_sample(power_source=None)))
         self.assertIn("unreadable", self.dog(final=True).check(good_sample(low_power=None)))
         self.assertIsNone(self.dog(final=True).check(good_sample()))
@@ -1081,7 +1082,7 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(failure["details"]["returncode"], 137)
         self.assertEqual(len(self.launched), 1)
 
-    def test_an_ordinary_child_failure_is_recorded_and_the_run_continues(self):
+    def test_an_ordinary_child_failure_is_recorded_and_stops_the_run(self):
         outcomes = iter([1, 0, 0, 0])
         base = self.popen()
 
@@ -1092,16 +1093,17 @@ class OrchestratorTests(unittest.TestCase):
                 return FakeProc(code, polls=1)
             return base(command, env)
 
-        self.assertEqual(self.run_it(popen=start), 0)
+        self.assertEqual(self.run_it(popen=start), 1)
         records = self.records()
         self.assertEqual([r["error_type"] for r in records if r["type"] == "failure"], ["failed"])
-        self.assertEqual(len([r for r in records if r["type"] == "arm"]), 3)
+        self.assertEqual(len([r for r in records if r["type"] == "arm"]), 0)
+        self.assertEqual(len(self.launched), 1)
 
     def test_a_digest_mismatch_is_reported_as_a_failed_validation(self):
         def make(size, condition, index):
             return make_arm(size, condition, index, digest="bad" if condition == "F2" else "good")
 
-        self.run_it(popen=self.popen(make))
+        self.assertEqual(self.run_it(popen=self.popen(make)), 1)
         validations = {r["arm_id"]: r["status"] for r in self.records() if r["type"] == "validation"}
         self.assertEqual(validations["exactness-1k-first"], "fail")
 
@@ -1128,7 +1130,7 @@ class OrchestratorTests(unittest.TestCase):
         self.run_it(self.args(conditions=["F0", "F2", "F1"], rounds=1), popen=self.popen(make))
         ran = [c[c.index("--condition") + 1] for c, _ in self.launched]
         self.assertNotIn("F1", ran)
-        self.assertTrue(any(r["type"] == "failure" and r["error_type"] == "guard"
+        self.assertTrue(any(r["type"] == "failure" and r["error_type"] == "validation"
                             for r in self.records()))
 
     def test_the_guarded_condition_runs_last_when_all_gates_pass(self):

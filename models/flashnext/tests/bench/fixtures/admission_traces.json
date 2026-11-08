@@ -1,0 +1,198 @@
+{
+ "unit": "GiB",
+ "runs": [
+  {
+   "name": "chat-success",
+   "outcome": "success",
+   "note": "five CHAT answers, pool 0, no stop",
+   "prefill_tokens": 60,
+   "samples": 2178,
+   "start": {
+    "available_gib": 9.697,
+    "anonymous_gib": 5.576,
+    "compressor_gib": 1.023,
+    "file_backed_gib": 0.466,
+    "swap_gib": 0.755,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 3.626,
+    "prefill": 5.929,
+    "decode": 6.459
+   },
+   "drop_total_gib": 6.459,
+   "min_available_gib": 3.238,
+   "max_compressor_gib": 5.187,
+   "max_swap_gib": 0.755,
+   "max_pressure": 1,
+   "mlx_peak_gib": 3.359,
+   "mlx_active_max_gib": 3.346,
+   "rss_max_gib": 3.564
+  },
+  {
+   "name": "chat-first-stop",
+   "outcome": "guard-stop",
+   "note": "stopped at 2.94 GiB available by the 3 GiB floor of that day (floor is 2 GiB now)",
+   "prefill_tokens": 0,
+   "samples": 72,
+   "start": {
+    "available_gib": 9.15,
+    "anonymous_gib": 6.36,
+    "compressor_gib": 0.862,
+    "file_backed_gib": 0.589,
+    "swap_gib": 0.755,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 6.213
+   },
+   "drop_total_gib": 6.213,
+   "min_available_gib": 2.936,
+   "max_compressor_gib": 4.929,
+   "max_swap_gib": 0.755,
+   "max_pressure": 1,
+   "mlx_peak_gib": 4.761,
+   "mlx_active_max_gib": 4.737,
+   "rss_max_gib": 3.548
+  },
+  {
+   "name": "agentic-first-stop",
+   "outcome": "guard-stop",
+   "note": "compressor guard stop in the first cold prefill, pressure level 2",
+   "prefill_tokens": 898,
+   "samples": 231,
+   "start": {
+    "available_gib": 9.593,
+    "anonymous_gib": 6.311,
+    "compressor_gib": 0.969,
+    "file_backed_gib": 0.542,
+    "swap_gib": 0.755,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 3.405,
+    "prefill": 6.331
+   },
+   "drop_total_gib": 6.331,
+   "min_available_gib": 3.262,
+   "max_compressor_gib": 6.479,
+   "max_swap_gib": 0.755,
+   "max_pressure": 2,
+   "mlx_peak_gib": 4.621,
+   "mlx_active_max_gib": 4.424,
+   "rss_max_gib": 3.725
+  },
+  {
+   "name": "agentic-gpu-hang",
+   "outcome": "gpu-hang",
+   "note": "GPU/GIL deadlock (repaired); memory was not the cause",
+   "prefill_tokens": 902,
+   "samples": 100,
+   "start": {
+    "available_gib": 11.225,
+    "anonymous_gib": 2.692,
+    "compressor_gib": 0.869,
+    "file_backed_gib": 0.625,
+    "swap_gib": 0.755,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 3.319,
+    "prefill": 6.541,
+    "decode": 5.155
+   },
+   "drop_total_gib": 6.541,
+   "min_available_gib": 4.684,
+   "max_compressor_gib": 4.018,
+   "max_swap_gib": 0.755,
+   "max_pressure": 1,
+   "mlx_peak_gib": 4.106,
+   "mlx_active_max_gib": 3.893,
+   "rss_max_gib": 4.102
+  },
+  {
+   "name": "agentic-1k",
+   "outcome": "success",
+   "note": "compact tier, one decoded token",
+   "prefill_tokens": 902,
+   "samples": 71,
+   "start": {
+    "available_gib": 10.658,
+    "anonymous_gib": 3.537,
+    "compressor_gib": 0.835,
+    "file_backed_gib": 0.801,
+    "swap_gib": 0.724,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 3.285,
+    "prefill": 6.361,
+    "decode": 5.092
+   },
+   "drop_total_gib": 6.361,
+   "min_available_gib": 4.297,
+   "max_compressor_gib": 4.867,
+   "max_swap_gib": 0.724,
+   "max_pressure": 1,
+   "mlx_peak_gib": 4.106,
+   "mlx_active_max_gib": 3.999,
+   "rss_max_gib": 4.09
+  },
+  {
+   "name": "agentic-4k",
+   "outcome": "success",
+   "note": "standard tier, 3,935-token cold prefill, then two warm turns",
+   "prefill_tokens": 3935,
+   "samples": 619,
+   "start": {
+    "available_gib": 9.712,
+    "anonymous_gib": 3.33,
+    "compressor_gib": 0.837,
+    "file_backed_gib": 3.231,
+    "swap_gib": 0.701,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 3.213,
+    "prefill": 6.333,
+    "decode": 6.649
+   },
+   "drop_total_gib": 6.649,
+   "min_available_gib": 3.063,
+   "max_compressor_gib": 6.195,
+   "max_swap_gib": 0.701,
+   "max_pressure": 1,
+   "mlx_peak_gib": 5.057,
+   "mlx_active_max_gib": 4.879,
+   "rss_max_gib": 3.967
+  },
+  {
+   "name": "agentic-8k",
+   "outcome": "incomplete",
+   "note": "owner-waived start (8.68 GiB); prefill did not finish in 900 s; pressure 2 transient, no guard stop",
+   "prefill_tokens": 8200,
+   "samples": 2073,
+   "start": {
+    "available_gib": 8.676,
+    "anonymous_gib": 3.355,
+    "compressor_gib": 0.933,
+    "file_backed_gib": 5.228,
+    "swap_gib": 0.701,
+    "pressure": 1
+   },
+   "drop_gib": {
+    "init": 2.526,
+    "prefill": 6.078,
+    "decode": 3.922
+   },
+   "drop_total_gib": 6.078,
+   "min_available_gib": 2.598,
+   "max_compressor_gib": 5.696,
+   "max_swap_gib": 0.701,
+   "max_pressure": 2,
+   "mlx_peak_gib": 5.291,
+   "mlx_active_max_gib": 5.234,
+   "rss_max_gib": 3.098
+  }
+ ]
+}

@@ -147,16 +147,14 @@ def plan_parts(store, switch_prefix: str):
 
 
 def fence() -> None:
-    """Wait until every GPU job queued before this call has finished.
+    """Wait until every GPU job queued before this call has finished (GIL released; see ``gpu_sync``).
 
-    ``mx.synchronize`` is avoided on purpose: it keeps the GIL while it waits,
-    and MLX's completion handler can need the GIL to free a numpy-backed
-    operand, which deadlocks. ``mx.eval`` releases the GIL, and a job queued
-    behind earlier work on the same stream cannot finish before it.
+    ``mx.synchronize`` is never used: it keeps the GIL while it waits, and MLX's completion handler can need the
+    GIL to free a numpy-backed operand, which deadlocks (seen in the first full-checkpoint AGENTIC run).
     """
-    import mlx.core as mx
+    from .gpu_sync import synchronize
 
-    mx.eval(mx.zeros((1,)) + 1)
+    synchronize()
 
 
 def working_set_bytes(active: int, pool_bytes: int) -> int:
@@ -397,17 +395,14 @@ class PrefillRing:
 
     def finish(self) -> None:
         """Normal end: wait for the GPU, then release the last half."""
-        if self._synchronize is not None:
-            self._synchronize()
+        from .pool_lifecycle import synchronize_or_fault
+        synchronize_or_fault(self._synchronize)
         self._retire()
 
     def abort(self) -> None:
         """Failure path: wait for the GPU, then release."""
-        if self._synchronize is not None:
-            try:
-                self._synchronize()
-            except Exception:
-                pass
+        from .pool_lifecycle import synchronize_or_fault
+        synchronize_or_fault(self._synchronize)
         self._retire()
 
     def close(self) -> bool:
@@ -422,8 +417,8 @@ class PrefillRing:
         """
         if not self.owns_pool or self.disposed:
             return False
-        if self._synchronize is not None:
-            self._synchronize()
+        from .pool_lifecycle import synchronize_or_fault
+        synchronize_or_fault(self._synchronize)
         pool = self.pool
         self._buf32 = None
         self.pending = None
@@ -580,18 +575,23 @@ def release(state, failed: bool = False) -> None:
 
     expert_cache.set_prefill_ring(None)
     closed = False
+    fenced = False
     try:
         if failed:
             state.abort()
         else:
             state.finish()
+        fenced = True
     finally:
-        closed = state.close()
-        if closed:
-            state.dispose()
-        elif state.owns_pool and not state.disposed:
-            _RETAINED.append(state)
-            LAST_REASON[0] = "ring did not close in time; temporary pool retained"
+        try:
+            closed = state.close()
+            if closed and fenced:
+                state.dispose()
+        finally:
+            if state.owns_pool and not state.disposed:
+                if state not in _RETAINED:
+                    _RETAINED.append(state)
+                LAST_REASON[0] = "ring could not be safely fenced or closed; temporary pool retained"
 
 
 @contextlib.contextmanager

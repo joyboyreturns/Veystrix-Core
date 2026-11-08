@@ -105,6 +105,35 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(expert_pool.configured_gb(), 6.0)
             self.assertTrue(expert_pool.enabled())
 
+    def test_for_store_allocation_fallback_to_1gb_on_error(self):
+        store = _Store()
+        with mock.patch.dict(os.environ, {expert_pool.SIZE_FLAG: "2"}):
+            self.addCleanup(expert_pool.set_budget_gb, None)
+            calls = []
+
+            def fake_init(st, size_bytes, *args, **kwargs):
+                calls.append(size_bytes)
+                if size_bytes == 2_000_000_000:
+                    raise MemoryError("simulated out of memory at 2 GB")
+                return None
+
+            with mock.patch.object(expert_pool.ExpertPool, "__init__", side_effect=fake_init):
+                pool = expert_pool.for_store(store)
+                self.assertIsNotNone(pool)
+                self.assertEqual(calls, [2_000_000_000, 1_000_000_000])
+                self.assertEqual(expert_pool.configured_gb(), 1.0)
+
+    def test_for_store_allocation_fallback_to_ssd_when_1gb_fails(self):
+        store = _Store()
+        with mock.patch.dict(os.environ, {expert_pool.SIZE_FLAG: "2"}):
+            self.addCleanup(expert_pool.set_budget_gb, None)
+
+            with mock.patch.object(expert_pool.ExpertPool, "__init__", side_effect=MemoryError("OOM")):
+                pool = expert_pool.for_store(store)
+                # Falls back to pure SSD (pool is None) without raising
+                self.assertIsNone(pool)
+                self.assertIsNone(getattr(store, "_flashnext_expert_pool", None))
+
 
 if __name__ == "__main__":
     unittest.main()

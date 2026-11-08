@@ -48,8 +48,11 @@ class LauncherTests(unittest.TestCase):
             with patch.dict(os.environ, {"MACQWEN_FLASHNEXT_PYTHON": str(python)}, clear=False), \
                     patch("macqwen.cli._supports_python", return_value=True):
                 _command, child_env = cli.command(["--model", "flashnext"])
+        from models.flashnext.settings.modes import OWNED
+
         for key, value in CHAT_ENV.items():
-            self.assertEqual(child_env[key], value)
+            if key not in OWNED:      # the launch mode owns these (the decode pool is 2 GB, not the old 6 GB)
+                self.assertEqual(child_env[key], value)
 
     def test_bonsai_uses_the_shared_runtime_environment(self):
         shared = cli.MANAGED_PYTHON

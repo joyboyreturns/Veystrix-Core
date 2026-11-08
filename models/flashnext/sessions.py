@@ -408,6 +408,12 @@ class SessionStore:
     ) -> dict[str, Any]:
         prefix = f"cache.l{layer_index:02d}"
         class_name = type(entry).__name__
+        if hasattr(entry, "bits") and hasattr(entry, "index_keys"):
+            # Quantized KV (packed data, scales, biases). The exact-session format stores dense arrays only; a silent
+            # attempt would fail on a tuple or, worse, mix representations. Prefix snapshots (prefix_cache) support it.
+            raise SessionError(
+                f"layer {layer_index}: exact sessions do not support a quantized KV cache ({class_name}); "
+                "use FLASHNEXT_KV_CACHE_DTYPE=bf16 to save a session")
         if all(hasattr(entry, field) for field in ("keys", "values", "index_keys")):
             offset = int(entry.offset)
             layer: dict[str, Any] = {

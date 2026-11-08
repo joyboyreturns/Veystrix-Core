@@ -25,7 +25,7 @@ class FakeHandler(server.MacqwenHandler):
         self.server = FakeServer(api_key, allowed_origins)
         self.errors = []
 
-    def _error(self, message, status=400):
+    def _error(self, message, status=400, code=None, headers=None, kind=None):
         self.errors.append((status, str(message)))
 
 

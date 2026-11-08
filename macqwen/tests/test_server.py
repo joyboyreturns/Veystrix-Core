@@ -433,9 +433,9 @@ def _make_handler(complete):
         handler.json_calls.append((value, status))
         return orig_json(value, status)
 
-    def rec_error(message, status=400):
+    def rec_error(message, status=400, code=None, headers=None, kind=None):
         handler.error_calls.append((str(message), status))
-        return orig_error(message, status)
+        return orig_error(message, status, code, headers, kind)
 
     handler._json = rec_json
     handler._error = rec_error
@@ -453,9 +453,48 @@ def _stub_result(finish, tool_calls, text="hello"):
 _STUB_TOOL = {"id": "call_1", "name": "tool_a", "arguments": '{"x": 1}'}
 
 
+class PrefillKeepAliveTests(unittest.TestCase):
+    """A cold prefill emits no token for minutes; the stream must still carry bytes so a client idle timeout does not fire."""
+
+    def test_comment_lines_flow_while_complete_is_silent_and_stop_with_it(self):
+        import time
+        from macqwen import server
+
+        def complete(messages, tools, max_tokens, on_text=None, gone=None):
+            time.sleep(0.4)
+            return "done"
+
+        handler = _make_handler(complete)
+        handler._client_gone = lambda: False
+        original = server.SSE_KEEPALIVE_SECONDS
+        server.SSE_KEEPALIVE_SECONDS = 0.05
+        try:
+            result = handler._complete_with_keepalive(handler.server.service, [], [], 16, None)
+        finally:
+            server.SSE_KEEPALIVE_SECONDS = original
+        written = handler.wfile.getvalue()
+        self.assertEqual(result, "done")
+        self.assertGreaterEqual(written.count(b": generating\n\n"), 3)
+        time.sleep(0.2)
+        self.assertEqual(handler.wfile.getvalue(), written, "the ticker must stop when the request ends")
+
+    def test_an_exception_from_complete_still_stops_the_ticker(self):
+        from macqwen import server
+
+        def complete(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        handler = _make_handler(complete)
+        handler._client_gone = lambda: False
+        with self.assertRaises(RuntimeError):
+            handler._complete_with_keepalive(handler.server.service, [], [], 16, None)
+        import threading
+        self.assertFalse([t for t in threading.enumerate() if t.name == "sse-keepalive"])
+
+
 class SseErrorTests(unittest.TestCase):
     def test_chat_stream_error_sends_error_then_done(self):
-        def boom(messages, tools, max_tokens, on_text=None):
+        def boom(messages, tools, max_tokens, on_text=None, gone=None):
             raise RuntimeError("boom-chat")
 
         handler = _make_handler(boom)
@@ -472,7 +511,7 @@ class SseErrorTests(unittest.TestCase):
         self.assertEqual(handler.json_calls, [])
 
     def test_anthropic_stream_error_sends_error_then_stop(self):
-        def boom(messages, tools, max_tokens, on_text=None):
+        def boom(messages, tools, max_tokens, on_text=None, gone=None):
             raise RuntimeError("boom-anthropic")
 
         handler = _make_handler(boom)
@@ -489,7 +528,7 @@ class SseErrorTests(unittest.TestCase):
         self.assertEqual(handler.json_calls, [])
 
     def test_responses_stream_error_sends_failed(self):
-        def boom(messages, tools, max_tokens, on_text=None):
+        def boom(messages, tools, max_tokens, on_text=None, gone=None):
             raise RuntimeError("boom-responses")
 
         handler = _make_handler(boom)
@@ -503,7 +542,7 @@ class SseErrorTests(unittest.TestCase):
         self.assertEqual(handler.json_calls, [])
 
     def test_limit_validated_before_sse_start(self):
-        def ok(messages, tools, max_tokens, on_text=None):
+        def ok(messages, tools, max_tokens, on_text=None, gone=None):
             return _stub_result("stop", [])
 
         for method, payload in (
@@ -550,7 +589,7 @@ class AnthropicStopTests(unittest.TestCase):
             with self.subTest(finish=finish, has_tools=has_tools):
                 tools = [_STUB_TOOL] if has_tools else []
 
-                def complete(messages, tool_arg, max_tokens, on_text=None,
+                def complete(messages, tool_arg, max_tokens, on_text=None, gone=None,
                              _finish=finish, _tools=tools):
                     return _stub_result(_finish, list(_tools))
 
@@ -575,7 +614,7 @@ class AnthropicStopTests(unittest.TestCase):
             with self.subTest(finish=finish, has_tools=has_tools):
                 tools = [_STUB_TOOL] if has_tools else []
 
-                def complete(messages, tool_arg, max_tokens, on_text=None,
+                def complete(messages, tool_arg, max_tokens, on_text=None, gone=None,
                              _finish=finish, _tools=tools):
                     return _stub_result(_finish, list(_tools))
 
