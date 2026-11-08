@@ -1,0 +1,77 @@
+# DeepSeek Harness patch for Veystrix AGENTIC mode (guarded baseline).
+# Use:  DSH_HOME=<profile home> VEYSTRIX_API_KEY=<same value as the server's --server-api-key> \
+#         dsh headless --patch docs/flashnext/dsh/veystrix-agentic.patch.yml "task"
+# Exposed tools: glob and grep only (read-only discovery, registered together by the tool-fs-search plugin,
+# which has no per-tool switch). read, read_image, edit and write are switched off in the tool-fs plugin.
+# What it does: routes the agent to the local server through the OpenAI Chat Completions
+# route (pi-ai `openai-completions`), and trims the harness to those two tools
+# so the whole request (system prompt + tool schemas) is small instead of 5.6K.
+# It also turns off the LLM session-title call, which would otherwise interleave a second,
+# unrelated conversation between a tool call and its follow-up and evict the live KV state.
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      veystrix:
+        displayName: Veystrix
+        apiKeyEnv: VEYSTRIX_API_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:8080/v1
+        models:
+          - id: macqwen-flashnext
+            name: Qwen3.8 Flash-Next Q4
+            # DeepSeek Harness (via pi-ai / pi-messages.js clampMaxTokensToContext) uses:
+            #   available = model.contextWindow - estimateContextTokens(context).tokens - CONTEXT_SAFETY_TOKENS
+            # where CONTEXT_SAFETY_TOKENS is hardcoded to 4096 and MIN_MAX_TOKENS is 1.
+            # When contextWindow was 4096 or 8192, a ~4K input prompt yielded:
+            #   8192 - ~4032 - 4096 <= 64 (or <= 0 when including tool schemas/framing), floored to 1.
+            # With contextWindow 12288 (8192 effective + 4096 safety offset) and maxTokens 1024:
+            #   12288 - ~4032 - 4096 = 4160 >= 1024, so dsh requests exactly max_completion_tokens: 1024.
+            # The Veystrix server enforces its own real context limit (8192 tokens) and checks
+            # that prompt_tokens + MIN_OUTPUT_RESERVE (256) <= 8192.
+            contextWindow: 12288
+            maxTokens: 1024
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: veystrix
+    model: macqwen-flashnext
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-working-directory
+  disabled: true
+- id: goal
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: command-goal
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: session-title-llm
+  disabled: true
+- id: tool-fs
+  config:
+    read: false
+    readImage: false
+    write: false
+    edit: false
+    applyPatch: false

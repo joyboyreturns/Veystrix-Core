@@ -1,0 +1,27 @@
+prefill readiness: headroom 4.04 GiB (needs 4.00): 16.0 physical - wired 1.81 - compressor 0.84 - cold prefill 6.00 - harness 1.0 - 0.75 x other anonymous 3.08
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-44877.jsonl
+watchdog       ON  (separate process 44920; stage deadlines /Users/vincent/.flashnext/watchdog)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /Users/vincent/.flashnext/prefix-cache, RAM 0.75 GB, SSD 20 GB, free reserve 50 GB, profiles off
+  chunk policy   budgeted 2048-token chunks, 512-expert scratch ring
+  memory         10.4 GB available, start gate 9 GB: READY
+  supervisor     ON (memory, swap, thermal, battery stops)  trace veystrix-chat-44877.jsonl
+  auto purge   ON  (sudo -n /usr/sbin/purge only when memory is short and the engine is idle)
+  context limit  8192 tokens (requests above it are refused, never truncated)
+  EXPERIMENTAL   long-context: deterministic memory-budgeted chunk plan (2048/1024/512/256) with live step-down and a 'long' admission tier (16K context, 14K cold prefill); offline-tested only, no real run above 2K
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+auto-purge: idle monitor every 5s and before each request (purge only when justified; log ~/.flashnext/purge-log.jsonl)
+[2mready in 3.3s  flashnext / agent  use /help for commands[0m
+
+server ready at http://127.0.0.1:8080
+context limit: 8192 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 4096 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+FlashNext safety guard stopped the process: memory pressure level 2
+Trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-44877.jsonl

@@ -1,0 +1,260 @@
+{
+  "started": "20261108-231830",
+  "attempt": 1,
+  "stub": true,
+  "outcome": "completed",
+  "profile": "8k",
+  "server_args": [
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "12288"
+  ],
+  "battery_run": false,
+  "gate": [
+    {
+      "check": "power",
+      "ok": true,
+      "detail": "AC power (57%)",
+      "hard": true
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False",
+      "hard": true
+    },
+    {
+      "check": "no thermal warning, no CPU speed limit",
+      "ok": true,
+      "detail": "{'source': 'ac', 'percent': 57, 'discharging': False, 'low_power_mode': False, 'thermal_warning': False, 'cpu_speed_limit': None}",
+      "hard": true
+    },
+    {
+      "check": "memory pressure level 1",
+      "ok": true,
+      "detail": "level=1",
+      "hard": true
+    },
+    {
+      "check": "dry admission (product rule, unchanged): one of ('long', '8k')",
+      "ok": false,
+      "detail": "no tier admitted; other anonymous 3.0 GiB; long 3.59 GiB (budget 6.25), 8k 3.84 GiB (budget 6.0); the 8K task needs one of ('long', '8k') (context 12288)",
+      "hard": true
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 717.5->717.5 MB",
+      "hard": true
+    },
+    {
+      "check": "heavy applications (advisory: the product's own admission decides; nothing is closed)",
+      "ok": true,
+      "detail": "none",
+      "hard": false
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080",
+      "hard": true
+    },
+    {
+      "check": "free SSD >= 60 GB",
+      "ok": true,
+      "detail": "214 GB",
+      "hard": true
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+      "hard": true
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh",
+      "hard": true
+    },
+    {
+      "check": "AGENTIC patch present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/docs/flashnext/dsh/veystrix-agentic-8k.patch.yml",
+      "hard": true
+    },
+    {
+      "check": "precomputed task present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/models/flashnext/tests/bench/fixtures/gate_8k_task.txt",
+      "hard": true
+    }
+  ],
+  "env": {
+    "power": {
+      "source": "ac",
+      "percent": 57,
+      "discharging": false,
+      "low_power_mode": false,
+      "thermal_warning": false,
+      "cpu_speed_limit": null
+    },
+    "vm": {
+      "free_gib": 4.475,
+      "inactive_gib": 4.1,
+      "wired_gib": 1.953,
+      "compressor_gib": 0.947,
+      "swapouts": 3908991
+    },
+    "swap_mb": 717.5,
+    "pressure": 1,
+    "git_head": "dab3d0d806d10cff8a7cb8c343e51f048a6faabc",
+    "git_status_lines": 179,
+    "fixture_tokens": 8203,
+    "harness_overhead_tokens": 828,
+    "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+  },
+  "server_cmd": [
+    "/Users/vincent/Documents/Veystrix/.venv/bin/python",
+    "-m",
+    "models.flashnext.tests.bench.gate_a",
+    "--serve-stub",
+    "8080",
+    "<key>"
+  ],
+  "stage": {
+    "ready": {
+      "ok": true,
+      "seconds": 2.1
+    },
+    "shutdown": {
+      "ok": true,
+      "seconds": 0.5,
+      "returncode": 0
+    }
+  },
+  "worker_pid": 55372,
+  "health_before": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 0,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null,
+      "memory_controller": null
+    }
+  },
+  "task": {
+    "exit": 1,
+    "seconds": 1.0,
+    "ended_by": null
+  },
+  "health_after_task": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 1,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null,
+      "memory_controller": null
+    }
+  },
+  "session_id": "session-02ee014d-cc02-45ec-9287-8d50dbe1a1e1",
+  "health_after_follow": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 1,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null,
+      "memory_controller": null
+    }
+  },
+  "wall_seconds": 3.6,
+  "battery": {
+    "start": 57,
+    "end": 57,
+    "lowest": 57,
+    "source": "ac",
+    "note": "AC"
+  },
+  "leftover_processes": []
+}

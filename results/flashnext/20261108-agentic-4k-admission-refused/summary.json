@@ -1,0 +1,85 @@
+{
+  "task": "Veystrix Agentic 4K End-to-End Validation",
+  "timestamp": "2026-11-08T19:38:00+05:30",
+  "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+  "admitted": false,
+  "exit_code": 69,
+  "stop_reason": "no step could improve the situation (recovery cannot help)",
+  "target_prompt_tokens": 4032,
+  "standard_tier": {
+    "context_limit": 8192,
+    "max_cold_prefill": 4096,
+    "budget_gib": 6.0,
+    "admitted": false
+  },
+  "machine": {
+    "hardware": "MacBook Air M4, 16 GB unified memory",
+    "power": "Battery 35% (discharging)",
+    "swap_used_mb": 733.5,
+    "pressure_level": 1,
+    "physical_gb": 16.0,
+    "wired_gb": 2.0909881591796875,
+    "compressor_gb": 0.750518798828125,
+    "file_backed_gb": 2.28997802734375,
+    "anonymous_gb": 5.3562164306640625,
+    "gate_available_gb": 8.760360717773438,
+    "required_gate_gb": 9.0,
+    "headroom_gb": 2.8913307189941406,
+    "required_headroom_gb": 4.0
+  },
+  "top_processes": [
+    {
+      "pid": 601,
+      "command": "WindowServer",
+      "resident": 661651456,
+      "compressed": 234881024
+    },
+    {
+      "pid": 31216,
+      "command": "agy",
+      "resident": 603979776,
+      "compressed": 0
+    },
+    {
+      "pid": 31228,
+      "command": "com.apple.WebKit",
+      "resident": 522190848,
+      "compressed": 0
+    },
+    {
+      "pid": 31205,
+      "command": "Gemini",
+      "resident": 341835776,
+      "compressed": 0
+    },
+    {
+      "pid": 1315,
+      "command": "Siri AI",
+      "resident": 310378496,
+      "compressed": 217055232
+    },
+    {
+      "pid": 1306,
+      "command": "Finder",
+      "resident": 233832448,
+      "compressed": 138412032
+    },
+    {
+      "pid": 1299,
+      "command": "Activity Monitor",
+      "resident": 101711872,
+      "compressed": 30408704
+    },
+    {
+      "pid": 605,
+      "command": "loginwindow",
+      "resident": 97517568,
+      "compressed": 82837504
+    }
+  ],
+  "verdict_advice": [
+    "The 9 GiB gate is short by 0.24 GiB; file cache could close that, but it would not admit this launch (see below), so no purge is attempted.",
+    "Other processes hold 5.36 GiB of anonymous memory that macOS will compress when the first prefill starts streaming experts. Quit applications until it is at least 1.48 GiB lower (browsers, chat and mail clients, editors, Docker). A cache purge does not help: this check does not count file cache.",
+    "Largest processes now (resident + compressed, from top): WindowServer 0.83 GiB, agy 0.56 GiB, com.apple.WebKit 0.49 GiB, Gemini 0.32 GiB, Siri AI 0.49 GiB."
+  ]
+}

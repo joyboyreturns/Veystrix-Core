@@ -1,0 +1,22 @@
+AGENTIC prefill readiness: REFUSED
+  free   4.92 GiB   speculative(file)   0.39 GiB   purgeable   0.71 GiB
+  inactive   3.45 GiB  = file   0.00 GiB to   1.90 GiB  +  anonymous   1.55 GiB to   3.45 GiB   (macOS does not report the split)
+  active   3.81 GiB   wired   2.09 GiB   compressor   0.75 GiB
+  file-backed   2.29 GiB   anonymous   5.36 GiB   reusable without compressing >=   5.31 GiB
+  swap used   0.72 GiB   pressure level 1   gate figure   8.76 GiB
+  tier standard  context  8192  cold prefill <=  4096  budget 6.00 GiB  not admitted
+  tier compact   context  2048  cold prefill <=  1536  budget 5.50 GiB  not admitted
+  tier minimal   context  1536  cold prefill <=  1024  budget 5.25 GiB  not admitted
+  [NO] start gate (mandatory, unchanged): 8.76 GiB available, needs 9.00 GiB
+  [ok] pressure and swap-out: pressure level 1, swap used 0.72 GiB, swap-out pages since last look 0
+  [NO] cold-prefill memory budget: headroom 2.89 GiB (needs 4.00): 16.0 physical - wired 2.09 - compressor 0.75 - cold prefill 5.25 - harness 1.0 - 0.75 x other anonymous 5.36
+  -> The 9 GiB gate is short by 0.24 GiB; file cache could close that, but it would not admit this launch (see below), so no purge is attempted.
+  -> Other processes hold 5.36 GiB of anonymous memory that macOS will compress when the first prefill starts streaming experts. Quit applications until it is at least 1.48 GiB lower (browsers, chat and mail clients, editors, Docker). A cache purge does not help: this check does not count file cache.
+  -> Largest processes now (resident + compressed, from top): WindowServer 0.83 GiB, agy 0.56 GiB, com.apple.WebKit 0.49 GiB, Gemini 0.32 GiB, Siri AI 0.49 GiB.
+
+Memory preparation: 1 round(s) in 4s, stopped because no step could improve the situation (recovery cannot help).
+  round 1 owned memory: nothing: no engine is loaded yet, so Veystrix owns no memory
+  round 1 file-cache purge: skipped: auto purge is off
+The smallest tier still needs other processes' anonymous memory lowered by 1.48 GiB, which Veystrix cannot do on its own.
+Optional: list applications Veystrix may ask to quit gracefully (never forced) in ~/.flashnext/close-apps.json: {"enabled": true, "apps": ["AppName"]}. It is off until you do.
+Nothing was loaded. No guard was weakened and nothing was terminated.

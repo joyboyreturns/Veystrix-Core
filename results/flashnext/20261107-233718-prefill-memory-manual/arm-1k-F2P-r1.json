@@ -1,0 +1,476 @@
+{
+ "arm_id": "1k-F2P-r1",
+ "size": "1k",
+ "turn": "first",
+ "condition": "F2P",
+ "round": 0,
+ "reverse": false,
+ "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+ "checkpoint_identity": "c97330e20b55d7d4069d405e127531f5a461df2e0102d14ce20351b2870d5715",
+ "metal_limit_bytes": 12713115648,
+ "diagnostic_overrides": {
+  "expert_pool_gb": 2.0,
+  "ring_min_tokens": null,
+  "min_available_gb": 2.0,
+  "max_compressor_growth_gib": 2.0,
+  "compressor_stop_available_gib": 3.0,
+  "trace_interval_s": 1.0,
+  "fast_trace_interval_s": 0.25
+ },
+ "prompts": {
+  "source_hash": "e429a330a215d5fc",
+  "first_hash": "26c86b494b703a7a",
+  "later_hash": "d62794cb6335c6b5",
+  "first_ids": 988,
+  "later_ids": 1001
+ },
+ "after_load": {
+  "active": 2794742880,
+  "peak": 2794742880,
+  "cache": 23820,
+  "rss": 1016971264,
+  "pool": {
+   "exists": false
+  }
+ },
+ "environment": {
+  "FLASHNEXT_COMPILE_GDN": "1",
+  "FLASHNEXT_COMPILE_HC": "1",
+  "FLASHNEXT_COMPILE_NORM": "1",
+  "FLASHNEXT_EVAL_LINEAR_STATE": "1",
+  "FLASHNEXT_EXPERT_POOL_GB": "2",
+  "FLASHNEXT_FUSED_SHARED": "1",
+  "FLASHNEXT_FUSED_SHARED_PARTS": "0",
+  "FLASHNEXT_FUSED_UP_SWIGLU": "1",
+  "FLASHNEXT_GPU_KEEPWARM": "0",
+  "FLASHNEXT_IO_QOS": "user-interactive",
+  "FLASHNEXT_IO_WORKERS": "8",
+  "FLASHNEXT_METAL_G64": "1",
+  "FLASHNEXT_METAL_RUNTIME": "1",
+  "FLASHNEXT_NGRAM_PARALLEL_MIN": "16",
+  "FLASHNEXT_NORM_WEIGHT_CACHE": "1",
+  "FLASHNEXT_ONE_SYNC": "1",
+  "FLASHNEXT_OVERLAP": "0",
+  "FLASHNEXT_PIN_CACHE": "/Users/vincent/Documents/Veystrix/results/flashnext/20261107-233718-prefill-memory-manual/pins/pins.json",
+  "FLASHNEXT_PREAD_CHUNK": "2",
+  "FLASHNEXT_PREFILL_CHUNK_TOKENS": "512",
+  "FLASHNEXT_PREFILL_RING_EXPERTS": "512",
+  "FLASHNEXT_PREFILL_RING_SCRATCH": "1",
+  "FLASHNEXT_PREFIX_CACHE": "1",
+  "FLASHNEXT_PREFIX_CACHE_DIR": "/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/fb12bd38-f2c7-4d06-a498-e8e5c9c31575/scratchpad/stage/c3-prefix",
+  "FLASHNEXT_PREFIX_CACHE_DISK_GB": "5",
+  "FLASHNEXT_PREFIX_CACHE_MIN_TOKENS": "8",
+  "FLASHNEXT_PREFIX_CACHE_RAM_GB": "0.75",
+  "FLASHNEXT_PROFILE_IO": "0",
+  "FLASHNEXT_QSA_CACHE_POOLED_KEYS": "1",
+  "FLASHNEXT_QSA_SCATTER_DECODE": "1",
+  "FLASHNEXT_RDAHEAD": "0",
+  "FLASHNEXT_READ": "pread",
+  "FLASHNEXT_SLAB_G64": "0",
+  "FLASHNEXT_SLAB_GLOBAL": "60",
+  "FLASHNEXT_SLAB_MAX_SLOTS": "6",
+  "FLASHNEXT_SLAB_MIN_SLOTS": "4",
+  "FLASHNEXT_SLAB_NUM_LAYERS": "12",
+  "FLASHNEXT_SLAB_PACK": "1",
+  "FLASHNEXT_SLAB_PACK_REQUIRE_EXISTING": "0",
+  "FLASHNEXT_SLAB_POLICY": "skew",
+  "FLASHNEXT_SLAB_PROFILE": "frozen",
+  "FLASHNEXT_STREAM_EMBED": "1",
+  "FLASHNEXT_STREAM_PACK": "1",
+  "FLASHNEXT_STREAM_PACK_CHUNK": "2",
+  "FLASHNEXT_TOPK_THRESHOLD": "0.85"
+ },
+ "trace_file": "arm-1k-F2P-r1.trace.jsonl",
+ "uncached_reads": null,
+ "status": "completed",
+ "turns": [
+  {
+   "name": "1-agent_B",
+   "pending_tokens": 2067,
+   "prefilled_tokens": 21,
+   "prefill_s": 4.823143583023921,
+   "prefill_tok_s": 4.354006808736519,
+   "prefill_calls": [
+    {
+     "tokens": 21,
+     "before": {
+      "active": 2967274672,
+      "peak": 2967274672,
+      "cache": 23820,
+      "pool_exists": false
+     },
+     "seconds": 4.681984166963957,
+     "after": {
+      "active": 3177548354,
+      "peak": 3452534599,
+      "cache": 66520019,
+      "pool_exists": false,
+      "retained": 0
+     }
+    }
+   ],
+   "mem_start": {
+    "active": 2794742880,
+    "peak": 0,
+    "cache": 23820
+   },
+   "mem_end_prefill": {
+    "active": 3167111662,
+    "peak": 3452534599,
+    "cache": 76956711
+   },
+   "mem_end_decode": {
+    "active": 5305878718,
+    "peak": 5336448557,
+    "cache": 167516659
+   },
+   "cache_max": 66520019,
+   "rss_end_prefill": 553844736,
+   "pool_start": {
+    "exists": false
+   },
+   "pool_end_prefill": {
+    "exists": false
+   },
+   "pool_end": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 7207,
+    "misses": 16424
+   },
+   "pool_hits_decode": 7207,
+   "pool_misses_decode": 16424,
+   "ring_acquired": false,
+   "ring_reason": "short prompt",
+   "ring": null,
+   "scratch": {
+    "acquire_s": 7.542024832218885e-06,
+    "dispose_s": null,
+    "acquire_faults": {
+     "minor": 3,
+     "major": 0
+    }
+   },
+   "generate_wall_s": 34.77794683299726,
+   "first_token": 40,
+   "kv_hash": "d66c1255c01613ba",
+   "digest": "44469c19690d01a8",
+   "generated_ids": [
+    40,
+    3172,
+    2624,
+    279,
+    12182,
+    364,
+    6813,
+    5265,
+    310,
+    279,
+    8978,
+    6297,
+    13,
+    271,
+    248058,
+    198,
+    27,
+    1628,
+    28,
+    5917,
+    10494,
+    29,
+    198,
+    27,
+    15704,
+    28,
+    5454,
+    29,
+    198,
+    24751,
+    976,
+    18997,
+    198,
+    510,
+    15704,
+    29,
+    198,
+    27,
+    15704,
+    28,
+    20503,
+    14416,
+    29,
+    198,
+    90166,
+    198,
+    510,
+    15704,
+    29,
+    198,
+    510,
+    1628,
+    29,
+    198,
+    248059,
+    198,
+    248058,
+    198,
+    27,
+    1628,
+    93260,
+    4185,
+    29,
+    198
+   ],
+   "generated_tokens": 64,
+   "decode": {
+    "tokens": 64,
+    "first_token_s": 0.20566541701555252,
+    "tok_s_1_64": 2.1474241717386047,
+    "tok_s_65_128": null,
+    "tok_s_overall": 2.151330895461255
+   },
+   "ssd_prefill_bytes": 9444450304,
+   "ssd_decode_bytes": 48488321024,
+   "vm": {
+    "reactivated": 127195,
+    "decompress": 255673,
+    "compress": 336416,
+    "pagein": 309727,
+    "pageout": 148,
+    "swapin": 0,
+    "swapout": 0
+   },
+   "vm_decode": {
+    "reactivated": 24441,
+    "decompress": 170598,
+    "compress": 94184,
+    "pagein": 24688,
+    "pageout": 6,
+    "swapin": 0,
+    "swapout": 0
+   },
+   "free_mb_before": 92.203125,
+   "finish": "length",
+   "chunk_tokens_run": [
+    21
+   ],
+   "chunk_seconds": [
+    4.682
+   ],
+   "chunk_end_positions": [
+    2067
+   ],
+   "system_boundary_tokens": 2046,
+   "request": "agent:B",
+   "prefix": {
+    "prompt_tokens": 2067,
+    "hit_tokens": 2046,
+    "prefilled_tokens": 21,
+    "tier": "ssd",
+    "restore_seconds": 0.11262041598092765,
+    "prefill_seconds": 4.6820316669764,
+    "bytes_loaded": 172329383,
+    "snapshots": [],
+    "snapshot_seconds": 0.0
+   },
+   "prompt_digest": "7f1d2e41ddd0e4bc",
+   "prompt_tokens": 2067
+  }
+ ],
+ "agent_prompts": {
+  "system_hash": "a3bf83160ac3d9ce",
+  "question_hashes": {
+   "A": "af59c2f088e327bc",
+   "B": "215836ed09d4155e"
+  },
+  "token_counts": {
+   "A": {
+    "prompt_tokens": 2068,
+    "system_message_tokens": 2046,
+    "user_and_generation_tokens": 22
+   },
+   "B": {
+    "prompt_tokens": 2067,
+    "system_message_tokens": 2046,
+    "user_and_generation_tokens": 21
+   }
+  },
+  "system_words": 1620
+ },
+ "requests": [
+  "agent:B"
+ ],
+ "prefix_settings": {
+  "FLASHNEXT_PREFIX_CACHE": "1",
+  "FLASHNEXT_PREFIX_CACHE_DIR": "/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/fb12bd38-f2c7-4d06-a498-e8e5c9c31575/scratchpad/stage/c3-prefix",
+  "FLASHNEXT_PREFIX_CACHE_DISK_GB": "5",
+  "FLASHNEXT_PREFIX_CACHE_MIN_TOKENS": "8",
+  "FLASHNEXT_PREFIX_CACHE_RAM_GB": "0.75"
+ },
+ "arm": "1k-F2P-r1",
+ "prefix_integrity": {
+  "checksums": [
+   {
+    "after": "1-agent_B",
+    "entries": {
+     "9f82132e75e19856bdbbf4a3f7f6af1b3c4644901d6d546f903221090a74e3af": "23a1494fdc56a3fc"
+    }
+   }
+  ],
+  "entries_changed_between_requests": {},
+  "store_usage": {
+   "ram_entries": 1,
+   "ram_bytes": 172310452,
+   "ram_budget": 750000000,
+   "disk_entries": 1,
+   "disk_bytes": 172329383,
+   "disk_budget": 5000000000
+  },
+  "store_stats": {
+   "lookups": 1,
+   "hits": 1,
+   "reused_tokens": 2046,
+   "missed_tokens": 21,
+   "ram_hits": 0,
+   "ssd_hits": 1,
+   "puts": 0,
+   "deduped_puts": 0,
+   "ssd_writes": 0,
+   "ssd_bytes_written": 0,
+   "ssd_bytes_read": 172329383,
+   "evicted_ram": 0,
+   "evicted_ssd": 0,
+   "invalidated": 0,
+   "restore_seconds": 0.11262041598092765
+  }
+ },
+ "trace": {
+  "file": "arm-1k-F2P-r1.trace.jsonl",
+  "phases": {
+   "load": {
+    "samples": 3,
+    "first_t": 0.0,
+    "last_t": 2.04,
+    "mlx_active": 2458986248,
+    "mlx_cache": 23844,
+    "mlx_peak": 2458986248,
+    "rss": 1696153600,
+    "compressor_mb": 2030.9,
+    "compressor_growth_mb": 884.6,
+    "file_backed_mb": 5766.6,
+    "swap_used_mb": 973.5,
+    "pressure_level": 1,
+    "available_mb": 5862.6
+   },
+   "prefill": {
+    "samples": 14,
+    "first_t": 3.11,
+    "last_t": 7.12,
+    "mlx_active": 3330468354,
+    "mlx_cache": 64537839,
+    "mlx_peak": 3433276259,
+    "rss": 807665664,
+    "compressor_mb": 4110.1,
+    "compressor_growth_mb": 2963.8,
+    "file_backed_mb": 5864.8,
+    "swap_used_mb": 973.5,
+    "pressure_level": 1,
+    "available_mb": 4557.5
+   },
+   "decode": {
+    "samples": 30,
+    "first_t": 7.38,
+    "last_t": 37.26,
+    "mlx_active": 5311746866,
+    "mlx_cache": 166870430,
+    "mlx_peak": 5336448557,
+    "rss": 2569404416,
+    "compressor_mb": 3718.0,
+    "compressor_growth_mb": 2571.7,
+    "file_backed_mb": 5855.5,
+    "swap_used_mb": 973.5,
+    "pressure_level": 1,
+    "available_mb": 3208.2
+   },
+   "done": {
+    "samples": 1,
+    "first_t": 37.39,
+    "last_t": 37.39,
+    "mlx_active": 5305878718,
+    "mlx_cache": 167516659,
+    "mlx_peak": 5336448557,
+    "rss": 2743025664,
+    "compressor_mb": 2210.1,
+    "compressor_growth_mb": 1063.8,
+    "file_backed_mb": 4085.1,
+    "swap_used_mb": 973.5,
+    "pressure_level": 1,
+    "available_mb": 3560.5
+   }
+  },
+  "events": [
+   {
+    "t": 3.17,
+    "event": "compressor_warning",
+    "phase": null,
+    "during": "prefill",
+    "growth_mb": 2846.5,
+    "limit_mb": 2048.0,
+    "available_mb": 4735.2
+   },
+   {
+    "t": 7.59,
+    "event": "expert_pool_creating",
+    "phase": null,
+    "during": "decode",
+    "size_bytes": 2000000000
+   },
+   {
+    "t": 7.59,
+    "event": "expert_pool_created",
+    "phase": null,
+    "during": "decode",
+    "slots": 651,
+    "mapped_bytes": 1999880192
+   },
+   {
+    "t": 37.39,
+    "event": "prefix_request",
+    "phase": null,
+    "during": "turn-end",
+    "request": "1-agent_B",
+    "hit": 2046
+   }
+  ],
+  "guard": null,
+  "last_sample": {
+   "t": 37.39,
+   "phase": "done",
+   "mlx_active": 5305878718,
+   "mlx_cache": 167516659,
+   "mlx_peak": 5336448557,
+   "rss": 2743025664,
+   "available_mb": 3560.5,
+   "compressor_mb": 2210.1,
+   "compressor_growth_mb": 1063.8,
+   "file_backed_mb": 4085.1,
+   "anonymous_mb": 2883.8,
+   "swap_used_mb": 973.5,
+   "pressure_level": 1,
+   "swapin": 3031499,
+   "swapout": 3908991,
+   "compress": 190476687,
+   "decompress": 148929115,
+   "pagein": 121051864,
+   "pool": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 7207,
+    "misses": 16424
+   }
+  },
+  "samples": 48
+ }
+}

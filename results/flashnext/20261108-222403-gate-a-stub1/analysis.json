@@ -1,0 +1,140 @@
+{
+  "passed": true,
+  "criteria": {
+    "server ready": true,
+    "first request about 4K real tokens": true,
+    "harness task exited 0": true,
+    "glob then grep generated and executed": true,
+    "tool arguments valid (non-empty objects)": true,
+    "final answer has batch size and token expiry, no decoy claimed": true,
+    "follow-up exited 0 with an answer": true,
+    "follow-up uses retained context": true,
+    "conversation state preserved (rebuilt once, reused >= 3, no eviction)": true,
+    "server shut down cleanly": true,
+    "no safety guard stop": true,
+    "no leftover processes": true
+  },
+  "measured": {
+    "first_request_tokens": 3965,
+    "requests": [
+      {
+        "prompt_tokens": 3965,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 29,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 1,
+        "wall_seconds": 0.0
+      },
+      {
+        "prompt_tokens": 4045,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 46,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 1,
+        "wall_seconds": 0.0
+      },
+      {
+        "prompt_tokens": 4155,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 49,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 0,
+        "wall_seconds": 0.0
+      },
+      {
+        "prompt_tokens": 4203,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 17,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 0,
+        "wall_seconds": 0.0
+      }
+    ],
+    "chunk_trace": null,
+    "plan": {
+      "plan_edges": null,
+      "executed_edges": null,
+      "plan_deviated": null,
+      "stepdowns": null,
+      "hit_tokens": null,
+      "snapshots": null,
+      "restore_seconds": null
+    },
+    "mlx_peak_gib": 0.0,
+    "mlx_active_max_gib": 0.0,
+    "min_available_gib": null,
+    "compressor_growth_max_mb": null,
+    "swapout_pages_delta": null,
+    "max_pressure": null,
+    "battery": {
+      "start": 38,
+      "end": 38,
+      "lowest": 38,
+      "source": "battery",
+      "note": "performance figures were measured on battery"
+    },
+    "cache_state": {
+      "reused": 3,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 4203,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": "auto:21f690270c9f8931",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:21f690270c9f8931",
+            "requests": 4,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 4185
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 8192,
+        "input_tokens": 4185,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 2983,
+        "continuation_ok": true
+      },
+      "last_divergence": null
+    },
+    "answer": "The configuration file is services/gateway/config/gateway.yaml. The batch size is 1536 and the authentication token expiry is 5400 seconds (the example file's 64 and 900 are templates).",
+    "follow_up_answer": "Lower the token expiry first: it controls how often every client re-authenticates.",
+    "tool_calls": [
+      {
+        "tool": "glob",
+        "input": {
+          "pattern": "**/gateway*.yaml"
+        }
+      },
+      {
+        "tool": "grep",
+        "input": {
+          "pattern": "batch_size|token_expiry",
+          "path": "services/gateway/config/gateway.yaml"
+        }
+      }
+    ]
+  }
+}

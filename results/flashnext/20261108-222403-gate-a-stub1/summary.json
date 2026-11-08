@@ -1,0 +1,279 @@
+{
+  "started": "20261108-222403",
+  "attempt": 1,
+  "stub": true,
+  "outcome": "completed",
+  "server_args": [
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "8192"
+  ],
+  "battery_run": true,
+  "gate": [
+    {
+      "check": "battery >= 35% (run is on BATTERY, explicitly authorized; figures are battery-mode)",
+      "ok": true,
+      "detail": "38% discharging=True",
+      "hard": true
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False",
+      "hard": true
+    },
+    {
+      "check": "no thermal warning, no CPU speed limit",
+      "ok": true,
+      "detail": "{'source': 'battery', 'percent': 38, 'discharging': True, 'low_power_mode': False, 'thermal_warning': False, 'cpu_speed_limit': None}",
+      "hard": true
+    },
+    {
+      "check": "memory pressure level 1",
+      "ok": true,
+      "detail": "level=1",
+      "hard": true
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 717.5->717.5 MB",
+      "hard": true
+    },
+    {
+      "check": "heavy applications (advisory: the product's own admission decides; nothing is closed)",
+      "ok": true,
+      "detail": "none",
+      "hard": false
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080",
+      "hard": true
+    },
+    {
+      "check": "free SSD >= 60 GB",
+      "ok": true,
+      "detail": "215 GB",
+      "hard": true
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+      "hard": true
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh",
+      "hard": true
+    },
+    {
+      "check": "AGENTIC patch present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/docs/flashnext/dsh/veystrix-agentic.patch.yml",
+      "hard": true
+    }
+  ],
+  "env": {
+    "power": {
+      "source": "battery",
+      "percent": 38,
+      "discharging": true,
+      "low_power_mode": false,
+      "thermal_warning": false,
+      "cpu_speed_limit": null
+    },
+    "vm": {
+      "free_gib": 2.874,
+      "inactive_gib": 4.804,
+      "wired_gib": 1.838,
+      "compressor_gib": 0.787,
+      "swapouts": 3908991
+    },
+    "swap_mb": 717.5,
+    "pressure": 1,
+    "git_head": "dab3d0d806d10cff8a7cb8c343e51f048a6faabc",
+    "git_status_lines": 169,
+    "fixture_tokens": 3651,
+    "harness_overhead_tokens": 830,
+    "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+  },
+  "server_cmd": [
+    "/Users/vincent/Documents/Veystrix/.venv/bin/python",
+    "-m",
+    "models.flashnext.tests.bench.gate_a",
+    "--serve-stub",
+    "8080",
+    "<key>"
+  ],
+  "stage": {
+    "ready": {
+      "ok": true,
+      "seconds": 2.0
+    },
+    "shutdown": {
+      "ok": true,
+      "seconds": 0.5,
+      "returncode": 0
+    }
+  },
+  "worker_pid": 42431,
+  "health_before": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 0,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null
+    }
+  },
+  "task": {
+    "exit": 0,
+    "seconds": 1.0,
+    "ended_by": null
+  },
+  "health_after_task": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 3,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 2,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 4155,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": "auto:21f690270c9f8931",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:21f690270c9f8931",
+            "requests": 3,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 4105
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 8192,
+        "input_tokens": 4105,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 3063,
+        "continuation_ok": true
+      },
+      "last_divergence": null
+    }
+  },
+  "session_id": "session-4fef42e2-c7d2-495d-abb5-70770a259399",
+  "follow_up": {
+    "exit": 0,
+    "seconds": 1.0,
+    "ended_by": null
+  },
+  "health_after_follow": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 4,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 3,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 4203,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": "auto:21f690270c9f8931",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:21f690270c9f8931",
+            "requests": 4,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 4185
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 8192,
+        "input_tokens": 4185,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 2983,
+        "continuation_ok": true
+      },
+      "last_divergence": null
+    }
+  },
+  "wall_seconds": 4.6,
+  "battery": {
+    "start": 38,
+    "end": 38,
+    "lowest": 38,
+    "source": "battery",
+    "note": "performance figures were measured on battery"
+  },
+  "leftover_processes": []
+}

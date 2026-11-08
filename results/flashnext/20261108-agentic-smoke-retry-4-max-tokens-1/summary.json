@@ -1,0 +1,187 @@
+{
+  "stub": false,
+  "started": "20261108-184525",
+  "outcome": "completed (judge the stages from the evidence, not this field)",
+  "preliminary_battery_run": true,
+  "gate": [
+    {
+      "check": "AC power (WAIVED by the owner for this run; result is preliminary)",
+      "ok": true,
+      "detail": "Now drawing from 'Battery Power' (46%), battery run accepted by the owner, needs >= 30%"
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False"
+    },
+    {
+      "check": "memory pressure normal (level 1)",
+      "ok": true,
+      "detail": "level=1"
+    },
+    {
+      "check": "system free memory >= 40%",
+      "ok": true,
+      "detail": "free=81%"
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 741.5->741.5 MB"
+    },
+    {
+      "check": "no memory-heavy applications",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080"
+    },
+    {
+      "check": "free SSD space >= 60 GB",
+      "ok": true,
+      "detail": "215 GB"
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"
+    }
+  ],
+  "stage": {
+    "ready": {
+      "ok": true,
+      "seconds": 10.1
+    },
+    "shutdown": {
+      "ok": true,
+      "seconds": 1.0,
+      "returncode": 0
+    }
+  },
+  "worker_pid": 29020,
+  "health_before": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 0,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 2048,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": 1536,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      }
+    }
+  },
+  "task": {
+    "exit": 1,
+    "seconds": 22.1
+  },
+  "health_after": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 1,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 2048,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 903,
+      "max_cold_prefill": 1536,
+      "sessions": {
+        "live": "auto:d0bfaa61d0b753c8",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:d0bfaa61d0b753c8",
+            "requests": 1,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 902
+          }
+        ]
+      }
+    }
+  },
+  "peaks": {
+    "compressor_gib": 4.78,
+    "pressure_level": 1,
+    "swap_mb": 741.5,
+    "server_rss_gb": 4.09,
+    "swapouts": 3908991
+  },
+  "swapouts_during_run": 0,
+  "wall_seconds": 33.2,
+  "requests": [
+    {
+      "time": 1794143766.128599,
+      "wall_seconds": 20.843,
+      "ttft_seconds": 20.045,
+      "prompt_tokens": 902,
+      "prefill_seconds": 20.041,
+      "prefill_tokens_per_second": 45.01,
+      "completion_tokens": 1,
+      "decode_seconds": 0.798,
+      "decode_tokens_per_second": 1.254,
+      "finish": "length",
+      "tool_calls": 1,
+      "prefix": {
+        "prompt_tokens": 902,
+        "hit_tokens": 643,
+        "prefilled_tokens": 259,
+        "tier": "ssd",
+        "restore_seconds": 0.09632420795969665,
+        "prefill_seconds": 19.91766400000779,
+        "bytes_loaded": 133478070,
+        "snapshots": [],
+        "snapshot_seconds": 0.0,
+        "plan_rejections": 0,
+        "plan_edges": [
+          643
+        ]
+      }
+    }
+  ],
+  "leftover_processes": [
+    "29078 /opt/homebrew/Cellar/python@3.12/3.12.16/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python -m models.flashnext.watchdog --pid 29020 --start 1794143734.18538 --record /Users/vincent/.flashnext/watchdog/progress-29020.bin --channel-fd 10 --dir /Users/vincent/.flashnext/watchdog --trace /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-29020.jsonl"
+  ]
+}

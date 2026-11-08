@@ -1,0 +1,117 @@
+{
+ "status": "guard_stop",
+ "reason": "compressor grew 2.92 GiB since the arm began (limit 2 GiB)",
+ "classification": "resource_stop",
+ "phase": "prefill",
+ "last_sample": {
+  "t": 2.06,
+  "phase": "prefill",
+  "mlx_active": 2795186318,
+  "mlx_cache": 23804,
+  "mlx_peak": 2795186318,
+  "rss": 369442816,
+  "available_mb": 5207.6,
+  "compressor_mb": 3584.9,
+  "compressor_growth_mb": 2994.3,
+  "file_backed_mb": 7230.8,
+  "anonymous_mb": 3019.0,
+  "swap_used_mb": 1029.25,
+  "pressure_level": 1,
+  "swapin": 2996734,
+  "swapout": 3877739,
+  "compress": 184593778,
+  "decompress": 144427573,
+  "pagein": 115815886,
+  "pool": {
+   "exists": false
+  }
+ },
+ "trace_file": "arm-256-F0u-r1.trace.jsonl",
+ "evidence": {
+  "arm_id": "256-F0u-r1",
+  "size": "256",
+  "turn": "first",
+  "condition": "F0u",
+  "round": 0,
+  "reverse": false,
+  "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+  "checkpoint_identity": "c97330e20b55d7d4069d405e127531f5a461df2e0102d14ce20351b2870d5715",
+  "metal_limit_bytes": 12713115648,
+  "diagnostic_overrides": {
+   "expert_pool_gb": 2.0,
+   "ring_min_tokens": 64,
+   "min_available_gb": 2.0,
+   "max_compressor_growth_gib": 2.0,
+   "trace_interval_s": 1.0
+  },
+  "prompts": {
+   "source_hash": "e429a330a215d5fc",
+   "first_hash": "a6b2c59fb4e36a24",
+   "later_hash": "eb16646c182fb2c5",
+   "first_ids": 220,
+   "later_ids": 233
+  },
+  "after_load": {
+   "active": 2794742880,
+   "peak": 2794742880,
+   "cache": 23820,
+   "rss": 362430464,
+   "pool": {
+    "exists": false
+   }
+  },
+  "environment": {
+   "FLASHNEXT_COMPILE_GDN": "1",
+   "FLASHNEXT_COMPILE_HC": "1",
+   "FLASHNEXT_COMPILE_NORM": "1",
+   "FLASHNEXT_EXPERT_POOL_GB": "2",
+   "FLASHNEXT_FUSED_SHARED": "1",
+   "FLASHNEXT_FUSED_SHARED_PARTS": "0",
+   "FLASHNEXT_FUSED_UP_SWIGLU": "1",
+   "FLASHNEXT_GPU_KEEPWARM": "0",
+   "FLASHNEXT_IO_QOS": "user-interactive",
+   "FLASHNEXT_IO_WORKERS": "8",
+   "FLASHNEXT_METAL_G64": "1",
+   "FLASHNEXT_METAL_RUNTIME": "1",
+   "FLASHNEXT_NGRAM_PARALLEL_MIN": "16",
+   "FLASHNEXT_NORM_WEIGHT_CACHE": "1",
+   "FLASHNEXT_ONE_SYNC": "1",
+   "FLASHNEXT_OVERLAP": "0",
+   "FLASHNEXT_PIN_CACHE": "/Users/vincent/Documents/Veystrix/results/flashnext/20261107-131700-prefill-memory-manual/pins/pins.json",
+   "FLASHNEXT_PREAD_CHUNK": "2",
+   "FLASHNEXT_PREFILL_RING_MIN_TOKENS": "64",
+   "FLASHNEXT_PROFILE_IO": "0",
+   "FLASHNEXT_QSA_CACHE_POOLED_KEYS": "1",
+   "FLASHNEXT_QSA_SCATTER_DECODE": "1",
+   "FLASHNEXT_RDAHEAD": "0",
+   "FLASHNEXT_READ": "pread",
+   "FLASHNEXT_SLAB_G64": "0",
+   "FLASHNEXT_SLAB_GLOBAL": "60",
+   "FLASHNEXT_SLAB_MAX_SLOTS": "6",
+   "FLASHNEXT_SLAB_MIN_SLOTS": "4",
+   "FLASHNEXT_SLAB_NUM_LAYERS": "12",
+   "FLASHNEXT_SLAB_PACK": "1",
+   "FLASHNEXT_SLAB_PACK_REQUIRE_EXISTING": "0",
+   "FLASHNEXT_SLAB_POLICY": "skew",
+   "FLASHNEXT_SLAB_PROFILE": "frozen",
+   "FLASHNEXT_STREAM_EMBED": "1",
+   "FLASHNEXT_STREAM_PACK": "1",
+   "FLASHNEXT_STREAM_PACK_CHUNK": "2",
+   "FLASHNEXT_TOPK_THRESHOLD": "0.85"
+  },
+  "trace_file": "arm-256-F0u-r1.trace.jsonl",
+  "uncached_reads": {
+   "descriptors_open_at_start": 0
+  },
+  "status": "running",
+  "turns": []
+ },
+ "uncached_reads": {
+  "descriptors": 1,
+  "applied": 1,
+  "unprotected": [],
+  "shards": [
+   "model-00001-of-00022.safetensors"
+  ]
+ }
+}

@@ -1,0 +1,484 @@
+{
+ "arm_id": "1k-F2P-r1",
+ "size": "1k",
+ "turn": "first",
+ "condition": "F2P",
+ "round": 0,
+ "reverse": false,
+ "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+ "checkpoint_identity": "c97330e20b55d7d4069d405e127531f5a461df2e0102d14ce20351b2870d5715",
+ "metal_limit_bytes": 12713115648,
+ "diagnostic_overrides": {
+  "expert_pool_gb": 2.0,
+  "ring_min_tokens": null,
+  "min_available_gb": 2.0,
+  "max_compressor_growth_gib": 2.0,
+  "compressor_stop_available_gib": 3.0,
+  "trace_interval_s": 1.0,
+  "fast_trace_interval_s": 0.25
+ },
+ "prompts": {
+  "source_hash": "e429a330a215d5fc",
+  "first_hash": "26c86b494b703a7a",
+  "later_hash": "d62794cb6335c6b5",
+  "first_ids": 988,
+  "later_ids": 1001
+ },
+ "after_load": {
+  "active": 2794742880,
+  "peak": 2794742880,
+  "cache": 23820,
+  "rss": 3163258880,
+  "pool": {
+   "exists": false
+  }
+ },
+ "environment": {
+  "FLASHNEXT_COMPILE_GDN": "1",
+  "FLASHNEXT_COMPILE_HC": "1",
+  "FLASHNEXT_COMPILE_NORM": "1",
+  "FLASHNEXT_EVAL_LINEAR_STATE": "1",
+  "FLASHNEXT_EXPERT_POOL_GB": "2",
+  "FLASHNEXT_FUSED_SHARED": "1",
+  "FLASHNEXT_FUSED_SHARED_PARTS": "0",
+  "FLASHNEXT_FUSED_UP_SWIGLU": "1",
+  "FLASHNEXT_GPU_KEEPWARM": "0",
+  "FLASHNEXT_IO_QOS": "user-interactive",
+  "FLASHNEXT_IO_WORKERS": "8",
+  "FLASHNEXT_METAL_G64": "1",
+  "FLASHNEXT_METAL_RUNTIME": "1",
+  "FLASHNEXT_NGRAM_PARALLEL_MIN": "16",
+  "FLASHNEXT_NORM_WEIGHT_CACHE": "1",
+  "FLASHNEXT_ONE_SYNC": "1",
+  "FLASHNEXT_OVERLAP": "0",
+  "FLASHNEXT_PIN_CACHE": "/Users/vincent/Documents/Veystrix/results/flashnext/20261107-231549-prefill-memory-manual/pins/pins.json",
+  "FLASHNEXT_PREAD_CHUNK": "2",
+  "FLASHNEXT_PREFILL_CHUNK_TOKENS": "512",
+  "FLASHNEXT_PREFILL_RING_EXPERTS": "512",
+  "FLASHNEXT_PREFILL_RING_SCRATCH": "1",
+  "FLASHNEXT_PREFIX_CACHE": "1",
+  "FLASHNEXT_PREFIX_CACHE_DIR": "/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/fb12bd38-f2c7-4d06-a498-e8e5c9c31575/scratchpad/stage/prefix-B",
+  "FLASHNEXT_PREFIX_CACHE_DISK_GB": "5",
+  "FLASHNEXT_PREFIX_CACHE_MIN_TOKENS": "8",
+  "FLASHNEXT_PREFIX_CACHE_RAM_GB": "0.75",
+  "FLASHNEXT_PROFILE_IO": "0",
+  "FLASHNEXT_QSA_CACHE_POOLED_KEYS": "1",
+  "FLASHNEXT_QSA_SCATTER_DECODE": "1",
+  "FLASHNEXT_RDAHEAD": "0",
+  "FLASHNEXT_READ": "pread",
+  "FLASHNEXT_SLAB_G64": "0",
+  "FLASHNEXT_SLAB_GLOBAL": "60",
+  "FLASHNEXT_SLAB_MAX_SLOTS": "6",
+  "FLASHNEXT_SLAB_MIN_SLOTS": "4",
+  "FLASHNEXT_SLAB_NUM_LAYERS": "12",
+  "FLASHNEXT_SLAB_PACK": "1",
+  "FLASHNEXT_SLAB_PACK_REQUIRE_EXISTING": "0",
+  "FLASHNEXT_SLAB_POLICY": "skew",
+  "FLASHNEXT_SLAB_PROFILE": "frozen",
+  "FLASHNEXT_STREAM_EMBED": "1",
+  "FLASHNEXT_STREAM_PACK": "1",
+  "FLASHNEXT_STREAM_PACK_CHUNK": "2",
+  "FLASHNEXT_TOPK_THRESHOLD": "0.85"
+ },
+ "trace_file": "arm-1k-F2P-r1.trace.jsonl",
+ "uncached_reads": null,
+ "status": "completed",
+ "turns": [
+  {
+   "name": "1-later",
+   "pending_tokens": 1037,
+   "prefilled_tokens": 1023,
+   "prefill_s": 38.07295050000539,
+   "prefill_tok_s": 26.869469966606744,
+   "prefill_calls": [
+    {
+     "tokens": 1023,
+     "before": {
+      "active": 2910940992,
+      "peak": 2910940992,
+      "cache": 23820,
+      "pool_exists": false
+     },
+     "seconds": 37.97096662496915,
+     "after": {
+      "active": 3108360382,
+      "peak": 5208174962,
+      "cache": 0,
+      "pool_exists": false,
+      "retained": 0
+     }
+    }
+   ],
+   "mem_start": {
+    "active": 2794742880,
+    "peak": 0,
+    "cache": 23820
+   },
+   "mem_end_prefill": {
+    "active": 3108356290,
+    "peak": 5208174962,
+    "cache": 4092
+   },
+   "mem_end_decode": {
+    "active": 5224939562,
+    "peak": 5255393522,
+    "cache": 80917000
+   },
+   "cache_max": 23820,
+   "rss_end_prefill": 716406784,
+   "pool_start": {
+    "exists": false
+   },
+   "pool_end_prefill": {
+    "exists": false
+   },
+   "pool_end": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 8397,
+    "misses": 13390
+   },
+   "pool_hits_decode": 8397,
+   "pool_misses_decode": 13390,
+   "ring_acquired": true,
+   "ring_reason": null,
+   "ring": {
+    "staged_layers": 96,
+    "staged_experts": 27990,
+    "staged_bytes": 85985280000,
+    "wait_seconds": 28.25070691824658,
+    "fallback_capacity": 0,
+    "fallback_busy": 0,
+    "fallback_error": 0,
+    "fallback_disabled": 0,
+    "fallback_memory": 0,
+    "disabled": null,
+    "half_experts": 512,
+    "ring_bytes": 1572864000,
+    "last_error": null,
+    "scratch_pool": true,
+    "disposed": false
+   },
+   "scratch": {
+    "acquire_s": 0.0006637499900534749,
+    "dispose_s": 0.023851250007282943,
+    "acquire_faults": {
+     "minor": 196,
+     "major": 0
+    }
+   },
+   "generate_wall_s": 64.45802758302307,
+   "first_token": 760,
+   "kv_hash": "a0c9243d708c8900",
+   "digest": "03134ffbed76703d",
+   "generated_ids": [
+    760,
+    1414,
+    42960,
+    421,
+    13468,
+    1510,
+    17546,
+    18351,
+    63,
+    6130,
+    469,
+    30237,
+    20952,
+    35302,
+    5891,
+    4927,
+    4906,
+    19019,
+    11,
+    430,
+    279,
+    5839,
+    84810,
+    369,
+    524,
+    52652,
+    29997,
+    466,
+    6830,
+    37972,
+    11,
+    694,
+    4598,
+    279,
+    14938,
+    32288,
+    19662,
+    8613,
+    539,
+    16350,
+    220,
+    19,
+    15,
+    20,
+    12954,
+    314,
+    6009,
+    795,
+    494,
+    264,
+    6103,
+    35160,
+    4016,
+    310,
+    37043,
+    21360,
+    8390,
+    13
+   ],
+   "generated_tokens": 58,
+   "decode": {
+    "tokens": 58,
+    "first_token_s": 0.14136287500150502,
+    "tok_s_1_64": null,
+    "tok_s_65_128": null,
+    "tok_s_overall": 2.2100605033946072
+   },
+   "ssd_prefill_bytes": 90113142784,
+   "ssd_decode_bytes": 43770617856,
+   "vm": {
+    "reactivated": 48459,
+    "decompress": 152875,
+    "compress": 201650,
+    "pagein": 11189,
+    "pageout": 21,
+    "swapin": 0,
+    "swapout": 0
+   },
+   "vm_decode": {
+    "reactivated": 1168,
+    "decompress": 1951,
+    "compress": 10168,
+    "pagein": 20648,
+    "pageout": 0,
+    "swapin": 0,
+    "swapout": 0
+   },
+   "free_mb_before": 80.484375,
+   "finish": "stop",
+   "chunk_tokens_run": [
+    498,
+    525
+   ],
+   "chunk_end_positions": [
+    512,
+    1037
+   ],
+   "request": "later",
+   "prefix": {
+    "prompt_tokens": 1037,
+    "hit_tokens": 14,
+    "prefilled_tokens": 1023,
+    "tier": "ssd",
+    "restore_seconds": 0.07494433299871162,
+    "prefill_seconds": 37.9710237919935,
+    "bytes_loaded": 116040794,
+    "snapshots": []
+   },
+   "prompt_digest": "929525dd2c37bb42",
+   "prompt_tokens": 1037
+  }
+ ],
+ "requests": [
+  "later"
+ ],
+ "prefix_settings": {
+  "FLASHNEXT_PREFIX_CACHE": "1",
+  "FLASHNEXT_PREFIX_CACHE_DIR": "/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/fb12bd38-f2c7-4d06-a498-e8e5c9c31575/scratchpad/stage/prefix-B",
+  "FLASHNEXT_PREFIX_CACHE_DISK_GB": "5",
+  "FLASHNEXT_PREFIX_CACHE_MIN_TOKENS": "8",
+  "FLASHNEXT_PREFIX_CACHE_RAM_GB": "0.75"
+ },
+ "arm": "1k-F2P-r1",
+ "prefix_integrity": {
+  "checksums": [
+   {
+    "after": "1-later",
+    "entries": {
+     "f23531e4e8994f73338fca065067fbac35d425d85b61400477c6646d39064cd7": "3beb24b3c05aae3d"
+    }
+   }
+  ],
+  "entries_changed_between_requests": {},
+  "store_usage": {
+   "ram_entries": 1,
+   "ram_bytes": 116030188,
+   "ram_budget": 750000000,
+   "disk_entries": 1,
+   "disk_bytes": 116040794,
+   "disk_budget": 5000000000
+  },
+  "store_stats": {
+   "lookups": 1,
+   "hits": 1,
+   "reused_tokens": 14,
+   "missed_tokens": 1023,
+   "ram_hits": 0,
+   "ssd_hits": 1,
+   "puts": 0,
+   "deduped_puts": 0,
+   "ssd_writes": 0,
+   "ssd_bytes_written": 0,
+   "ssd_bytes_read": 116040794,
+   "evicted_ram": 0,
+   "evicted_ssd": 0,
+   "invalidated": 0,
+   "restore_seconds": 0.07494433299871162
+  }
+ },
+ "trace": {
+  "file": "arm-1k-F2P-r1.trace.jsonl",
+  "phases": {
+   "load": {
+    "samples": 2,
+    "first_t": 0.0,
+    "last_t": 1.02,
+    "mlx_active": 771598536,
+    "mlx_cache": 23844,
+    "mlx_peak": 771598536,
+    "rss": 847134720,
+    "compressor_mb": 1123.4,
+    "compressor_growth_mb": 0.0,
+    "file_backed_mb": 4349.2,
+    "swap_used_mb": 1013.5,
+    "pressure_level": 1,
+    "available_mb": 7876.0
+   },
+   "feed": {
+    "samples": 1,
+    "first_t": 2.05,
+    "last_t": 2.05,
+    "mlx_active": 2794747028,
+    "mlx_cache": 23820,
+    "mlx_peak": 2794747028,
+    "rss": 3163570176,
+    "compressor_mb": 1134.2,
+    "compressor_growth_mb": 10.8,
+    "file_backed_mb": 5567.3,
+    "swap_used_mb": 1013.5,
+    "pressure_level": 1,
+    "available_mb": 6297.6
+   },
+   "prefill": {
+    "samples": 144,
+    "first_t": 2.32,
+    "last_t": 39.96,
+    "mlx_active": 5155858076,
+    "mlx_cache": 632540292,
+    "mlx_peak": 5208174962,
+    "compressor_mb": 3164.1,
+    "compressor_growth_mb": 2040.7,
+    "file_backed_mb": 4952.2,
+    "available_mb": 4060.7,
+    "rss": 2455404544,
+    "swap_used_mb": 1013.5,
+    "pressure_level": 1
+   },
+   "decode": {
+    "samples": 26,
+    "first_t": 40.26,
+    "last_t": 65.92,
+    "mlx_active": 5229542768,
+    "mlx_cache": 80339298,
+    "mlx_peak": 5255393522,
+    "rss": 2940059648,
+    "compressor_mb": 1368.7,
+    "compressor_growth_mb": 245.3,
+    "file_backed_mb": 4066.9,
+    "swap_used_mb": 1013.5,
+    "pressure_level": 1,
+    "available_mb": 3732.8
+   },
+   "done": {
+    "samples": 1,
+    "first_t": 66.48,
+    "last_t": 66.48,
+    "mlx_active": 5224939562,
+    "mlx_cache": 80917000,
+    "mlx_peak": 5255393522,
+    "rss": 3054862336,
+    "compressor_mb": 1368.5,
+    "compressor_growth_mb": 245.1,
+    "file_backed_mb": 4065.7,
+    "swap_used_mb": 1013.5,
+    "pressure_level": 1,
+    "available_mb": 3780.5
+   }
+  },
+  "events": [
+   {
+    "t": 2.06,
+    "event": "expert_pool_creating",
+    "phase": null,
+    "during": "ring-acquire",
+    "size_bytes": 1622020096
+   },
+   {
+    "t": 2.06,
+    "event": "expert_pool_created",
+    "phase": null,
+    "during": "ring-acquire",
+    "slots": 528,
+    "mapped_bytes": 1622032384
+   },
+   {
+    "t": 40.2,
+    "event": "expert_pool_creating",
+    "phase": null,
+    "during": "decode",
+    "size_bytes": 2000000000
+   },
+   {
+    "t": 40.2,
+    "event": "expert_pool_created",
+    "phase": null,
+    "during": "decode",
+    "slots": 651,
+    "mapped_bytes": 1999880192
+   },
+   {
+    "t": 66.47,
+    "event": "prefix_request",
+    "phase": null,
+    "during": "turn-end",
+    "request": "1-later",
+    "hit": 14
+   }
+  ],
+  "guard": null,
+  "last_sample": {
+   "t": 66.48,
+   "phase": "done",
+   "mlx_active": 5224939562,
+   "mlx_cache": 80917000,
+   "mlx_peak": 5255393522,
+   "rss": 3054862336,
+   "available_mb": 3780.5,
+   "compressor_mb": 1368.5,
+   "compressor_growth_mb": 245.1,
+   "file_backed_mb": 4065.7,
+   "anonymous_mb": 3333.7,
+   "swap_used_mb": 1013.5,
+   "pressure_level": 1,
+   "swapin": 3028617,
+   "swapout": 3908991,
+   "compress": 188125658,
+   "decompress": 146868592,
+   "pagein": 119410579,
+   "pool": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 8397,
+    "misses": 13390
+   }
+  },
+  "samples": 174
+ }
+}

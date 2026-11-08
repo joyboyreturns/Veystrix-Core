@@ -1,0 +1,7 @@
+{"type":"session","sessionId":"session-7636f9f2-a1a4-418c-b327-c94385e01f22","cwd":"/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/567b946c-8253-4400-8f35-732265a800bf/scratchpad/smoke/ws"}
+{"type":"status","phase":"turn_start","turn":1}
+{"type":"status","phase":"step_start","turn":1,"step":1}
+{"type":"text","text":"<tool_call>"}
+{"type":"status","phase":"step_end","turn":1,"step":1,"usage":{"inputTokens":902,"outputTokens":1,"totalTokens":903}}
+{"type":"status","phase":"turn_end","turn":1,"reason":{"kind":"max-tokens"}}
+{"type":"final","sessionId":"session-7636f9f2-a1a4-418c-b327-c94385e01f22","reason":{"kind":"max-tokens"},"text":"<tool_call>"}

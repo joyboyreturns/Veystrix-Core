@@ -1,0 +1,14 @@
+22:28:15 battery 37 blocked | would be admitted at tier compact; other anonymous 3.54 GiB; long 3.48 GiB (budget 6.25), standard 3.73 GiB (budget 6.0), compact 4.23 GiB (budget 5.5), minimal 4.48 GiB 
+22:29:00 battery 37 blocked | would be admitted at tier compact; other anonymous 3.6 GiB; long 3.5 GiB (budget 6.25), standard 3.75 GiB (budget 6.0), compact 4.25 GiB (budget 5.5), minimal 4.5 GiB (bu
+22:29:45 battery 37 blocked | would be admitted at tier compact; other anonymous 3.53 GiB; long 3.5 GiB (budget 6.25), standard 3.75 GiB (budget 6.0), compact 4.25 GiB (budget 5.5), minimal 4.5 GiB (b
+22:30:30 battery 37 blocked | would be admitted at tier compact; other anonymous 3.69 GiB; long 3.61 GiB (budget 6.25), standard 3.86 GiB (budget 6.0), compact 4.36 GiB (budget 5.5), minimal 4.61 GiB 
+22:31:15 battery 37 blocked | would be admitted at tier compact; other anonymous 3.71 GiB; long 3.59 GiB (budget 6.25), standard 3.84 GiB (budget 6.0), compact 4.34 GiB (budget 5.5), minimal 4.59 GiB 
+22:32:00 battery 37 blocked | would be admitted at tier compact; other anonymous 3.56 GiB; long 3.48 GiB (budget 6.25), standard 3.73 GiB (budget 6.0), compact 4.23 GiB (budget 5.5), minimal 4.48 GiB 
+22:32:45 battery 36 blocked | no tier admitted; other anonymous 6.04 GiB; long 1.44 GiB (budget 6.25), standard 1.69 GiB (budget 6.0), compact 2.19 GiB (budget 5.5), minimal 2.44 GiB (budget 5.25); th
+22:33:30 battery 36 blocked | no tier admitted; other anonymous 6.76 GiB; long 0.94 GiB (budget 6.25), standard 1.19 GiB (budget 6.0), compact 1.69 GiB (budget 5.5), minimal 1.94 GiB (budget 5.25); th
+22:34:15 battery 36 blocked | no tier admitted; other anonymous 6.85 GiB; long 1.1 GiB (budget 6.25), standard 1.35 GiB (budget 6.0), compact 1.85 GiB (budget 5.5), minimal 2.1 GiB (budget 5.25); the 
+22:35:00 battery 36 blocked | no tier admitted; other anonymous 6.86 GiB; long 1.06 GiB (budget 6.25), standard 1.31 GiB (budget 6.0), compact 1.81 GiB (budget 5.5), minimal 2.06 GiB (budget 5.25); th
+22:35:46 battery 36 blocked | no tier admitted; other anonymous 6.66 GiB; long 1.28 GiB (budget 6.25), standard 1.53 GiB (budget 6.0), compact 2.03 GiB (budget 5.5), minimal 2.28 GiB (budget 5.25); th
+22:36:31 battery 36 blocked | no tier admitted; other anonymous 6.65 GiB; long 1.29 GiB (budget 6.25), standard 1.54 GiB (budget 6.0), compact 2.04 GiB (budget 5.5), minimal 2.29 GiB (budget 5.25); th
+22:37:16 battery 36 blocked | no tier admitted; other anonymous 6.67 GiB; long 1.3 GiB (budget 6.25), standard 1.55 GiB (budget 6.0), compact 2.05 GiB (budget 5.5), minimal 2.3 GiB (budget 5.25); the 
+exit=143

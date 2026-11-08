@@ -1,0 +1,22 @@
+service: gateway
+limits:
+
+
+
+
+
+
+
+
+
+
+
+  batch_size: 1536
+
+
+
+
+
+
+
+  token_expiry_seconds: 5400

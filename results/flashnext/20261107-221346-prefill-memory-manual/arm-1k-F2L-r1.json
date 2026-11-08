@@ -1,0 +1,335 @@
+{
+ "arm_id": "1k-F2L-r1",
+ "size": "1k",
+ "turn": "first",
+ "condition": "F2L",
+ "round": 0,
+ "reverse": false,
+ "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+ "checkpoint_identity": "c97330e20b55d7d4069d405e127531f5a461df2e0102d14ce20351b2870d5715",
+ "metal_limit_bytes": 12713115648,
+ "diagnostic_overrides": {
+  "expert_pool_gb": 2.0,
+  "ring_min_tokens": null,
+  "min_available_gb": 2.0,
+  "max_compressor_growth_gib": 2.0,
+  "compressor_stop_available_gib": 3.0,
+  "trace_interval_s": 1.0,
+  "fast_trace_interval_s": 0.25
+ },
+ "prompts": {
+  "source_hash": "e429a330a215d5fc",
+  "first_hash": "26c86b494b703a7a",
+  "later_hash": "d62794cb6335c6b5",
+  "first_ids": 988,
+  "later_ids": 1001
+ },
+ "after_load": {
+  "active": 2794742880,
+  "peak": 2794742880,
+  "cache": 23820,
+  "rss": 2266497024,
+  "pool": {
+   "exists": false
+  }
+ },
+ "environment": {
+  "FLASHNEXT_COMPILE_GDN": "1",
+  "FLASHNEXT_COMPILE_HC": "1",
+  "FLASHNEXT_COMPILE_NORM": "1",
+  "FLASHNEXT_EVAL_LINEAR_STATE": "1",
+  "FLASHNEXT_EXPERT_POOL_GB": "2",
+  "FLASHNEXT_FUSED_SHARED": "1",
+  "FLASHNEXT_FUSED_SHARED_PARTS": "0",
+  "FLASHNEXT_FUSED_UP_SWIGLU": "1",
+  "FLASHNEXT_GPU_KEEPWARM": "0",
+  "FLASHNEXT_IO_QOS": "user-interactive",
+  "FLASHNEXT_IO_WORKERS": "8",
+  "FLASHNEXT_METAL_G64": "1",
+  "FLASHNEXT_METAL_RUNTIME": "1",
+  "FLASHNEXT_NGRAM_PARALLEL_MIN": "16",
+  "FLASHNEXT_NORM_WEIGHT_CACHE": "1",
+  "FLASHNEXT_ONE_SYNC": "1",
+  "FLASHNEXT_OVERLAP": "0",
+  "FLASHNEXT_PIN_CACHE": "/Users/vincent/Documents/Veystrix/results/flashnext/20261107-221346-prefill-memory-manual/pins/pins.json",
+  "FLASHNEXT_PREAD_CHUNK": "2",
+  "FLASHNEXT_PREFILL_RING_EXPERTS": "512",
+  "FLASHNEXT_PREFILL_RING_SCRATCH": "1",
+  "FLASHNEXT_PROFILE_IO": "0",
+  "FLASHNEXT_QSA_CACHE_POOLED_KEYS": "1",
+  "FLASHNEXT_QSA_SCATTER_DECODE": "1",
+  "FLASHNEXT_RDAHEAD": "0",
+  "FLASHNEXT_READ": "pread",
+  "FLASHNEXT_SLAB_G64": "0",
+  "FLASHNEXT_SLAB_GLOBAL": "60",
+  "FLASHNEXT_SLAB_MAX_SLOTS": "6",
+  "FLASHNEXT_SLAB_MIN_SLOTS": "4",
+  "FLASHNEXT_SLAB_NUM_LAYERS": "12",
+  "FLASHNEXT_SLAB_PACK": "1",
+  "FLASHNEXT_SLAB_PACK_REQUIRE_EXISTING": "0",
+  "FLASHNEXT_SLAB_POLICY": "skew",
+  "FLASHNEXT_SLAB_PROFILE": "frozen",
+  "FLASHNEXT_STREAM_EMBED": "1",
+  "FLASHNEXT_STREAM_PACK": "1",
+  "FLASHNEXT_STREAM_PACK_CHUNK": "2",
+  "FLASHNEXT_TOPK_THRESHOLD": "0.85"
+ },
+ "trace_file": "arm-1k-F2L-r1.trace.jsonl",
+ "uncached_reads": null,
+ "status": "completed",
+ "turns": [
+  {
+   "name": "measured",
+   "pending_tokens": 1025,
+   "prefilled_tokens": 1025,
+   "prefill_s": 25.46713283401914,
+   "prefill_tok_s": 40.24795436064162,
+   "prefill_calls": [
+    {
+     "tokens": 1025,
+     "before": {
+      "active": 2794746980,
+      "peak": 2794746980,
+      "cache": 23820,
+      "pool_exists": false
+     },
+     "seconds": 25.46694466599729,
+     "after": {
+      "active": 3031090340,
+      "peak": 5583986951,
+      "cache": 0,
+      "pool_exists": false,
+      "retained": 0
+     }
+    }
+   ],
+   "mem_start": {
+    "active": 2794742880,
+    "peak": 0,
+    "cache": 23820
+   },
+   "mem_end_prefill": {
+    "active": 3031090340,
+    "peak": 5583986951,
+    "cache": 0
+   },
+   "mem_end_decode": {
+    "active": 5121852884,
+    "peak": 5583986951,
+    "cache": 95338888
+   },
+   "cache_max": 23820,
+   "rss_end_prefill": 345751552,
+   "pool_start": {
+    "exists": false
+   },
+   "pool_end_prefill": {
+    "exists": false
+   },
+   "pool_end": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 9739,
+    "misses": 19457
+   },
+   "pool_hits_decode": 9739,
+   "pool_misses_decode": 19457,
+   "ring_acquired": true,
+   "ring_reason": null,
+   "ring": {
+    "staged_layers": 48,
+    "staged_experts": 16385,
+    "staged_bytes": 50334720000,
+    "wait_seconds": 16.64614166977117,
+    "fallback_capacity": 0,
+    "fallback_busy": 0,
+    "fallback_error": 0,
+    "fallback_disabled": 0,
+    "fallback_memory": 0,
+    "disabled": null,
+    "half_experts": 512,
+    "ring_bytes": 1572864000,
+    "last_error": null,
+    "scratch_pool": true,
+    "disposed": false
+   },
+   "scratch": {
+    "acquire_s": 0.0005196250276640058,
+    "dispose_s": 0.01947770797414705,
+    "acquire_faults": {
+     "minor": 171,
+     "major": 0
+    }
+   },
+   "first_token": 760,
+   "kv_hash": "fd83510bd53f9c82",
+   "digest": "2f84f7d220e782b8",
+   "generated_tokens": 77,
+   "decode": {
+    "tokens": 77,
+    "first_token_s": 0.12119012500625104,
+    "tok_s_1_64": 2.107118404918022,
+    "tok_s_65_128": null,
+    "tok_s_overall": 2.1118091383107367
+   },
+   "ssd_prefill_bytes": 53427191808,
+   "ssd_decode_bytes": 63422058496,
+   "vm": {
+    "reactivated": 51334,
+    "decompress": 176553,
+    "compress": 237198,
+    "pagein": 465,
+    "pageout": 8,
+    "swapin": 0,
+    "swapout": 0
+   },
+   "vm_decode": {
+    "reactivated": 16,
+    "decompress": 10650,
+    "compress": 0,
+    "pagein": 24743,
+    "pageout": 0,
+    "swapin": 0,
+    "swapout": 0
+   },
+   "free_mb_before": 84.1875,
+   "finish": "stop"
+  }
+ ],
+ "trace": {
+  "file": "arm-1k-F2L-r1.trace.jsonl",
+  "phases": {
+   "load": {
+    "samples": 2,
+    "first_t": 0.0,
+    "last_t": 1.03,
+    "mlx_active": 755904264,
+    "mlx_cache": 23844,
+    "mlx_peak": 755904264,
+    "rss": 818774016,
+    "compressor_mb": 863.2,
+    "compressor_growth_mb": 0.0,
+    "file_backed_mb": 4693.4,
+    "swap_used_mb": 645.25,
+    "pressure_level": 1,
+    "available_mb": 6966.0
+   },
+   "prefill": {
+    "samples": 97,
+    "first_t": 2.05,
+    "last_t": 27.32,
+    "mlx_active": 5414880568,
+    "mlx_cache": 1205271585,
+    "mlx_peak": 5583986951,
+    "rss": 2269462528,
+    "compressor_mb": 4041.4,
+    "compressor_growth_mb": 3178.2,
+    "file_backed_mb": 5099.6,
+    "swap_used_mb": 645.25,
+    "pressure_level": 1,
+    "available_mb": 3470.3
+   },
+   "decode": {
+    "samples": 36,
+    "first_t": 27.59,
+    "last_t": 63.56,
+    "mlx_active": 5126024930,
+    "mlx_cache": 94771478,
+    "mlx_peak": 5583986951,
+    "rss": 2544484352,
+    "compressor_mb": 1779.4,
+    "compressor_growth_mb": 916.2,
+    "file_backed_mb": 4000.8,
+    "swap_used_mb": 645.25,
+    "pressure_level": 1,
+    "available_mb": 3873.4
+   },
+   "done": {
+    "samples": 1,
+    "first_t": 64.07,
+    "last_t": 64.07,
+    "mlx_active": 5121852884,
+    "mlx_cache": 95338888,
+    "mlx_peak": 5583986951,
+    "rss": 2544500736,
+    "compressor_mb": 1728.4,
+    "compressor_growth_mb": 865.2,
+    "file_backed_mb": 4000.8,
+    "swap_used_mb": 645.25,
+    "pressure_level": 1,
+    "available_mb": 3961.9
+   }
+  },
+  "events": [
+   {
+    "t": 2.01,
+    "event": "expert_pool_creating",
+    "phase": null,
+    "during": "ring-acquire",
+    "size_bytes": 1622020096
+   },
+   {
+    "t": 2.01,
+    "event": "expert_pool_created",
+    "phase": null,
+    "during": "ring-acquire",
+    "slots": 528,
+    "mapped_bytes": 1622032384
+   },
+   {
+    "t": 2.58,
+    "event": "compressor_warning",
+    "phase": null,
+    "during": "prefill",
+    "growth_mb": 2662.7,
+    "limit_mb": 2048.0,
+    "available_mb": 4937.4
+   },
+   {
+    "t": 27.62,
+    "event": "expert_pool_creating",
+    "phase": null,
+    "during": "decode",
+    "size_bytes": 2000000000
+   },
+   {
+    "t": 27.62,
+    "event": "expert_pool_created",
+    "phase": null,
+    "during": "decode",
+    "slots": 651,
+    "mapped_bytes": 1999880192
+   }
+  ],
+  "guard": null,
+  "last_sample": {
+   "t": 64.07,
+   "phase": "done",
+   "mlx_active": 5121852884,
+   "mlx_cache": 95338888,
+   "mlx_peak": 5583986951,
+   "rss": 2544500736,
+   "available_mb": 3961.9,
+   "compressor_mb": 1728.4,
+   "compressor_growth_mb": 865.2,
+   "file_backed_mb": 4000.8,
+   "anonymous_mb": 2888.9,
+   "swap_used_mb": 645.25,
+   "pressure_level": 1,
+   "swapin": 3020937,
+   "swapout": 3877739,
+   "compress": 186627606,
+   "decompress": 145789910,
+   "pagein": 118434345,
+   "pool": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 9739,
+    "misses": 19457
+   }
+  },
+  "samples": 136
+ }
+}

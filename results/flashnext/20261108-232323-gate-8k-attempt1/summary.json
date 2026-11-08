@@ -1,0 +1,428 @@
+{
+  "started": "20261108-232323",
+  "attempt": 1,
+  "stub": false,
+  "outcome": "completed",
+  "profile": "8k",
+  "memory_waiver": true,
+  "server_args": [
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "12288"
+  ],
+  "battery_run": false,
+  "gate": [
+    {
+      "check": "power",
+      "ok": true,
+      "detail": "AC power (62%)",
+      "hard": true
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False",
+      "hard": true
+    },
+    {
+      "check": "no thermal warning, no CPU speed limit",
+      "ok": true,
+      "detail": "{'source': 'ac', 'percent': 62, 'discharging': False, 'low_power_mode': False, 'thermal_warning': False, 'cpu_speed_limit': None}",
+      "hard": true
+    },
+    {
+      "check": "memory pressure level 1",
+      "ok": true,
+      "detail": "level=1",
+      "hard": true
+    },
+    {
+      "check": "dry admission (ADVISORY: the owner waived admission, FLASHNEXT_MEMORY_WAIVER=swap-only)",
+      "ok": true,
+      "detail": "WOULD BE REFUSED: no tier admitted; other anonymous 3.11 GiB; long 3.46 GiB (budget 6.25), 8k 3.71 GiB (budget 6.0); the 8K task needs one of ('long', '8k') (context 12288)",
+      "hard": false
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 717.5->717.5 MB",
+      "hard": true
+    },
+    {
+      "check": "heavy applications (advisory: the product's own admission decides; nothing is closed)",
+      "ok": true,
+      "detail": "none",
+      "hard": false
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080",
+      "hard": true
+    },
+    {
+      "check": "free SSD >= 60 GB",
+      "ok": true,
+      "detail": "214 GB",
+      "hard": true
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+      "hard": true
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh",
+      "hard": true
+    },
+    {
+      "check": "AGENTIC patch present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/docs/flashnext/dsh/veystrix-agentic-8k.patch.yml",
+      "hard": true
+    },
+    {
+      "check": "precomputed task present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/models/flashnext/tests/bench/fixtures/gate_8k_task.txt",
+      "hard": true
+    }
+  ],
+  "env": {
+    "power": {
+      "source": "ac",
+      "percent": 62,
+      "discharging": false,
+      "low_power_mode": false,
+      "thermal_warning": false,
+      "cpu_speed_limit": null
+    },
+    "vm": {
+      "free_gib": 4.236,
+      "inactive_gib": 4.173,
+      "wired_gib": 1.685,
+      "compressor_gib": 0.932,
+      "swapouts": 3908991
+    },
+    "swap_mb": 717.5,
+    "pressure": 1,
+    "git_head": "dab3d0d806d10cff8a7cb8c343e51f048a6faabc",
+    "git_status_lines": 182,
+    "fixture_tokens": 8203,
+    "harness_overhead_tokens": 828,
+    "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+  },
+  "server_cmd": [
+    "/Users/vincent/Documents/Veystrix/chat.sh",
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "12288"
+  ],
+  "stage": {
+    "ready": {
+      "ok": true,
+      "seconds": 9.0
+    },
+    "shutdown": {
+      "ok": true,
+      "seconds": 1.5,
+      "returncode": 0
+    }
+  },
+  "worker_pid": 56389,
+  "health_before": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 0,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 12288,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": 10240,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null,
+      "memory_controller": {
+        "state": "normal",
+        "reasons": [],
+        "recovery_events": 0,
+        "episodes": [],
+        "elevated_seconds": 0.0,
+        "throttled_seconds": 0.0,
+        "swap_at_launch_mb": 717.5,
+        "peak": {
+          "swap_increase_mib": 0.0,
+          "swapout_window_mib": 0.0,
+          "swapin_window_mib": 0.0,
+          "compressor_growth_mib": 233.19999999999993,
+          "pressure_level": 1,
+          "pressure_seconds": 0.0
+        },
+        "last": {
+          "mono_t": 368718.11,
+          "pressure": 1,
+          "available_mb": 6367.6,
+          "swap_increase_mib": 0.0,
+          "swapout_window_mib": 0.0,
+          "swapin_window_mib": 0.0,
+          "compressor_window_growth_mib": 233.2,
+          "compressor_growth_mib": 233.2,
+          "pressure_seconds": 0.0,
+          "window_s": 2.4
+        },
+        "swap_growth_stop_gib": 2.5,
+        "stop_reason": null
+      }
+    }
+  },
+  "task": {
+    "exit": 0,
+    "seconds": 903.0,
+    "ended_by": "wall cap"
+  },
+  "health_after_task": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": true,
+    "queue": {
+      "active": {
+        "path": "/v1/chat/completions",
+        "seconds": 247.2
+      },
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 2,
+      "rejected": 2,
+      "dropped": 0
+    },
+    "context_limit": 12288,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 3,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 8203,
+      "max_cold_prefill": 10240,
+      "sessions": {
+        "live": "auto:d635321bafee1efe",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:d635321bafee1efe",
+            "requests": 3,
+            "rebuilds": 3,
+            "cold": false,
+            "last_prompt_tokens": 8203
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 12288,
+        "input_tokens": 8203,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 3061,
+        "continuation_ok": true
+      },
+      "last_divergence": null,
+      "memory_controller": {
+        "state": "normal",
+        "reasons": [],
+        "recovery_events": 3,
+        "episodes": [
+          {
+            "start_s": 199.0,
+            "seconds": 15.3,
+            "peak_pressure": 1
+          },
+          {
+            "start_s": 732.5,
+            "seconds": 42.2,
+            "peak_pressure": 2
+          },
+          {
+            "start_s": 781.2,
+            "seconds": 30.3,
+            "peak_pressure": 2
+          }
+        ],
+        "elevated_seconds": 87.7,
+        "throttled_seconds": 17.8,
+        "swap_at_launch_mb": 717.5,
+        "peak": {
+          "swap_increase_mib": 0.0,
+          "swapout_window_mib": 0.0,
+          "swapin_window_mib": 1.4375,
+          "compressor_growth_mib": 4877.700000000001,
+          "pressure_level": 2,
+          "pressure_seconds": 18.16481391695561
+        },
+        "last": {
+          "mono_t": 369621.34,
+          "pressure": 1,
+          "available_mb": 5852.3,
+          "swap_increase_mib": 0.0,
+          "swapout_window_mib": 0.0,
+          "swapin_window_mib": 0.0,
+          "compressor_window_growth_mib": 0.0,
+          "compressor_growth_mib": 975.1,
+          "pressure_seconds": 0.0,
+          "window_s": 9.1
+        },
+        "swap_growth_stop_gib": 2.5,
+        "stop_reason": null
+      }
+    }
+  },
+  "session_id": "session-73f404fd-99f7-4ff9-a371-a2d261556301",
+  "follow_up": {
+    "exit": 1,
+    "seconds": 137.4,
+    "ended_by": null
+  },
+  "health_after_follow": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": true,
+    "queue": {
+      "active": {
+        "path": "/v1/chat/completions",
+        "seconds": 384.6
+      },
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 2,
+      "rejected": 8,
+      "dropped": 0
+    },
+    "context_limit": 12288,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 3,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 8203,
+      "max_cold_prefill": 10240,
+      "sessions": {
+        "live": "auto:d635321bafee1efe",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:d635321bafee1efe",
+            "requests": 3,
+            "rebuilds": 3,
+            "cold": false,
+            "last_prompt_tokens": 8203
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 12288,
+        "input_tokens": 8203,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 3061,
+        "continuation_ok": true
+      },
+      "last_divergence": null,
+      "memory_controller": {
+        "state": "normal",
+        "reasons": [],
+        "recovery_events": 3,
+        "episodes": [
+          {
+            "start_s": 199.0,
+            "seconds": 15.3,
+            "peak_pressure": 1
+          },
+          {
+            "start_s": 732.5,
+            "seconds": 42.2,
+            "peak_pressure": 2
+          },
+          {
+            "start_s": 781.2,
+            "seconds": 30.3,
+            "peak_pressure": 2
+          }
+        ],
+        "elevated_seconds": 87.7,
+        "throttled_seconds": 17.8,
+        "swap_at_launch_mb": 717.5,
+        "peak": {
+          "swap_increase_mib": 0.0,
+          "swapout_window_mib": 0.0,
+          "swapin_window_mib": 1.4375,
+          "compressor_growth_mib": 4877.700000000001,
+          "pressure_level": 2,
+          "pressure_seconds": 18.16481391695561
+        },
+        "last": {
+          "mono_t": 369758.97,
+          "pressure": 1,
+          "available_mb": 6295.0,
+          "swap_increase_mib": 0.0,
+          "swapout_window_mib": 0.0,
+          "swapin_window_mib": 0.0,
+          "compressor_window_growth_mib": 0.0,
+          "compressor_growth_mib": 892.0,
+          "pressure_seconds": 0.0,
+          "window_s": 9.8
+        },
+        "swap_growth_stop_gib": 2.5,
+        "stop_reason": null
+      }
+    }
+  },
+  "wall_seconds": 1051.1,
+  "battery": {
+    "start": 62,
+    "end": 71,
+    "lowest": 62,
+    "source": "ac",
+    "note": "AC"
+  },
+  "leftover_processes": []
+}

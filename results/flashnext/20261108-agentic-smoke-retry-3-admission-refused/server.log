@@ -1,0 +1,13 @@
+AGENTIC prefill readiness: REFUSED
+  free   5.04 GiB   speculative(file)   0.12 GiB   purgeable   0.13 GiB
+  inactive   3.71 GiB  = file   0.12 GiB to   3.71 GiB  +  anonymous   0.00 GiB to   3.58 GiB   (macOS does not report the split)
+  active   3.77 GiB   wired   1.95 GiB   compressor   0.82 GiB
+  file-backed   4.02 GiB   anonymous   3.58 GiB   reusable without compressing >=   5.28 GiB
+  swap used   0.72 GiB   pressure level 1   gate figure   8.87 GiB
+  [NO] start gate (mandatory, unchanged): 8.87 GiB available, needs 9.00 GiB
+  [ok] pressure and swap-out: pressure level 1, swap used 0.72 GiB, swap-out pages since last look 0
+  [NO] cold-prefill memory budget: headroom 3.54 GiB (needs 4.00): 16.0 physical - wired 1.95 - compressor 0.82 - cold prefill 6.0 - harness 1.0 - 0.75 x other anonymous 3.58
+  -> The 9 GiB gate is short by 0.13 GiB; file cache could close that, but it would not admit this launch (see below), so no purge is attempted.
+  -> Other processes hold 3.58 GiB of anonymous memory that macOS will compress when the first prefill starts streaming experts. Quit applications until it is at least 0.61 GiB lower (browsers, chat and mail clients, editors, Docker). A cache purge does not help: this check does not count file cache.
+  -> Largest processes now (resident + compressed, from top): WindowServer 0.81 GiB, claude.exe 0.36 GiB, Siri AI 0.43 GiB, Finder 0.32 GiB, Activity Monitor 0.18 GiB.
+Nothing was loaded. No guard was weakened; free the memory named above and start again.

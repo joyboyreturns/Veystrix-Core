@@ -1,0 +1,83 @@
+{
+  "stub": false,
+  "started": "20261108-182120",
+  "outcome": "server exited early with code 69 (admission refusal or crash)",
+  "preliminary_battery_run": true,
+  "gate": [
+    {
+      "check": "AC power (WAIVED by the owner for this run; result is preliminary)",
+      "ok": true,
+      "detail": "Now drawing from 'Battery Power' (50%), battery run accepted by the owner, needs >= 30%"
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False"
+    },
+    {
+      "check": "memory pressure normal (level 1)",
+      "ok": true,
+      "detail": "level=1"
+    },
+    {
+      "check": "system free memory >= 40%",
+      "ok": true,
+      "detail": "free=81%"
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 741.5->741.5 MB"
+    },
+    {
+      "check": "no memory-heavy applications",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080"
+    },
+    {
+      "check": "free SSD space >= 60 GB",
+      "ok": true,
+      "detail": "215 GB"
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"
+    }
+  ],
+  "stage": {
+    "ready": {
+      "ok": false,
+      "seconds": 3.0
+    },
+    "shutdown": {
+      "ok": false,
+      "returncode": 69
+    }
+  },
+  "peaks": {
+    "compressor_gib": 0.82,
+    "pressure_level": 1,
+    "swap_mb": 741.5,
+    "server_rss_gb": 0,
+    "swapouts": 3908991
+  },
+  "swapouts_during_run": 0,
+  "wall_seconds": 3.1,
+  "leftover_processes": []
+}

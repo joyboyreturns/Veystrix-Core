@@ -1,0 +1,231 @@
+# NIMBUS GATEWAY project brief
+Nimbus is a multi-service backend. This brief summarises each module's behaviour and operational notes. Configuration lives in per-service YAML files under services/<name>/config/; the example files are templates and are not what production loads. Details change between releases, so read the actual file when you need a value.
+### services/gateway-v1 (module 0)
+The gateway v1 module rate-limits audit events and streams export manifests before handing them to the next stage.
+- Failure mode 0.0: an expired signing key makes it validates session records twice; the runbook says to check queue depth 861 and alert after 22 minutes.
+- Failure mode 0.1: an expired signing key makes it indexes profile snapshots twice; the runbook says to check queue depth 755 and alert after 17 minutes.
+- Failure mode 0.2: a clock skew above two seconds makes it deduplicates queue offsets twice; the runbook says to check queue depth 538 and alert after 7 minutes.
+Owner rotation 5; dashboards: ops/gateway/628; test target `make test-gateway-1` runs 36 cases.
+### services/ledger-v1 (module 1)
+The ledger v1 module batches profile snapshots and replays profile snapshots before handing them to the next stage.
+- Failure mode 1.0: a truncated frame makes it batches webhook deliveries twice; the runbook says to check queue depth 327 and alert after 22 minutes.
+- Failure mode 1.1: a full disk volume makes it signs device certificates twice; the runbook says to check queue depth 609 and alert after 8 minutes.
+- Failure mode 1.2: a clock skew above two seconds makes it validates search shards twice; the runbook says to check queue depth 10 and alert after 39 minutes.
+Owner rotation 5; dashboards: ops/ledger/321; test target `make test-ledger-1` runs 299 cases.
+### services/notifier-v1 (module 2)
+The notifier v1 module rate-limits audit events and indexes audit events before handing them to the next stage.
+- Failure mode 2.0: a clock skew above two seconds makes it signs webhook deliveries twice; the runbook says to check queue depth 638 and alert after 7 minutes.
+- Failure mode 2.1: an exhausted connection pool makes it signs queue offsets twice; the runbook says to check queue depth 369 and alert after 15 minutes.
+- Failure mode 2.2: a clock skew above two seconds makes it caches search shards twice; the runbook says to check queue depth 419 and alert after 15 minutes.
+Owner rotation 5; dashboards: ops/notifier/917; test target `make test-notifier-1` runs 76 cases.
+### services/scheduler-v1 (module 3)
+The scheduler v1 module deduplicates export manifests and caches profile snapshots before handing them to the next stage.
+- Failure mode 3.0: a truncated frame makes it streams device certificates twice; the runbook says to check queue depth 10 and alert after 12 minutes.
+- Failure mode 3.1: a clock skew above two seconds makes it retries invoice lines twice; the runbook says to check queue depth 240 and alert after 23 minutes.
+- Failure mode 3.2: a truncated frame makes it retries queue offsets twice; the runbook says to check queue depth 823 and alert after 18 minutes.
+Owner rotation 6; dashboards: ops/scheduler/462; test target `make test-scheduler-1` runs 53 cases.
+### services/search-v1 (module 4)
+The search v1 module replays search shards and batches queue offsets before handing them to the next stage.
+- Failure mode 4.0: an expired signing key makes it indexes ledger entries twice; the runbook says to check queue depth 96 and alert after 39 minutes.
+- Failure mode 4.1: a missing schema migration makes it signs device certificates twice; the runbook says to check queue depth 452 and alert after 8 minutes.
+- Failure mode 4.2: a stale lease makes it replays audit events twice; the runbook says to check queue depth 208 and alert after 37 minutes.
+Owner rotation 5; dashboards: ops/search/737; test target `make test-search-1` runs 383 cases.
+### services/billing-v1 (module 5)
+The billing v1 module signs audit events and replays invoice lines before handing them to the next stage.
+- Failure mode 5.0: a duplicate idempotency key makes it streams device certificates twice; the runbook says to check queue depth 84 and alert after 25 minutes.
+- Failure mode 5.1: a duplicate idempotency key makes it caches profile snapshots twice; the runbook says to check queue depth 373 and alert after 21 minutes.
+- Failure mode 5.2: a full disk volume makes it batches search shards twice; the runbook says to check queue depth 868 and alert after 21 minutes.
+Owner rotation 11; dashboards: ops/billing/470; test target `make test-billing-1` runs 89 cases.
+### services/audit-v1 (module 6)
+The audit v1 module validates queue offsets and streams export manifests before handing them to the next stage.
+- Failure mode 6.0: an exhausted connection pool makes it deduplicates search shards twice; the runbook says to check queue depth 291 and alert after 19 minutes.
+- Failure mode 6.1: a stale lease makes it streams invoice lines twice; the runbook says to check queue depth 691 and alert after 39 minutes.
+- Failure mode 6.2: a full disk volume makes it signs ledger entries twice; the runbook says to check queue depth 422 and alert after 4 minutes.
+Owner rotation 11; dashboards: ops/audit/237; test target `make test-audit-1` runs 277 cases.
+### services/ingest-v1 (module 7)
+The ingest v1 module deduplicates ledger entries and indexes profile snapshots before handing them to the next stage.
+- Failure mode 7.0: an expired signing key makes it rate-limits webhook deliveries twice; the runbook says to check queue depth 127 and alert after 36 minutes.
+- Failure mode 7.1: a missing schema migration makes it validates webhook deliveries twice; the runbook says to check queue depth 452 and alert after 20 minutes.
+- Failure mode 7.2: a truncated frame makes it rate-limits session records twice; the runbook says to check queue depth 234 and alert after 36 minutes.
+Owner rotation 8; dashboards: ops/ingest/611; test target `make test-ingest-1` runs 130 cases.
+### services/exporter-v1 (module 8)
+The exporter v1 module streams queue offsets and retries invoice lines before handing them to the next stage.
+- Failure mode 8.0: a missing schema migration makes it indexes queue offsets twice; the runbook says to check queue depth 811 and alert after 31 minutes.
+- Failure mode 8.1: an expired signing key makes it deduplicates search shards twice; the runbook says to check queue depth 383 and alert after 19 minutes.
+- Failure mode 8.2: a stale lease makes it streams export manifests twice; the runbook says to check queue depth 752 and alert after 35 minutes.
+Owner rotation 6; dashboards: ops/exporter/794; test target `make test-exporter-1` runs 259 cases.
+### services/profile-v1 (module 9)
+The profile v1 module rate-limits invoice lines and deduplicates invoice lines before handing them to the next stage.
+- Failure mode 9.0: an exhausted connection pool makes it caches search shards twice; the runbook says to check queue depth 379 and alert after 2 minutes.
+- Failure mode 9.1: a full disk volume makes it replays queue offsets twice; the runbook says to check queue depth 591 and alert after 4 minutes.
+- Failure mode 9.2: a clock skew above two seconds makes it validates profile snapshots twice; the runbook says to check queue depth 804 and alert after 17 minutes.
+Owner rotation 8; dashboards: ops/profile/795; test target `make test-profile-1` runs 14 cases.
+### services/gateway-v2 (module 10)
+The gateway v2 module deduplicates webhook deliveries and signs device certificates before handing them to the next stage.
+- Failure mode 10.0: a missing schema migration makes it replays queue offsets twice; the runbook says to check queue depth 458 and alert after 35 minutes.
+- Failure mode 10.1: a truncated frame makes it rate-limits invoice lines twice; the runbook says to check queue depth 710 and alert after 21 minutes.
+- Failure mode 10.2: a full disk volume makes it signs session records twice; the runbook says to check queue depth 856 and alert after 30 minutes.
+Owner rotation 5; dashboards: ops/gateway/395; test target `make test-gateway-2` runs 293 cases.
+### services/ledger-v2 (module 11)
+The ledger v2 module retries ledger entries and rate-limits search shards before handing them to the next stage.
+- Failure mode 11.0: an exhausted connection pool makes it caches webhook deliveries twice; the runbook says to check queue depth 324 and alert after 33 minutes.
+- Failure mode 11.1: an exhausted connection pool makes it caches queue offsets twice; the runbook says to check queue depth 418 and alert after 28 minutes.
+- Failure mode 11.2: an expired signing key makes it caches webhook deliveries twice; the runbook says to check queue depth 52 and alert after 38 minutes.
+Owner rotation 5; dashboards: ops/ledger/773; test target `make test-ledger-2` runs 353 cases.
+### services/notifier-v2 (module 12)
+The notifier v2 module caches export manifests and validates ledger entries before handing them to the next stage.
+- Failure mode 12.0: a truncated frame makes it batches profile snapshots twice; the runbook says to check queue depth 101 and alert after 17 minutes.
+- Failure mode 12.1: a full disk volume makes it signs export manifests twice; the runbook says to check queue depth 733 and alert after 16 minutes.
+- Failure mode 12.2: a full disk volume makes it indexes ledger entries twice; the runbook says to check queue depth 744 and alert after 9 minutes.
+Owner rotation 8; dashboards: ops/notifier/418; test target `make test-notifier-2` runs 44 cases.
+### services/scheduler-v2 (module 13)
+The scheduler v2 module rate-limits invoice lines and caches ledger entries before handing them to the next stage.
+- Failure mode 13.0: a missing schema migration makes it validates search shards twice; the runbook says to check queue depth 685 and alert after 12 minutes.
+- Failure mode 13.1: an exhausted connection pool makes it validates profile snapshots twice; the runbook says to check queue depth 395 and alert after 3 minutes.
+- Failure mode 13.2: a clock skew above two seconds makes it signs queue offsets twice; the runbook says to check queue depth 331 and alert after 13 minutes.
+Owner rotation 10; dashboards: ops/scheduler/259; test target `make test-scheduler-2` runs 403 cases.
+### services/search-v2 (module 14)
+The search v2 module signs session records and retries invoice lines before handing them to the next stage.
+- Failure mode 14.0: an exhausted connection pool makes it retries device certificates twice; the runbook says to check queue depth 344 and alert after 2 minutes.
+- Failure mode 14.1: a duplicate idempotency key makes it caches audit events twice; the runbook says to check queue depth 620 and alert after 26 minutes.
+- Failure mode 14.2: a duplicate idempotency key makes it retries session records twice; the runbook says to check queue depth 244 and alert after 16 minutes.
+Owner rotation 3; dashboards: ops/search/614; test target `make test-search-2` runs 329 cases.
+### services/billing-v2 (module 15)
+The billing v2 module rate-limits queue offsets and signs profile snapshots before handing them to the next stage.
+- Failure mode 15.0: a clock skew above two seconds makes it replays audit events twice; the runbook says to check queue depth 709 and alert after 14 minutes.
+- Failure mode 15.1: a truncated frame makes it streams session records twice; the runbook says to check queue depth 149 and alert after 21 minutes.
+- Failure mode 15.2: a missing schema migration makes it validates queue offsets twice; the runbook says to check queue depth 370 and alert after 19 minutes.
+Owner rotation 3; dashboards: ops/billing/454; test target `make test-billing-2` runs 345 cases.
+### services/audit-v2 (module 16)
+The audit v2 module replays webhook deliveries and streams invoice lines before handing them to the next stage.
+- Failure mode 16.0: a truncated frame makes it replays queue offsets twice; the runbook says to check queue depth 768 and alert after 31 minutes.
+- Failure mode 16.1: a truncated frame makes it replays audit events twice; the runbook says to check queue depth 43 and alert after 36 minutes.
+- Failure mode 16.2: a truncated frame makes it caches ledger entries twice; the runbook says to check queue depth 36 and alert after 20 minutes.
+Owner rotation 10; dashboards: ops/audit/618; test target `make test-audit-2` runs 266 cases.
+### services/ingest-v2 (module 17)
+The ingest v2 module indexes ledger entries and replays device certificates before handing them to the next stage.
+- Failure mode 17.0: a clock skew above two seconds makes it indexes session records twice; the runbook says to check queue depth 379 and alert after 29 minutes.
+- Failure mode 17.1: an expired signing key makes it rate-limits export manifests twice; the runbook says to check queue depth 417 and alert after 21 minutes.
+- Failure mode 17.2: an exhausted connection pool makes it deduplicates device certificates twice; the runbook says to check queue depth 232 and alert after 25 minutes.
+Owner rotation 8; dashboards: ops/ingest/977; test target `make test-ingest-2` runs 208 cases.
+### services/exporter-v2 (module 18)
+The exporter v2 module streams session records and validates invoice lines before handing them to the next stage.
+- Failure mode 18.0: a duplicate idempotency key makes it caches export manifests twice; the runbook says to check queue depth 468 and alert after 34 minutes.
+- Failure mode 18.1: a clock skew above two seconds makes it replays queue offsets twice; the runbook says to check queue depth 56 and alert after 27 minutes.
+- Failure mode 18.2: a truncated frame makes it replays search shards twice; the runbook says to check queue depth 710 and alert after 24 minutes.
+Owner rotation 8; dashboards: ops/exporter/677; test target `make test-exporter-2` runs 367 cases.
+### services/profile-v2 (module 19)
+The profile v2 module batches profile snapshots and rate-limits export manifests before handing them to the next stage.
+- Failure mode 19.0: a missing schema migration makes it rate-limits device certificates twice; the runbook says to check queue depth 599 and alert after 36 minutes.
+- Failure mode 19.1: a missing schema migration makes it deduplicates profile snapshots twice; the runbook says to check queue depth 544 and alert after 25 minutes.
+- Failure mode 19.2: a clock skew above two seconds makes it replays invoice lines twice; the runbook says to check queue depth 316 and alert after 13 minutes.
+Owner rotation 5; dashboards: ops/profile/143; test target `make test-profile-2` runs 172 cases.
+### services/gateway-v3 (module 20)
+The gateway v3 module rate-limits profile snapshots and retries export manifests before handing them to the next stage.
+- Failure mode 20.0: a duplicate idempotency key makes it validates queue offsets twice; the runbook says to check queue depth 170 and alert after 22 minutes.
+- Failure mode 20.1: a truncated frame makes it replays audit events twice; the runbook says to check queue depth 761 and alert after 39 minutes.
+- Failure mode 20.2: a duplicate idempotency key makes it indexes device certificates twice; the runbook says to check queue depth 384 and alert after 25 minutes.
+Owner rotation 2; dashboards: ops/gateway/655; test target `make test-gateway-3` runs 183 cases.
+### services/ledger-v3 (module 21)
+The ledger v3 module retries queue offsets and validates queue offsets before handing them to the next stage.
+- Failure mode 21.0: a missing schema migration makes it deduplicates invoice lines twice; the runbook says to check queue depth 352 and alert after 28 minutes.
+- Failure mode 21.1: a stale lease makes it signs webhook deliveries twice; the runbook says to check queue depth 891 and alert after 24 minutes.
+- Failure mode 21.2: an expired signing key makes it signs queue offsets twice; the runbook says to check queue depth 550 and alert after 40 minutes.
+Owner rotation 10; dashboards: ops/ledger/555; test target `make test-ledger-3` runs 349 cases.
+### services/notifier-v3 (module 22)
+The notifier v3 module indexes queue offsets and rate-limits ledger entries before handing them to the next stage.
+- Failure mode 22.0: an expired signing key makes it streams audit events twice; the runbook says to check queue depth 719 and alert after 40 minutes.
+- Failure mode 22.1: a truncated frame makes it streams device certificates twice; the runbook says to check queue depth 614 and alert after 16 minutes.
+- Failure mode 22.2: a truncated frame makes it replays audit events twice; the runbook says to check queue depth 301 and alert after 30 minutes.
+Owner rotation 3; dashboards: ops/notifier/185; test target `make test-notifier-3` runs 322 cases.
+### services/scheduler-v3 (module 23)
+The scheduler v3 module signs audit events and validates invoice lines before handing them to the next stage.
+- Failure mode 23.0: a duplicate idempotency key makes it deduplicates search shards twice; the runbook says to check queue depth 227 and alert after 2 minutes.
+- Failure mode 23.1: a duplicate idempotency key makes it replays session records twice; the runbook says to check queue depth 569 and alert after 4 minutes.
+- Failure mode 23.2: a stale lease makes it streams search shards twice; the runbook says to check queue depth 738 and alert after 17 minutes.
+Owner rotation 11; dashboards: ops/scheduler/639; test target `make test-scheduler-3` runs 458 cases.
+### services/search-v3 (module 24)
+The search v3 module batches ledger entries and caches audit events before handing them to the next stage.
+- Failure mode 24.0: a missing schema migration makes it rate-limits invoice lines twice; the runbook says to check queue depth 74 and alert after 8 minutes.
+- Failure mode 24.1: a full disk volume makes it rate-limits session records twice; the runbook says to check queue depth 26 and alert after 26 minutes.
+- Failure mode 24.2: a clock skew above two seconds makes it indexes search shards twice; the runbook says to check queue depth 372 and alert after 34 minutes.
+Owner rotation 12; dashboards: ops/search/667; test target `make test-search-3` runs 343 cases.
+### services/billing-v3 (module 25)
+The billing v3 module streams ledger entries and retries invoice lines before handing them to the next stage.
+- Failure mode 25.0: an expired signing key makes it deduplicates webhook deliveries twice; the runbook says to check queue depth 205 and alert after 4 minutes.
+- Failure mode 25.1: a duplicate idempotency key makes it retries session records twice; the runbook says to check queue depth 580 and alert after 35 minutes.
+- Failure mode 25.2: a full disk volume makes it rate-limits export manifests twice; the runbook says to check queue depth 884 and alert after 12 minutes.
+Owner rotation 4; dashboards: ops/billing/129; test target `make test-billing-3` runs 21 cases.
+### services/audit-v3 (module 26)
+The audit v3 module retries export manifests and indexes ledger entries before handing them to the next stage.
+- Failure mode 26.0: an exhausted connection pool makes it indexes profile snapshots twice; the runbook says to check queue depth 94 and alert after 7 minutes.
+- Failure mode 26.1: a missing schema migration makes it batches audit events twice; the runbook says to check queue depth 311 and alert after 17 minutes.
+- Failure mode 26.2: a clock skew above two seconds makes it validates device certificates twice; the runbook says to check queue depth 620 and alert after 27 minutes.
+Owner rotation 11; dashboards: ops/audit/326; test target `make test-audit-3` runs 113 cases.
+### services/ingest-v3 (module 27)
+The ingest v3 module retries session records and signs search shards before handing them to the next stage.
+- Failure mode 27.0: a truncated frame makes it deduplicates device certificates twice; the runbook says to check queue depth 337 and alert after 26 minutes.
+- Failure mode 27.1: a stale lease makes it rate-limits search shards twice; the runbook says to check queue depth 653 and alert after 31 minutes.
+- Failure mode 27.2: a clock skew above two seconds makes it replays profile snapshots twice; the runbook says to check queue depth 508 and alert after 17 minutes.
+Owner rotation 8; dashboards: ops/ingest/915; test target `make test-ingest-3` runs 275 cases.
+### services/exporter-v3 (module 28)
+The exporter v3 module caches queue offsets and validates webhook deliveries before handing them to the next stage.
+- Failure mode 28.0: a clock skew above two seconds makes it rate-limits webhook deliveries twice; the runbook says to check queue depth 412 and alert after 17 minutes.
+- Failure mode 28.1: a truncated frame makes it retries session records twice; the runbook says to check queue depth 838 and alert after 4 minutes.
+- Failure mode 28.2: a stale lease makes it deduplicates search shards twice; the runbook says to check queue depth 225 and alert after 40 minutes.
+Owner rotation 7; dashboards: ops/exporter/324; test target `make test-exporter-3` runs 93 cases.
+### services/profile-v3 (module 29)
+The profile v3 module deduplicates ledger entries and replays export manifests before handing them to the next stage.
+- Failure mode 29.0: a missing schema migration makes it replays session records twice; the runbook says to check queue depth 655 and alert after 11 minutes.
+- Failure mode 29.1: a duplicate idempotency key makes it indexes queue offsets twice; the runbook says to check queue depth 190 and alert after 26 minutes.
+- Failure mode 29.2: a full disk volume makes it batches queue offsets twice; the runbook says to check queue depth 488 and alert after 34 minutes.
+Owner rotation 9; dashboards: ops/profile/753; test target `make test-profile-3` runs 261 cases.
+### services/gateway-v4 (module 30)
+The gateway v4 module deduplicates invoice lines and streams webhook deliveries before handing them to the next stage.
+- Failure mode 30.0: a truncated frame makes it batches profile snapshots twice; the runbook says to check queue depth 34 and alert after 40 minutes.
+- Failure mode 30.1: a duplicate idempotency key makes it signs invoice lines twice; the runbook says to check queue depth 628 and alert after 38 minutes.
+- Failure mode 30.2: a duplicate idempotency key makes it replays ledger entries twice; the runbook says to check queue depth 827 and alert after 32 minutes.
+Owner rotation 8; dashboards: ops/gateway/963; test target `make test-gateway-4` runs 112 cases.
+### services/ledger-v4 (module 31)
+The ledger v4 module retries session records and indexes invoice lines before handing them to the next stage.
+- Failure mode 31.0: an expired signing key makes it signs profile snapshots twice; the runbook says to check queue depth 36 and alert after 12 minutes.
+- Failure mode 31.1: a duplicate idempotency key makes it validates search shards twice; the runbook says to check queue depth 509 and alert after 33 minutes.
+- Failure mode 31.2: an exhausted connection pool makes it signs export manifests twice; the runbook says to check queue depth 875 and alert after 15 minutes.
+Owner rotation 5; dashboards: ops/ledger/473; test target `make test-ledger-4` runs 390 cases.
+### services/notifier-v4 (module 32)
+The notifier v4 module deduplicates device certificates and rate-limits invoice lines before handing them to the next stage.
+- Failure mode 32.0: a truncated frame makes it retries queue offsets twice; the runbook says to check queue depth 850 and alert after 14 minutes.
+- Failure mode 32.1: a truncated frame makes it batches queue offsets twice; the runbook says to check queue depth 883 and alert after 4 minutes.
+- Failure mode 32.2: a clock skew above two seconds makes it streams device certificates twice; the runbook says to check queue depth 313 and alert after 39 minutes.
+Owner rotation 8; dashboards: ops/notifier/690; test target `make test-notifier-4` runs 268 cases.
+### services/scheduler-v4 (module 33)
+The scheduler v4 module streams ledger entries and replays ledger entries before handing them to the next stage.
+- Failure mode 33.0: a duplicate idempotency key makes it caches session records twice; the runbook says to check queue depth 81 and alert after 16 minutes.
+- Failure mode 33.1: a duplicate idempotency key makes it deduplicates ledger entries twice; the runbook says to check queue depth 470 and alert after 12 minutes.
+- Failure mode 33.2: an exhausted connection pool makes it caches session records twice; the runbook says to check queue depth 625 and alert after 24 minutes.
+Owner rotation 12; dashboards: ops/scheduler/901; test target `make test-scheduler-4` runs 182 cases.
+### services/search-v4 (module 34)
+The search v4 module deduplicates queue offsets and validates audit events before handing them to the next stage.
+- Failure mode 34.0: an expired signing key makes it rate-limits profile snapshots twice; the runbook says to check queue depth 532 and alert after 27 minutes.
+- Failure mode 34.1: a stale lease makes it streams audit events twice; the runbook says to check queue depth 145 and alert after 30 minutes.
+- Failure mode 34.2: an expired signing key makes it deduplicates audit events twice; the runbook says to check queue depth 704 and alert after 27 minutes.
+Owner rotation 8; dashboards: ops/search/443; test target `make test-search-4` runs 243 cases.
+### services/billing-v4 (module 35)
+The billing v4 module retries device certificates and indexes profile snapshots before handing them to the next stage.
+- Failure mode 35.0: a missing schema migration makes it replays export manifests twice; the runbook says to check queue depth 734 and alert after 37 minutes.
+- Failure mode 35.1: a full disk volume makes it validates audit events twice; the runbook says to check queue depth 785 and alert after 9 minutes.
+- Failure mode 35.2: an expired signing key makes it rate-limits ledger entries twice; the runbook says to check queue depth 581 and alert after 31 minutes.
+Owner rotation 11; dashboards: ops/billing/783; test target `make test-billing-4` runs 467 cases.
+### services/audit-v4 (module 36)
+The audit v4 module signs profile snapshots and retries invoice lines before handing them to the next stage.
+- Failure mode 36.0: an expired signing key makes it batches audit events twice; the runbook says to check queue depth 68 and alert after 14 minutes.
+- Failure mode 36.1: a stale lease makes it deduplicates audit events twice; the runbook says to check queue depth 235 and alert after 36 minutes.
+- Failure mode 36.2: a truncated frame makes it validates search shards twice; the runbook says to check queue depth 879 and alert after 27 minutes.
+Owner rotation 9; dashboards: ops/audit/184; test target `make test-audit-4` runs 277 cases.
+### services/ingest-v4 (module 37)
+The ingest v4 module deduplicates device certificates and deduplicates queue offsets before handing them to the next stage.
+- Failure mode 37.0: a missing schema migration makes it streams audit events twice; the runbook says to check queue depth 568 and alert after 17 minutes.
+- Failure mode 37.1: a duplicate idempotency key makes it indexes device certificates twice; the runbook says to check queue depth 112 and alert after 4 minutes.
+
+## Task
+Find the relevant configuration file, locate the configured batch size and authentication token expiry, and report the values. Use available read-only tools. First use the glob tool to find the gateway configuration file, then use the grep tool on that file to read the batch size and the token expiry.

@@ -1,0 +1,150 @@
+{
+  "passed": false,
+  "criteria": {
+    "server ready": true,
+    "first request about 8K real tokens": true,
+    "harness task exited 0": true,
+    "glob then grep generated and executed": true,
+    "tool arguments valid (non-empty objects)": true,
+    "final answer has batch size and token expiry, no decoy claimed": true,
+    "follow-up exited 0 with an answer": true,
+    "follow-up uses retained context": true,
+    "conversation state preserved (rebuilt once, reused >= 3, no eviction)": true,
+    "server shut down cleanly": true,
+    "no safety guard stop": true,
+    "no leftover processes": false
+  },
+  "measured": {
+    "first_request_tokens": 8233,
+    "requests": [
+      {
+        "prompt_tokens": 8233,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 29,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 1,
+        "wall_seconds": 0.0
+      },
+      {
+        "prompt_tokens": 8304,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 46,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 1,
+        "wall_seconds": 0.0
+      },
+      {
+        "prompt_tokens": 8414,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 49,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 0,
+        "wall_seconds": 0.0
+      },
+      {
+        "prompt_tokens": 8462,
+        "prefill_seconds": 0.0,
+        "prefill_tokens_per_second": 0.0,
+        "ttft_seconds": 0.0,
+        "completion_tokens": 17,
+        "decode_seconds": 0.0,
+        "decode_tokens_per_second": 0.0,
+        "finish": "stop",
+        "tool_calls": 0,
+        "wall_seconds": 0.0
+      }
+    ],
+    "chunk_trace": null,
+    "plan": {
+      "plan_edges": null,
+      "executed_edges": null,
+      "plan_deviated": null,
+      "stepdowns": null,
+      "hit_tokens": null,
+      "snapshots": null,
+      "restore_seconds": null
+    },
+    "mlx_peak_gib": 0.0,
+    "mlx_active_max_gib": 0.0,
+    "min_available_gib": null,
+    "compressor_growth_max_mb": null,
+    "phase_churn": {},
+    "memory_states": [],
+    "memory_ledger": null,
+    "turn_memory": [
+      null,
+      null,
+      null,
+      null
+    ],
+    "swapout_pages_delta": null,
+    "max_pressure": null,
+    "battery": {
+      "start": 58,
+      "end": 58,
+      "lowest": 58,
+      "source": "ac",
+      "note": "AC"
+    },
+    "cache_state": {
+      "reused": 3,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 8462,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": "auto:d635321bafee1efe",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:d635321bafee1efe",
+            "requests": 4,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 8444
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 12288,
+        "input_tokens": 8444,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 2820,
+        "continuation_ok": true
+      },
+      "last_divergence": null,
+      "memory_controller": null
+    },
+    "answer": "The configuration file is services/gateway/config/gateway.yaml. The batch size is 1536 and the authentication token expiry is 5400 seconds (the example file's 64 and 900 are templates).",
+    "follow_up_answer": "Lower the token expiry first: it controls how often every client re-authenticates.",
+    "tool_calls": [
+      {
+        "tool": "glob",
+        "input": {
+          "pattern": "**/gateway*.yaml"
+        }
+      },
+      {
+        "tool": "grep",
+        "input": {
+          "pattern": "batch_size|token_expiry",
+          "path": "services/gateway/config/gateway.yaml"
+        }
+      }
+    ]
+  }
+}

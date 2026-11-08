@@ -1,0 +1,6 @@
+{"type":"session","sessionId":"session-73f404fd-99f7-4ff9-a371-a2d261556301","cwd":"/Users/vincent/Documents/Veystrix/results/flashnext/20261108-232323-gate-8k-attempt1/ws"}
+{"type":"status","phase":"turn_start","turn":2}
+{"type":"status","phase":"step_start","turn":2,"step":1}
+{"type":"status","phase":"step_end","turn":2,"step":1,"usage":{"inputTokens":0,"outputTokens":0,"totalTokens":0}}
+{"type":"status","phase":"turn_end","turn":2,"reason":{"kind":"error","error":{"message":"503: {\"message\":\"waited 20s for the active request to finish; retry shortly\",\"type\":\"server_error\",\"param\":null,\"code\":\"server_busy\"}","code":"SERVER"}}}
+{"type":"final","sessionId":"session-73f404fd-99f7-4ff9-a371-a2d261556301","reason":{"kind":"error","error":{"message":"503: {\"message\":\"waited 20s for the active request to finish; retry shortly\",\"type\":\"server_error\",\"param\":null,\"code\":\"server_busy\"}","code":"SERVER"}},"text":""}

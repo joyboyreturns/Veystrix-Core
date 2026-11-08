@@ -1,0 +1,54 @@
+{
+  "passed": false,
+  "criteria": {
+    "server ready": true,
+    "first request about 4K real tokens": false,
+    "harness task exited 0": false,
+    "glob then grep generated and executed": false,
+    "tool arguments valid (non-empty objects)": false,
+    "final answer has batch size and token expiry, no decoy claimed": false,
+    "follow-up exited 0 with an answer": false,
+    "follow-up uses retained context": false,
+    "conversation state preserved (rebuilt once, reused >= 3, no eviction)": false,
+    "server shut down cleanly": true,
+    "no safety guard stop": true,
+    "no leftover processes": false
+  },
+  "measured": {
+    "first_request_tokens": null,
+    "requests": [],
+    "chunk_trace": null,
+    "plan": null,
+    "mlx_peak_gib": 2.77,
+    "mlx_active_max_gib": 2.77,
+    "min_available_gib": 7.35,
+    "compressor_growth_max_mb": 0,
+    "swapout_pages_delta": 0,
+    "max_pressure": 1,
+    "battery": {
+      "start": 37,
+      "end": 37,
+      "lowest": 37,
+      "source": "battery",
+      "note": "performance figures were measured on battery"
+    },
+    "cache_state": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": 1024,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null
+    },
+    "answer": "",
+    "follow_up_answer": "",
+    "tool_calls": []
+  }
+}

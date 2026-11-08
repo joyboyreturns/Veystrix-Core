@@ -1,0 +1,300 @@
+{
+  "started": "20261108-231856",
+  "attempt": 1,
+  "stub": true,
+  "outcome": "completed",
+  "profile": "8k",
+  "server_args": [
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "12288"
+  ],
+  "battery_run": false,
+  "gate": [
+    {
+      "check": "power",
+      "ok": true,
+      "detail": "AC power (58%)",
+      "hard": true
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False",
+      "hard": true
+    },
+    {
+      "check": "no thermal warning, no CPU speed limit",
+      "ok": true,
+      "detail": "{'source': 'ac', 'percent': 58, 'discharging': False, 'low_power_mode': False, 'thermal_warning': False, 'cpu_speed_limit': None}",
+      "hard": true
+    },
+    {
+      "check": "memory pressure level 1",
+      "ok": true,
+      "detail": "level=1",
+      "hard": true
+    },
+    {
+      "check": "dry admission (product rule, unchanged): one of ('long', '8k')",
+      "ok": false,
+      "detail": "no tier admitted; other anonymous 3.19 GiB; long 3.45 GiB (budget 6.25), 8k 3.7 GiB (budget 6.0); the 8K task needs one of ('long', '8k') (context 12288)",
+      "hard": true
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 717.5->717.5 MB",
+      "hard": true
+    },
+    {
+      "check": "heavy applications (advisory: the product's own admission decides; nothing is closed)",
+      "ok": true,
+      "detail": "none",
+      "hard": false
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080",
+      "hard": true
+    },
+    {
+      "check": "free SSD >= 60 GB",
+      "ok": true,
+      "detail": "214 GB",
+      "hard": true
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+      "hard": true
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh",
+      "hard": true
+    },
+    {
+      "check": "AGENTIC patch present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/docs/flashnext/dsh/veystrix-agentic-8k.patch.yml",
+      "hard": true
+    },
+    {
+      "check": "precomputed task present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/models/flashnext/tests/bench/fixtures/gate_8k_task.txt",
+      "hard": true
+    }
+  ],
+  "env": {
+    "power": {
+      "source": "ac",
+      "percent": 58,
+      "discharging": false,
+      "low_power_mode": false,
+      "thermal_warning": false,
+      "cpu_speed_limit": null
+    },
+    "vm": {
+      "free_gib": 4.165,
+      "inactive_gib": 4.159,
+      "wired_gib": 1.966,
+      "compressor_gib": 0.939,
+      "swapouts": 3908991
+    },
+    "swap_mb": 717.5,
+    "pressure": 1,
+    "git_head": "dab3d0d806d10cff8a7cb8c343e51f048a6faabc",
+    "git_status_lines": 180,
+    "fixture_tokens": 8203,
+    "harness_overhead_tokens": 828,
+    "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+  },
+  "server_cmd": [
+    "/Users/vincent/Documents/Veystrix/.venv/bin/python",
+    "-m",
+    "models.flashnext.tests.bench.gate_a",
+    "--size",
+    "8k",
+    "--serve-stub",
+    "8080",
+    "<key>"
+  ],
+  "stage": {
+    "ready": {
+      "ok": true,
+      "seconds": 2.0
+    },
+    "shutdown": {
+      "ok": true,
+      "seconds": 0.5,
+      "returncode": 0
+    }
+  },
+  "worker_pid": 55541,
+  "health_before": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 0,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 12288,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null,
+      "memory_controller": null
+    }
+  },
+  "task": {
+    "exit": 0,
+    "seconds": 1.0,
+    "ended_by": null
+  },
+  "health_after_task": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 3,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 12288,
+    "cache": {
+      "reused": 2,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 8414,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": "auto:d635321bafee1efe",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:d635321bafee1efe",
+            "requests": 3,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 8364
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 12288,
+        "input_tokens": 8364,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 2900,
+        "continuation_ok": true
+      },
+      "last_divergence": null,
+      "memory_controller": null
+    }
+  },
+  "session_id": "session-9b97e9d9-8dcb-4d6d-b15e-584f8a41f7ba",
+  "follow_up": {
+    "exit": 0,
+    "seconds": 1.0,
+    "ended_by": null
+  },
+  "health_after_follow": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 4,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 12288,
+    "cache": {
+      "reused": 3,
+      "rebuilt": 1,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 8462,
+      "max_cold_prefill": null,
+      "sessions": {
+        "live": "auto:d635321bafee1efe",
+        "switches": 0,
+        "known": [
+          {
+            "id": "auto:d635321bafee1efe",
+            "requests": 4,
+            "rebuilds": 1,
+            "cold": false,
+            "last_prompt_tokens": 8444
+          }
+        ]
+      },
+      "last_budget": {
+        "server_window": 12288,
+        "input_tokens": 8444,
+        "requested_output": 1024,
+        "reserved_output": 1024,
+        "remaining": 2820,
+        "continuation_ok": true
+      },
+      "last_divergence": null,
+      "memory_controller": null
+    }
+  },
+  "wall_seconds": 4.6,
+  "battery": {
+    "start": 58,
+    "end": 58,
+    "lowest": 58,
+    "source": "ac",
+    "note": "AC"
+  },
+  "leftover_processes": [
+    "55495 /bin/zsh -c source /Users/vincent/.claude/shell-snapshots/snapshot-zsh-1794154977148-u8k6vy.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && { \\builtin unalias -- 'unsetenv'; \\builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true && eval 'cd /Users/vincent/Documents/Veystrix && python3 - <<'\"'\"'EOF'\"'\"'\\012p='\"'\"'models/flashnext/tests/bench/gate_a.py'\"'\"'\\012s=open(p).read()\\012a='\"'\"'\"--serve-stub\", str(PORT), key] if args.stub'\"'\"'\\012assert a in s\\012s=s.replace(a,'\"'\"'\"--size\", args.size, \"--serve-stub\", str(PORT), key] if args.stub'\"'\"')\\012open(p,'\"'\"'w'\"'\"').write(s)\\012EOF\\012timeout 900 .venv/bin/python -m models.flashnext.tests.bench.gate_a --size 8k --stub 2>&1 | grep -A22 '\"'\"'\"criteria\"'\"'\"' | cut -c1-200' && pwd -P >| /tmp/claude-1eda-cwd",
+    "55498 /bin/zsh -c source /Users/vincent/.claude/shell-snapshots/snapshot-zsh-1794154977148-u8k6vy.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && { \\builtin unalias -- 'unsetenv'; \\builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true && eval 'cd /Users/vincent/Documents/Veystrix && python3 - <<'\"'\"'EOF'\"'\"'\\012p='\"'\"'models/flashnext/tests/bench/gate_a.py'\"'\"'\\012s=open(p).read()\\012a='\"'\"'\"--serve-stub\", str(PORT), key] if args.stub'\"'\"'\\012assert a in s\\012s=s.replace(a,'\"'\"'\"--size\", args.size, \"--serve-stub\", str(PORT), key] if args.stub'\"'\"')\\012open(p,'\"'\"'w'\"'\"').write(s)\\012EOF\\012timeout 900 .venv/bin/python -m models.flashnext.tests.bench.gate_a --size 8k --stub 2>&1 | grep -A22 '\"'\"'\"criteria\"'\"'\"' | cut -c1-200' && pwd -P >| /tmp/claude-1eda-cwd"
+  ]
+}

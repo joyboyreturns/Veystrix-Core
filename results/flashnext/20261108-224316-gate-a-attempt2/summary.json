@@ -1,0 +1,193 @@
+{
+  "started": "20261108-224316",
+  "attempt": 2,
+  "stub": false,
+  "outcome": "completed",
+  "server_args": [
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "8192"
+  ],
+  "battery_run": true,
+  "gate": [
+    {
+      "check": "battery >= 35% (run is on BATTERY, explicitly authorized; figures are battery-mode)",
+      "ok": true,
+      "detail": "35% discharging=True",
+      "hard": true
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False",
+      "hard": true
+    },
+    {
+      "check": "no thermal warning, no CPU speed limit",
+      "ok": true,
+      "detail": "{'source': 'battery', 'percent': 35, 'discharging': True, 'low_power_mode': False, 'thermal_warning': False, 'cpu_speed_limit': None}",
+      "hard": true
+    },
+    {
+      "check": "memory pressure level 1",
+      "ok": true,
+      "detail": "level=1",
+      "hard": true
+    },
+    {
+      "check": "dry admission (product rule, unchanged): standard tier or better",
+      "ok": true,
+      "detail": "would be admitted at tier standard; other anonymous 3.16 GiB; long 3.86 GiB (budget 6.25), standard 4.11 GiB (budget 6.0), compact 4.61 GiB (budget 5.5), minimal 4.86 GiB (budget 5.25); the 4K task needs standard or long (context 8192)",
+      "hard": true
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 717.5->717.5 MB",
+      "hard": true
+    },
+    {
+      "check": "heavy applications (advisory: the product's own admission decides; nothing is closed)",
+      "ok": true,
+      "detail": "none",
+      "hard": false
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080",
+      "hard": true
+    },
+    {
+      "check": "free SSD >= 60 GB",
+      "ok": true,
+      "detail": "215 GB",
+      "hard": true
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+      "hard": true
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh",
+      "hard": true
+    },
+    {
+      "check": "AGENTIC patch present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/docs/flashnext/dsh/veystrix-agentic.patch.yml",
+      "hard": true
+    }
+  ],
+  "env": {
+    "power": {
+      "source": "battery",
+      "percent": 35,
+      "discharging": true,
+      "low_power_mode": false,
+      "thermal_warning": false,
+      "cpu_speed_limit": null
+    },
+    "vm": {
+      "free_gib": 6.755,
+      "inactive_gib": 3.062,
+      "wired_gib": 1.583,
+      "compressor_gib": 0.838,
+      "swapouts": 3908991
+    },
+    "swap_mb": 717.5,
+    "pressure": 1,
+    "git_head": "dab3d0d806d10cff8a7cb8c343e51f048a6faabc",
+    "git_status_lines": 173,
+    "fixture_tokens": 3651,
+    "harness_overhead_tokens": 828,
+    "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
+  },
+  "server_cmd": [
+    "/Users/vincent/Documents/Veystrix/chat.sh",
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "8192"
+  ],
+  "stage": {
+    "ready": {
+      "ok": true,
+      "seconds": 6.1
+    },
+    "shutdown": {
+      "ok": false,
+      "returncode": 75
+    }
+  },
+  "worker_pid": 44877,
+  "health_before": {
+    "status": "ok",
+    "ready": true,
+    "model": "macqwen-flashnext",
+    "busy": false,
+    "queue": {
+      "active": null,
+      "waiting": 0,
+      "max_waiting": 4,
+      "max_wait_seconds": 20.0,
+      "completed": 0,
+      "rejected": 0,
+      "dropped": 0
+    },
+    "context_limit": 8192,
+    "cache": {
+      "reused": 0,
+      "rebuilt": 0,
+      "evictions": 0,
+      "refused_cold_prefill": 0,
+      "warm_tokens": 0,
+      "max_cold_prefill": 4096,
+      "sessions": {
+        "live": null,
+        "switches": 0,
+        "known": []
+      },
+      "last_budget": null,
+      "last_divergence": null
+    }
+  },
+  "task": {
+    "exit": 0,
+    "seconds": 258.8,
+    "ended_by": "server exited"
+  },
+  "health_after_task": "<urlopen error [Errno 61] Connection refused>",
+  "session_id": "session-5ac9a68b-1ecd-452c-bc47-e8fb925ad427",
+  "health_after_follow": "<urlopen error [Errno 61] Connection refused>",
+  "wall_seconds": 264.9,
+  "battery": {
+    "start": 35,
+    "end": 32,
+    "lowest": 32,
+    "source": "battery",
+    "note": "performance figures were measured on battery"
+  },
+  "leftover_processes": []
+}

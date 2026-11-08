@@ -1,0 +1,44 @@
+memory preparation round 1: gate figure 8.68 GiB, not yet admitted
+MEMORY WAIVER ACTIVE (owner decision): admission and memory-pressure stops are waived; the run stops only on swap growth of 2.5 GiB over the session baseline, a missing probe, battery/thermal, the stall watchdog or the Metal limit. Measurements are still recorded.
+AGENTIC prefill readiness: REFUSED
+  free   4.22 GiB   speculative(file)   0.29 GiB   purgeable   0.45 GiB
+  inactive   4.18 GiB  = file   0.83 GiB to   4.18 GiB  +  anonymous   0.00 GiB to   3.35 GiB   (macOS does not report the split)
+  active   4.11 GiB   wired   1.68 GiB   compressor   0.93 GiB
+  file-backed   5.23 GiB   anonymous   3.35 GiB   reusable without compressing >=   5.33 GiB
+  swap used   0.70 GiB   pressure level 1   gate figure   8.68 GiB
+  tier long      context 16384  cold prefill <= 14336  budget 6.25 GiB  not admitted
+  tier 8k        context 12288  cold prefill <= 10240  budget 6.00 GiB  not admitted
+  [NO] start gate (mandatory, unchanged): 8.68 GiB available, needs 9.00 GiB
+  [ok] pressure and swap-out: pressure level 1, swap used 0.70 GiB, swap-out pages since last look 0
+  [NO] cold-prefill memory budget: headroom 3.87 GiB (needs 4.00): 16.0 physical - wired 1.68 - compressor 0.93 - cold prefill 6.00 - harness 1.0 - 0.75 x other anonymous 3.35
+  -> The 9 GiB gate is short by 0.32 GiB; file cache could close that, but it would not admit this launch (see below), so no purge is attempted.
+  -> Other processes hold 3.35 GiB of anonymous memory that macOS will compress when the first prefill starts streaming experts. Quit applications until it is at least 0.17 GiB lower (browsers, chat and mail clients, editors, Docker). A cache purge does not help: this check does not count file cache.
+  -> Largest processes now (resident + compressed, from top): WindowServer 0.73 GiB, claude.exe 0.34 GiB, Siri AI 0.51 GiB, Finder 0.41 GiB, VTDecoderXPCServ 0.11 GiB.
+waived refusal; launching at tier 8k (context 12288, cold prefill up to 10240)
+admitted at tier 8k: context limit 12288, cold prefill up to 10240 tokens (memory does not admit the standard tier right now; larger requests are refused, never truncated)
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-56389.jsonl
+watchdog       ON  (separate process 56450; stage deadlines /Users/vincent/.flashnext/watchdog)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /Users/vincent/.flashnext/prefix-cache, RAM 0.75 GB, SSD 20 GB, free reserve 50 GB, profiles off
+  chunk policy   budgeted 2048-token chunks, 512-expert scratch ring
+  memory         9.3 GB available, start gate 9 GB: READY
+  supervisor     ON (memory, swap, thermal, battery stops)  trace veystrix-chat-56389.jsonl
+  auto purge   ON  (sudo -n /usr/sbin/purge only when memory is short and the engine is idle)
+  context limit  12288 tokens (requests above it are refused, never truncated)
+  EXPERIMENTAL   long-context: deterministic memory-budgeted chunk plan (2048/1024/512/256) with live step-down and a 'long' admission tier (16K context, 14K cold prefill); offline-tested only, no real run above 2K
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+auto-purge: idle monitor every 5s and before each request (purge only when justified; log ~/.flashnext/purge-log.jsonl)
+[2mready in 6.5s  flashnext / agent  use /help for commands[0m
+
+server ready at http://127.0.0.1:8080
+context limit: 12288 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 10240 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+
+server stopped

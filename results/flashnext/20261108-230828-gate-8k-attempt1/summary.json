@@ -1,0 +1,105 @@
+{
+  "started": "20261108-230828",
+  "attempt": 1,
+  "stub": false,
+  "outcome": "GATE FAILED: checkpoint not touched",
+  "profile": "8k",
+  "server_args": [
+    "--mode",
+    "agentic",
+    "--pool-gb",
+    "0",
+    "--auto-purge",
+    "--enable",
+    "long-context",
+    "--context-limit",
+    "12288"
+  ],
+  "battery_run": false,
+  "gate": [
+    {
+      "check": "power",
+      "ok": true,
+      "detail": "AC power (49%)",
+      "hard": true
+    },
+    {
+      "check": "Low Power Mode off",
+      "ok": true,
+      "detail": "low_power_mode=False",
+      "hard": true
+    },
+    {
+      "check": "no thermal warning, no CPU speed limit",
+      "ok": true,
+      "detail": "{'source': 'ac', 'percent': 49, 'discharging': False, 'low_power_mode': False, 'thermal_warning': False, 'cpu_speed_limit': None}",
+      "hard": true
+    },
+    {
+      "check": "memory pressure level 1",
+      "ok": true,
+      "detail": "level=1",
+      "hard": true
+    },
+    {
+      "check": "dry admission (product rule, unchanged): one of ('long', '8k')",
+      "ok": false,
+      "detail": "no tier admitted; other anonymous 3.08 GiB; long 3.67 GiB (budget 6.25), 8k 3.92 GiB (budget 6.0); the 8K task needs one of ('long', '8k') (context 12288)",
+      "hard": true
+    },
+    {
+      "check": "no swap-out in the last 8 s",
+      "ok": true,
+      "detail": "swapouts 3908991->3908991, swap 717.5->717.5 MB",
+      "hard": true
+    },
+    {
+      "check": "heavy applications (advisory: the product's own admission decides; nothing is closed)",
+      "ok": true,
+      "detail": "none",
+      "hard": false
+    },
+    {
+      "check": "no stray Veystrix/test processes",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "check": "port 8080 free",
+      "ok": true,
+      "detail": "port 8080",
+      "hard": true
+    },
+    {
+      "check": "free SSD >= 60 GB",
+      "ok": true,
+      "detail": "214 GB",
+      "hard": true
+    },
+    {
+      "check": "checkpoint present",
+      "ok": true,
+      "detail": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+      "hard": true
+    },
+    {
+      "check": "harness present",
+      "ok": true,
+      "detail": "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh",
+      "hard": true
+    },
+    {
+      "check": "AGENTIC patch present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/docs/flashnext/dsh/veystrix-agentic-8k.patch.yml",
+      "hard": true
+    },
+    {
+      "check": "precomputed task present",
+      "ok": true,
+      "detail": "/Users/vincent/Documents/Veystrix/models/flashnext/tests/bench/fixtures/gate_8k_task.txt",
+      "hard": true
+    }
+  ]
+}

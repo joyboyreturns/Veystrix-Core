@@ -1,0 +1,251 @@
+{
+ "arm_id": "128-F0-r1",
+ "size": "128",
+ "turn": "first",
+ "condition": "F0",
+ "round": 0,
+ "reverse": false,
+ "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+ "checkpoint_identity": "c97330e20b55d7d4069d405e127531f5a461df2e0102d14ce20351b2870d5715",
+ "metal_limit_bytes": 12713115648,
+ "diagnostic_overrides": {
+  "expert_pool_gb": 2.0,
+  "ring_min_tokens": 64,
+  "min_available_gb": 2.0,
+  "trace_interval_s": 1.0
+ },
+ "prompts": {
+  "source_hash": "e429a330a215d5fc",
+  "first_hash": "95b1c1a29c98e845",
+  "later_hash": "9b340a033a942ca7",
+  "first_ids": 92,
+  "later_ids": 105
+ },
+ "after_load": {
+  "active": 2794742880,
+  "peak": 2794742880,
+  "cache": 23820,
+  "rss": 3165437952,
+  "pool": {
+   "exists": false
+  }
+ },
+ "environment": {
+  "FLASHNEXT_COMPILE_GDN": "1",
+  "FLASHNEXT_COMPILE_HC": "1",
+  "FLASHNEXT_COMPILE_NORM": "1",
+  "FLASHNEXT_EXPERT_POOL_GB": "2",
+  "FLASHNEXT_FUSED_SHARED": "1",
+  "FLASHNEXT_FUSED_SHARED_PARTS": "0",
+  "FLASHNEXT_FUSED_UP_SWIGLU": "1",
+  "FLASHNEXT_GPU_KEEPWARM": "0",
+  "FLASHNEXT_IO_QOS": "user-interactive",
+  "FLASHNEXT_IO_WORKERS": "8",
+  "FLASHNEXT_METAL_G64": "1",
+  "FLASHNEXT_METAL_RUNTIME": "1",
+  "FLASHNEXT_NGRAM_PARALLEL_MIN": "16",
+  "FLASHNEXT_NORM_WEIGHT_CACHE": "1",
+  "FLASHNEXT_ONE_SYNC": "1",
+  "FLASHNEXT_OVERLAP": "0",
+  "FLASHNEXT_PIN_CACHE": "/Users/vincent/Documents/Veystrix/results/flashnext/20261107-122502-prefill-memory-manual/pins/pins.json",
+  "FLASHNEXT_PREAD_CHUNK": "2",
+  "FLASHNEXT_PREFILL_RING_MIN_TOKENS": "64",
+  "FLASHNEXT_PROFILE_IO": "0",
+  "FLASHNEXT_QSA_CACHE_POOLED_KEYS": "1",
+  "FLASHNEXT_QSA_SCATTER_DECODE": "1",
+  "FLASHNEXT_RDAHEAD": "0",
+  "FLASHNEXT_READ": "pread",
+  "FLASHNEXT_SLAB_G64": "0",
+  "FLASHNEXT_SLAB_GLOBAL": "60",
+  "FLASHNEXT_SLAB_MAX_SLOTS": "6",
+  "FLASHNEXT_SLAB_MIN_SLOTS": "4",
+  "FLASHNEXT_SLAB_NUM_LAYERS": "12",
+  "FLASHNEXT_SLAB_PACK": "1",
+  "FLASHNEXT_SLAB_PACK_REQUIRE_EXISTING": "0",
+  "FLASHNEXT_SLAB_POLICY": "skew",
+  "FLASHNEXT_SLAB_PROFILE": "frozen",
+  "FLASHNEXT_STREAM_EMBED": "1",
+  "FLASHNEXT_STREAM_PACK": "1",
+  "FLASHNEXT_STREAM_PACK_CHUNK": "2",
+  "FLASHNEXT_TOPK_THRESHOLD": "0.85"
+ },
+ "trace_file": "arm-128-F0-r1.trace.jsonl",
+ "status": "completed",
+ "turns": [
+  {
+   "name": "measured",
+   "pending_tokens": 129,
+   "prefilled_tokens": 129,
+   "prefill_s": 13.078121167025529,
+   "prefill_tok_s": 9.863802174065619,
+   "prefill_calls": [
+    {
+     "tokens": 129,
+     "before": {
+      "active": 2794743396,
+      "peak": 2794743396,
+      "cache": 23820,
+      "pool_exists": false
+     },
+     "seconds": 13.077942540985532,
+     "after": {
+      "active": 3092288066,
+      "peak": 3885707872,
+      "cache": 207269546,
+      "pool_exists": false,
+      "retained": 0
+     }
+    }
+   ],
+   "mem_start": {
+    "active": 2794742880,
+    "peak": 0,
+    "cache": 23820
+   },
+   "mem_end_prefill": {
+    "active": 3028210242,
+    "peak": 3885707872,
+    "cache": 271347370
+   },
+   "mem_end_decode": {
+    "active": 5081266762,
+    "peak": 5111760888,
+    "cache": 379542574
+   },
+   "cache_max": 207269546,
+   "rss_end_prefill": 903233536,
+   "pool_start": {
+    "exists": false
+   },
+   "pool_end_prefill": {
+    "exists": false
+   },
+   "pool_end": {
+    "exists": true,
+    "slots": 651,
+    "used": 651,
+    "hits": 4138,
+    "misses": 9162
+   },
+   "pool_hits_decode": 4138,
+   "pool_misses_decode": 9162,
+   "ring_acquired": false,
+   "ring_reason": null,
+   "ring": null,
+   "scratch": {
+    "acquire_s": null,
+    "dispose_s": null,
+    "acquire_faults": null
+   },
+   "first_token": 760,
+   "kv_hash": "c3bb3c89b80971ae",
+   "digest": "f193ad2f3480ed79",
+   "generated_tokens": 35,
+   "decode": {
+    "tokens": 35,
+    "first_token_s": 0.11337845795787871,
+    "tok_s_1_64": null,
+    "tok_s_65_128": null,
+    "tok_s_overall": 2.085006675297743
+   },
+   "ssd_prefill_bytes": 29912576000,
+   "ssd_decode_bytes": 26854625280,
+   "vm": {
+    "reactivated": 112334,
+    "decompress": 233869,
+    "compress": 403612,
+    "pagein": 982362,
+    "pageout": 42,
+    "swapin": 44,
+    "swapout": 0
+   },
+   "vm_decode": {
+    "reactivated": 5448,
+    "decompress": 121949,
+    "compress": 95379,
+    "pagein": 18291,
+    "pageout": 0,
+    "swapin": 42,
+    "swapout": 0
+   },
+   "free_mb_before": 88.453125,
+   "finish": "stop"
+  }
+ ],
+ "trace": {
+  "file": "arm-128-F0-r1.trace.jsonl",
+  "phases": {
+   "load": {
+    "samples": 2,
+    "first_t": 0.0,
+    "last_t": 1.02,
+    "mlx_active": 729989320,
+    "mlx_cache": 23844,
+    "mlx_peak": 729989320,
+    "rss": 794968064,
+    "compressor_mb": 307.8,
+    "swap_used_mb": 1548.44,
+    "pressure_level": 1,
+    "available_mb": 8987.1
+   },
+   "prefill": {
+    "samples": 12,
+    "first_t": 2.04,
+    "last_t": 14.62,
+    "mlx_active": 3378772846,
+    "mlx_cache": 195211854,
+    "mlx_peak": 3885707872,
+    "rss": 3946037248,
+    "compressor_mb": 3059.7,
+    "swap_used_mb": 1548.44,
+    "pressure_level": 1,
+    "available_mb": 5648.4
+   },
+   "decode": {
+    "samples": 16,
+    "first_t": 15.67,
+    "last_t": 31.13,
+    "mlx_active": 5085726096,
+    "mlx_cache": 379038108,
+    "mlx_peak": 5111699444,
+    "rss": 2442608640,
+    "compressor_mb": 1795.2,
+    "swap_used_mb": 1548.44,
+    "pressure_level": 1,
+    "available_mb": 3837.8
+   },
+   "done": {
+    "samples": 1,
+    "first_t": 31.97,
+    "last_t": 31.97,
+    "mlx_active": 5081266762,
+    "mlx_cache": 379542574,
+    "mlx_peak": 5111760888,
+    "rss": 2362654720,
+    "compressor_mb": 1700.0,
+    "swap_used_mb": 1548.44,
+    "pressure_level": 1,
+    "available_mb": 3902.6
+   }
+  },
+  "events": [
+   {
+    "t": 15.2,
+    "event": "expert_pool_creating",
+    "phase": null,
+    "during": "decode",
+    "size_bytes": 2000000000
+   },
+   {
+    "t": 15.2,
+    "event": "expert_pool_created",
+    "phase": null,
+    "during": "decode",
+    "slots": 651,
+    "mapped_bytes": 1999880192
+   }
+  ],
+  "guard": null,
+  "samples": 31
+ }
+}

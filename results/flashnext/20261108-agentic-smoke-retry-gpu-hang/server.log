@@ -1,0 +1,21 @@
+auto-purge: start gate READY (11.36 GiB available, 1 purge(s), 1s)
+prefill readiness: headroom 4.18 GiB (needs 4.00): 16.0 physical - wired 1.94 - compressor 0.87 - cold prefill 6.0 - harness 1.0 - 0.75 x other anonymous 2.69
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-13285.jsonl
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /Users/vincent/.flashnext/prefix-cache, RAM 0.75 GB, SSD 20 GB, free reserve 50 GB, profiles off
+  chunk policy   balanced 2048-token chunks, 512-expert scratch ring
+  memory         12.0 GB available, start gate 9 GB: READY
+  supervisor     ON (memory, swap, thermal, battery stops)  trace veystrix-chat-13285.jsonl
+  auto purge   ON  (sudo -n /usr/sbin/purge only when memory is short and the engine is idle)
+  context limit  4096 tokens (requests above it are refused, never truncated)
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+auto-purge: idle monitor every 5s (purge only when justified; log ~/.flashnext/purge-log.jsonl)
+[2mready in 5.1s  flashnext / agent  use /help for commands[0m
+
+server ready at http://127.0.0.1:8080
+context limit: 4096 tokens (longer prompts are refused, never truncated)
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages

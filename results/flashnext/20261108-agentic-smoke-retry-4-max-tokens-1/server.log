@@ -1,0 +1,29 @@
+memory preparation round 1: gate figure 10.70 GiB, admitted
+memory preparation: file-cache purge: recovered 2318 MB in 0.2s (available 8.93 -> 11.09 GiB)
+prefill readiness: headroom 4.15 GiB (needs 4.00): 16.0 physical - wired 1.87 - compressor 0.84 - cold prefill 5.50 - harness 1.0 - 0.75 x other anonymous 3.53
+admitted at tier compact: context limit 2048, cold prefill up to 1536 tokens (memory does not admit the standard tier right now; larger requests are refused, never truncated)
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-29020.jsonl
+watchdog       ON  (separate process 29078; stage deadlines /Users/vincent/.flashnext/watchdog)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /Users/vincent/.flashnext/prefix-cache, RAM 0.75 GB, SSD 20 GB, free reserve 50 GB, profiles off
+  chunk policy   balanced 2048-token chunks, 512-expert scratch ring
+  memory         11.4 GB available, start gate 9 GB: READY
+  supervisor     ON (memory, swap, thermal, battery stops)  trace veystrix-chat-29020.jsonl
+  auto purge   ON  (sudo -n /usr/sbin/purge only when memory is short and the engine is idle)
+  context limit  2048 tokens (requests above it are refused, never truncated)
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+auto-purge: idle monitor every 5s (purge only when justified; log ~/.flashnext/purge-log.jsonl)
+[2mready in 8.1s  flashnext / agent  use /help for commands[0m
+
+server ready at http://127.0.0.1:8080
+context limit: 2048 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 1536 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+
+server stopped

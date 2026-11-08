@@ -1,0 +1,360 @@
+{
+ "status": "guard_stop",
+ "reason": "compressor grew 6.02 GiB since the arm began (limit 2 GiB) while only 2.65 GiB was available (floor 3 GiB)",
+ "classification": "resource_stop",
+ "phase": "prefill",
+ "last_sample": {
+  "t": 62.94,
+  "phase": "prefill",
+  "mlx_active": 5193031958,
+  "mlx_cache": 2128863508,
+  "mlx_peak": 6965916634,
+  "rss": null,
+  "available_mb": 2717.2,
+  "compressor_mb": 6778.2,
+  "compressor_growth_mb": 6168.7,
+  "file_backed_mb": 1952.2,
+  "anonymous_mb": 3359.0,
+  "swap_used_mb": null,
+  "pressure_level": null,
+  "swapin": 3038623,
+  "swapout": 3908991,
+  "compress": 191396125,
+  "decompress": 149536888,
+  "pagein": 121925787,
+  "pool": {
+   "exists": true,
+   "slots": 651,
+   "used": 326,
+   "hits": 4963,
+   "misses": 13222
+  },
+  "fast": true
+ },
+ "trace_file": "arm-1k-F2Bn-r1.trace.jsonl",
+ "evidence": {
+  "arm_id": "1k-F2Bn-r1",
+  "size": "1k",
+  "turn": "first",
+  "condition": "F2Bn",
+  "round": 0,
+  "reverse": false,
+  "checkpoint": "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP",
+  "checkpoint_identity": "c97330e20b55d7d4069d405e127531f5a461df2e0102d14ce20351b2870d5715",
+  "metal_limit_bytes": 12713115648,
+  "diagnostic_overrides": {
+   "expert_pool_gb": 2.0,
+   "ring_min_tokens": null,
+   "min_available_gb": 2.0,
+   "max_compressor_growth_gib": 2.0,
+   "compressor_stop_available_gib": 3.0,
+   "trace_interval_s": 1.0,
+   "fast_trace_interval_s": 0.25
+  },
+  "prompts": {
+   "source_hash": "e429a330a215d5fc",
+   "first_hash": "26c86b494b703a7a",
+   "later_hash": "d62794cb6335c6b5",
+   "first_ids": 988,
+   "later_ids": 1001
+  },
+  "after_load": {
+   "active": 2794742880,
+   "peak": 2794742880,
+   "cache": 23820,
+   "rss": 3164831744,
+   "pool": {
+    "exists": false
+   }
+  },
+  "environment": {
+   "FLASHNEXT_COMPILE_GDN": "1",
+   "FLASHNEXT_COMPILE_HC": "1",
+   "FLASHNEXT_COMPILE_NORM": "1",
+   "FLASHNEXT_EVAL_LINEAR_STATE": "1",
+   "FLASHNEXT_EXPERT_POOL_GB": "2",
+   "FLASHNEXT_FUSED_SHARED": "1",
+   "FLASHNEXT_FUSED_SHARED_PARTS": "0",
+   "FLASHNEXT_FUSED_UP_SWIGLU": "1",
+   "FLASHNEXT_GPU_KEEPWARM": "0",
+   "FLASHNEXT_IO_QOS": "user-interactive",
+   "FLASHNEXT_IO_WORKERS": "8",
+   "FLASHNEXT_METAL_G64": "1",
+   "FLASHNEXT_METAL_RUNTIME": "1",
+   "FLASHNEXT_NGRAM_PARALLEL_MIN": "16",
+   "FLASHNEXT_NORM_WEIGHT_CACHE": "1",
+   "FLASHNEXT_ONE_SYNC": "1",
+   "FLASHNEXT_OVERLAP": "0",
+   "FLASHNEXT_PIN_CACHE": "/Users/vincent/Documents/Veystrix/results/flashnext/20261108-003402-prefill-memory-manual/pins/pins.json",
+   "FLASHNEXT_PREAD_CHUNK": "2",
+   "FLASHNEXT_PREFILL_CHUNK_POLICY": "balanced",
+   "FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048",
+   "FLASHNEXT_PREFILL_RING_EXPERTS": "512",
+   "FLASHNEXT_PREFILL_RING_SCRATCH": "1",
+   "FLASHNEXT_PREFIX_CACHE": "1",
+   "FLASHNEXT_PREFIX_CACHE_DIR": "/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/fb12bd38-f2c7-4d06-a498-e8e5c9c31575/scratchpad/stage/s1-prefix-ref",
+   "FLASHNEXT_PREFIX_CACHE_DISK_GB": "5",
+   "FLASHNEXT_PREFIX_CACHE_MIN_TOKENS": "8",
+   "FLASHNEXT_PREFIX_CACHE_RAM_GB": "0.75",
+   "FLASHNEXT_PREFIX_CACHE_RESTORE": "0",
+   "FLASHNEXT_PROFILE_IO": "0",
+   "FLASHNEXT_QSA_CACHE_POOLED_KEYS": "1",
+   "FLASHNEXT_QSA_SCATTER_DECODE": "1",
+   "FLASHNEXT_RDAHEAD": "0",
+   "FLASHNEXT_READ": "pread",
+   "FLASHNEXT_SLAB_G64": "0",
+   "FLASHNEXT_SLAB_GLOBAL": "60",
+   "FLASHNEXT_SLAB_MAX_SLOTS": "6",
+   "FLASHNEXT_SLAB_MIN_SLOTS": "4",
+   "FLASHNEXT_SLAB_NUM_LAYERS": "12",
+   "FLASHNEXT_SLAB_PACK": "1",
+   "FLASHNEXT_SLAB_PACK_REQUIRE_EXISTING": "0",
+   "FLASHNEXT_SLAB_POLICY": "skew",
+   "FLASHNEXT_SLAB_PROFILE": "frozen",
+   "FLASHNEXT_STREAM_EMBED": "1",
+   "FLASHNEXT_STREAM_PACK": "1",
+   "FLASHNEXT_STREAM_PACK_CHUNK": "2",
+   "FLASHNEXT_TOPK_THRESHOLD": "0.85"
+  },
+  "trace_file": "arm-1k-F2Bn-r1.trace.jsonl",
+  "uncached_reads": null,
+  "status": "running",
+  "turns": [
+   {
+    "name": "1-agent_A",
+    "pending_tokens": 2068,
+    "prefilled_tokens": 2068,
+    "prefill_s": 33.47862962499494,
+    "prefill_tok_s": 61.77074818068551,
+    "prefill_calls": [
+     {
+      "tokens": 2068,
+      "before": {
+       "active": 2794759424,
+       "peak": 2794759424,
+       "cache": 23820,
+       "pool_exists": false
+      },
+      "seconds": 33.44361679197755,
+      "after": {
+       "active": 2979367182,
+       "peak": 5824574730,
+       "cache": 0,
+       "pool_exists": false,
+       "retained": 0
+      }
+     }
+    ],
+    "mem_start": {
+     "active": 2794742880,
+     "peak": 0,
+     "cache": 23820
+    },
+    "mem_end_prefill": {
+     "active": 2979358910,
+     "peak": 5824574730,
+     "cache": 8272
+    },
+    "mem_end_decode": {
+     "active": 5133235590,
+     "peak": 5824574730,
+     "cache": 79170740
+    },
+    "cache_max": 23820,
+    "rss_end_prefill": 2884370432,
+    "pool_start": {
+     "exists": false
+    },
+    "pool_end_prefill": {
+     "exists": false
+    },
+    "pool_end": {
+     "exists": true,
+     "slots": 651,
+     "used": 651,
+     "hits": 4963,
+     "misses": 13222
+    },
+    "pool_hits_decode": 4963,
+    "pool_misses_decode": 13222,
+    "ring_acquired": true,
+    "ring_reason": null,
+    "ring": {
+     "staged_layers": 96,
+     "staged_experts": 17847,
+     "staged_bytes": 54825984000,
+     "wait_seconds": 18.128628539212514,
+     "fallback_capacity": 0,
+     "fallback_busy": 0,
+     "fallback_error": 0,
+     "fallback_disabled": 0,
+     "fallback_memory": 0,
+     "disabled": null,
+     "half_experts": 512,
+     "ring_bytes": 1572864000,
+     "last_error": null,
+     "scratch_pool": true,
+     "disposed": false
+    },
+    "scratch": {
+     "acquire_s": 0.0006873339880257845,
+     "dispose_s": 0.021978833014145494,
+     "acquire_faults": {
+      "minor": 222,
+      "major": 0
+     }
+    },
+    "generate_wall_s": 58.568847957998514,
+    "first_token": 40,
+    "kv_hash": "555f71e4ff34a9b5",
+    "digest": "e326048fd867d4be",
+    "generated_ids": [
+     40,
+     3172,
+     12804,
+     279,
+     12182,
+     310,
+     1423,
+     279,
+     9761,
+     4011,
+     7873,
+     13,
+     271,
+     248058,
+     198,
+     27,
+     1628,
+     39619,
+     14416,
+     29,
+     198,
+     27,
+     15704,
+     79114,
+     29,
+     198,
+     13,
+     198,
+     510,
+     15704,
+     29,
+     198,
+     27,
+     15704,
+     28,
+     17038,
+     29,
+     198,
+     17,
+     198,
+     510,
+     15704,
+     29,
+     198,
+     510,
+     1628,
+     29,
+     198,
+     248059
+    ],
+    "generated_tokens": 49,
+    "decode": {
+     "tokens": 49,
+     "first_token_s": 0.15802025003358722,
+     "tok_s_1_64": null,
+     "tok_s_65_128": null,
+     "tok_s_overall": 1.9653583825744787
+    },
+    "ssd_prefill_bytes": 58833559552,
+    "ssd_decode_bytes": 43071614976,
+    "vm": {
+     "reactivated": 28688,
+     "decompress": 17781,
+     "compress": 85965,
+     "pagein": 3900,
+     "pageout": 72,
+     "swapin": 4,
+     "swapout": 0
+    },
+    "vm_decode": {
+     "reactivated": 8,
+     "decompress": 2457,
+     "compress": 0,
+     "pagein": 16912,
+     "pageout": 0,
+     "swapin": 0,
+     "swapout": 0
+    },
+    "free_mb_before": 2313.1875,
+    "finish": "stop",
+    "chunk_tokens_run": [
+     2046,
+     22
+    ],
+    "chunk_seconds": [
+     29.488,
+     3.932
+    ],
+    "chunk_end_positions": [
+     2046,
+     2068
+    ],
+    "system_boundary_tokens": 2046,
+    "request": "agent:A",
+    "prefix": {
+     "prompt_tokens": 2068,
+     "hit_tokens": 0,
+     "prefilled_tokens": 2068,
+     "tier": null,
+     "restore_seconds": 0.0,
+     "prefill_seconds": 33.44373529194854,
+     "bytes_loaded": 0,
+     "snapshots": [],
+     "snapshot_seconds": 0.0,
+     "plan_rejections": 0,
+     "plan_edges": [
+      2046
+     ]
+    },
+    "prompt_digest": "5a208c402b83a56e",
+    "prompt_tokens": 2068
+   }
+  ],
+  "agent_prompts": {
+   "system_hash": "a3bf83160ac3d9ce",
+   "question_hashes": {
+    "A": "af59c2f088e327bc",
+    "B": "215836ed09d4155e"
+   },
+   "token_counts": {
+    "A": {
+     "prompt_tokens": 2068,
+     "system_message_tokens": 2046,
+     "user_and_generation_tokens": 22
+    },
+    "B": {
+     "prompt_tokens": 2067,
+     "system_message_tokens": 2046,
+     "user_and_generation_tokens": 21
+    }
+   },
+   "system_words": 1620
+  },
+  "requests": [
+   "agent:A",
+   "agent:B"
+  ],
+  "prefix_settings": {
+   "FLASHNEXT_PREFIX_CACHE": "1",
+   "FLASHNEXT_PREFIX_CACHE_DIR": "/private/tmp/claude-501/-Users-vincent-Documents-Veystrix/fb12bd38-f2c7-4d06-a498-e8e5c9c31575/scratchpad/stage/s1-prefix-ref",
+   "FLASHNEXT_PREFIX_CACHE_DISK_GB": "5",
+   "FLASHNEXT_PREFIX_CACHE_MIN_TOKENS": "8",
+   "FLASHNEXT_PREFIX_CACHE_RAM_GB": "0.75",
+   "FLASHNEXT_PREFIX_CACHE_RESTORE": "0"
+  },
+  "arm": "1k-F2Bn-r1"
+ },
+ "uncached_reads": null
+}
