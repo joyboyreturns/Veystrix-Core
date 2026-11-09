@@ -85,8 +85,9 @@ tokens and prefilled 632 (`bench_restore_check.py`).
   streamed tool-result follow-up matched 2,424 of 2,452 tokens, 40 SSE events, `[DONE]`, coherent text; **client disconnect 15 s into a 4.6K layer-major prefill: `request_cancelled` (no memory stop),
   server ready again 2 s later, next request answered**; `/v1/messages` and `/v1/responses` both 200 with correct shapes. Swap stayed at 1,262-1,270 MiB (flat), pressure level 1, minimum available
   3.9 GB. This does **not** explain or retire the earlier stop: the premise differs (purge on, guard on, 4.6K instead of 8K), a pre-request purge was not seen in the flight recorder (memory was ample), and the
-  8K-after-decode scenario that breached the ceiling has not been re-run. Layer-major remains opt-in. Observation: short cold prompts are slow under layer-major (a 471-token prompt took 25 s, about 19 tok/s: the window
-  stages every expert of every layer, a full pass, however few tokens it holds); the hybrid mode (`layer-major-hybrid-4k`, chunk-major below 2,048 tokens) targets this and is unmeasured.
+  8K-after-decode scenario that breached the ceiling has not been re-run. Layer-major remains opt-in. Observation: a 471-token cold prompt took 25 s (about 19 tok/s) in this layer-major server. This is probably **not specific to layer-major**: with 10 of 512 experts routed per token, the union over 471 tokens
+covers most of every layer's experts (about 99% if routing were uniform; real routing is skewed, so less), so chunk-major also reads close to a full 75 GB pass. Chunk-major was not measured on this prompt, so the
+comparison is open; the hybrid mode (`layer-major-hybrid-4k`, chunk-major below 2,048 tokens) is unmeasured.
 * An earlier version of that smoke was invalid (a one-request state probe raised on the second request); fixed in the harness.
 * Not validated: real Qwen Code or DeepSeek Harness runs with the opt-ins, cancel of an **8K** layer-major prefill (4.6K was tested), restart-and-resume with
   the opt-ins in a multi-turn session, reasoning-effort variants, 262K (only the architectural limit exists; no 262K conversation was run), the combination of
