@@ -62,6 +62,15 @@ tokens and prefilled 632 (`bench_restore_check.py`).
   Layer 1 (PLE n-gram rows) costs about 8 s per prefill (random row reads, about 0.5 s fixed per call) and is not yet overlapped.
 * **16K:** window 1 86 s, window 2 148 s (reads 88 GB per window, attention over 8K+ context, throttled).
 
+### Decode cost model (ESTIMATE from measured inputs; not a measurement)
+
+Inputs, all measured above: GPU drain about 72 ms and host about 6 ms per token; physical reads 0.73 GB/token at pool 2 GB (about 0.47 GB/token with `pool-buffered-fill`, -36%); the drive delivers about 2.5 GB/s
+to decode while it is blocked and about 3.0 GB/s in the best prefill windows. With no overlap, token time = bytes / bandwidth + 78 ms. At 0.47 GB/token and the **best observed 3.0 GB/s** that is 157 + 78 = 235 ms = **4.3 tok/s at 2.7K context**
+(measured 3.6; the gap is the 2.5 GB/s decode bandwidth). **5 tok/s needs a 200 ms token, i.e. about 0.37 GB/token at 3.0 GB/s: roughly half of today's 0.73 GB/token**, which the route replay prices at about +5 GB of effective
+expert cache (about +9 hit points per GB), not available under the 3 GiB swap rule on this 16 GB machine. Overlap of reads with the 72 ms GPU drain could recover at most that 72 ms (about +1 tok/s at the same bytes) but earlier
+look-ahead prefetch lost, and that remains untested for a new predictor. 8-10 tok/s would need about 0.15-0.2 GB/token or a faster drive. So the remaining decode gap is a physical capacity and bandwidth limit of this machine, not a
+software defect that is still on the table, unless a read-saving idea (e.g. exact speculative verification that shares expert reads across several tokens, which measured slower when last tried) is shown to pay off.
+
 ## 4. Tests
 
 * flashnext unit discovery: **1,754 tests, OK (3 skipped)** on the final tree; macqwen: **686 tests, OK** (run before the last two small flashnext-only edits, which do not touch macqwen).
