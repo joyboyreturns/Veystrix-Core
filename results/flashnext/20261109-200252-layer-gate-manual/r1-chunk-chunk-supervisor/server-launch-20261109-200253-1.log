@@ -1,0 +1,31 @@
+MEMORY POLICY: swap-growth-only (approved AGENTIC policy)
+  * 9 GiB gate & available-memory admission thresholds are demoted to telemetry-only.
+  * Hard stop: swap growth > 2.5 GiB above launch baseline (high-watermark enforced; fails closed on missing/invalid probe).
+  * Safe GPU cancellation on stop; no automatic retry.
+  * Notice: The swap-growth-only policy does not guarantee protection against sudden OOM, GPU allocation failure, compressor growth, or degraded responsiveness.
+prefill readiness: 11.65 GiB available, needs 9.02 GiB (predicted lowest gate figure 8.02 GiB after load and 4.93 GiB through a 4096-token cold prefill (fall 6.72); it must stay above the 2.0 GiB runtime floor + 0.30 margin)
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-50436.jsonl
+watchdog       ON  (separate process 50500; stage deadlines /Users/vincent/.flashnext/watchdog)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-layer-gate-2ezorxi9/prefix, RAM 0.75 GB, SSD 50 GB, free reserve 50 GB, profiles off
+  chunk policy   balanced 2048-token chunks, 512-expert scratch ring
+  memory         READY (12.5 GB available; start gate waived under swap-growth-only policy; stops only at +2.5 GiB swap growth)
+  supervisor     ON (swap growth +2.5 GiB, thermal, battery stops; pressure/available are telemetry)  trace veystrix-chat-50436.jsonl
+  auto purge   off
+  context limit  262144 tokens (requests above it are refused, never truncated)
+  prefill limits cold 32768, uncached increment 32768 tokens per request (admission ceilings; internal chunks stay 2048; real-checkpoint evidence to 16384 only)
+  EXPERIMENTAL   uncached-reads: read every expert row with F_NOCACHE so streaming does not fill the file cache or push the server's own pages into the compressor; same bytes in the same order, so results are identical; speed effect unmeasured
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+[2mready in 3.3s  flashnext / agent  use /help for commands[0m
+
+flight recorder: /Users/vincent/.flashnext/logs/server-50436.jsonl
+server ready at http://127.0.0.1:49210
+context limit: 262144 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 32768 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models

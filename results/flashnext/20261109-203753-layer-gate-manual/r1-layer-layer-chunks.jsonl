@@ -1,0 +1,3 @@
+{"wall": 1794237212.21, "start": 0, "end": 2107, "tokens": 2107, "seconds": 57.25, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 2.99, "mlx_peak_gb": 5.12}
+{"wall": 1794237283.15, "start": 2107, "end": 6124, "tokens": 4017, "seconds": 70.83, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 3.29, "mlx_peak_gb": 6.12}
+{"wall": 1794237345.11, "start": 6124, "end": 8139, "tokens": 2015, "seconds": 61.74, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 3.66, "mlx_peak_gb": 6.12}

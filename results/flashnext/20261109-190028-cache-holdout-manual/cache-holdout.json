@@ -1,0 +1,148 @@
+{
+  "trace": "/Users/vincent/Documents/Veystrix/results/flashnext/20260922-221213-route-trace-manual/route-trace.json.gz",
+  "trace_sha256": "2228e7012b90f2b1a0c963e3708d10b94bd1879a5c2b6b86ade88438f08c84a7",
+  "scope": "offline routing replay, one held-out turn; not physical I/O or a target-checkpoint benchmark",
+  "results": [
+    {
+      "train_turns": [
+        0,
+        1
+      ],
+      "holdout_turn": 2,
+      "slots": 311,
+      "record_bytes": 3211264,
+      "policies": {
+        "global_lru": {
+          "hits": 0,
+          "accesses": 98587,
+          "hit_rate": 0.0,
+          "miss_records": 98587,
+          "estimated_miss_bytes": 316588883968,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 316588883968
+        },
+        "arc": {
+          "hits": 28192,
+          "accesses": 98587,
+          "hit_rate": 0.2859606236116324,
+          "miss_records": 70395,
+          "estimated_miss_bytes": 226056929280,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 226056929280
+        },
+        "per_layer_lru": {
+          "hits": 34019,
+          "accesses": 98587,
+          "hit_rate": 0.34506577946382383,
+          "miss_records": 64568,
+          "estimated_miss_bytes": 207344893952,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 207344893952
+        },
+        "static_frequency": {
+          "hits": 10844,
+          "accesses": 98587,
+          "hit_rate": 0.10999421830464463,
+          "miss_records": 87743,
+          "estimated_miss_bytes": 281765937152,
+          "cold_pin_fill_records": 311,
+          "estimated_bytes_with_cold_fill": 282764640256
+        }
+      }
+    },
+    {
+      "train_turns": [
+        0,
+        1
+      ],
+      "holdout_turn": 2,
+      "slots": 622,
+      "record_bytes": 3211264,
+      "policies": {
+        "global_lru": {
+          "hits": 47329,
+          "accesses": 98587,
+          "hit_rate": 0.4800734376743384,
+          "miss_records": 51258,
+          "estimated_miss_bytes": 164602970112,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 164602970112
+        },
+        "arc": {
+          "hits": 49683,
+          "accesses": 98587,
+          "hit_rate": 0.5039508251595037,
+          "miss_records": 48904,
+          "estimated_miss_bytes": 157043654656,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 157043654656
+        },
+        "per_layer_lru": {
+          "hits": 50990,
+          "accesses": 98587,
+          "hit_rate": 0.5172081511761185,
+          "miss_records": 47597,
+          "estimated_miss_bytes": 152846532608,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 152846532608
+        },
+        "static_frequency": {
+          "hits": 13303,
+          "accesses": 98587,
+          "hit_rate": 0.13493665493422052,
+          "miss_records": 85284,
+          "estimated_miss_bytes": 273869438976,
+          "cold_pin_fill_records": 622,
+          "estimated_bytes_with_cold_fill": 275866845184
+        }
+      }
+    },
+    {
+      "train_turns": [
+        0,
+        1
+      ],
+      "holdout_turn": 2,
+      "slots": 1245,
+      "record_bytes": 3211264,
+      "policies": {
+        "global_lru": {
+          "hits": 63813,
+          "accesses": 98587,
+          "hit_rate": 0.6472760100216053,
+          "miss_records": 34774,
+          "estimated_miss_bytes": 111668494336,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 111668494336
+        },
+        "arc": {
+          "hits": 63522,
+          "accesses": 98587,
+          "hit_rate": 0.6443243023928105,
+          "miss_records": 35065,
+          "estimated_miss_bytes": 112602972160,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 112602972160
+        },
+        "per_layer_lru": {
+          "hits": 64575,
+          "accesses": 98587,
+          "hit_rate": 0.6550052238124702,
+          "miss_records": 34012,
+          "estimated_miss_bytes": 109221511168,
+          "cold_pin_fill_records": 0,
+          "estimated_bytes_with_cold_fill": 109221511168
+        },
+        "static_frequency": {
+          "hits": 16794,
+          "accesses": 98587,
+          "hit_rate": 0.17034700315457413,
+          "miss_records": 81793,
+          "estimated_miss_bytes": 262658916352,
+          "cold_pin_fill_records": 1245,
+          "estimated_bytes_with_cold_fill": 266656940032
+        }
+      }
+    }
+  ]
+}

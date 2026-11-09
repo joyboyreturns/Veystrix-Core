@@ -1,0 +1,3 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Starting r1-chunk
+Gate stopped: request failed: HTTP 500: {"error": {"message": "layer gate requires greedy target-model decoding", "type": "server_error", "param": null, "code": "internal_error"}}

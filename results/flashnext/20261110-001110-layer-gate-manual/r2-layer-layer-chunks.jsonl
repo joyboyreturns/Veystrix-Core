@@ -1,0 +1,2 @@
+{"wall": 1794250154.75, "start": 0, "end": 2107, "tokens": 2107, "seconds": 42.37, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 4.33, "mlx_peak_gb": 4.99}
+{"wall": 1794250261.07, "start": 2107, "end": 8139, "tokens": 6032, "seconds": 106.2, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 6.73, "mlx_peak_gb": 8.3}

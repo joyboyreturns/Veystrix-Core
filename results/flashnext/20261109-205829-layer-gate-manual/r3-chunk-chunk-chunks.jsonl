@@ -1,0 +1,6 @@
+{"wall": 1794239436.03, "start": 0, "end": 1054, "tokens": 1054, "seconds": 29.25, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 2.93, "mlx_peak_gb": 4.48}
+{"wall": 1794239469.21, "start": 1054, "end": 2107, "tokens": 1053, "seconds": 32.78, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 3.1, "mlx_peak_gb": 4.71}
+{"wall": 1794239541.11, "start": 2107, "end": 4116, "tokens": 2009, "seconds": 71.54, "memory_state": "elevated", "available_gb": null, "pressure": null, "mlx_active_gb": 3.32, "mlx_peak_gb": 5.32}
+{"wall": 1794239606.72, "start": 4116, "end": 6124, "tokens": 2008, "seconds": 65.42, "memory_state": "normal", "available_gb": null, "pressure": null, "mlx_active_gb": 3.59, "mlx_peak_gb": 5.57}
+{"wall": 1794239674.55, "start": 6124, "end": 8132, "tokens": 2008, "seconds": 67.62, "memory_state": "elevated", "available_gb": null, "pressure": null, "mlx_active_gb": 3.91, "mlx_peak_gb": 5.91}
+{"wall": 1794239678.2, "start": 8132, "end": 8139, "tokens": 7, "seconds": 3.64, "memory_state": "elevated", "available_gb": null, "pressure": null, "mlx_active_gb": 4.26, "mlx_peak_gb": 5.91}

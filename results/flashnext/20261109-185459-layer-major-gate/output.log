@@ -1,0 +1,3 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Starting r1-chunk
+Gate stopped: request safety: available memory is below 3 GB or unreadable
