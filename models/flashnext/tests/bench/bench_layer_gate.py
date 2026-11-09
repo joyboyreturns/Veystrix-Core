@@ -662,7 +662,7 @@ def main():
         print(f"Gate postponed (nothing started): {postponed}", flush=True)
         return 2
     payload = make_prompt(checkpoint, args.source_tokens)
-    token_range = (2048, 4096) if args.source_tokens <= 600 else (6144, 12288)
+    token_range = (2048, 4096) if args.source_tokens <= 600 else (6144, 12288) if args.source_tokens <= 9000 else (12288, 20480)
     path = output_path("flashnext", "layer-gate", "layer-gate.jsonl")
     git = lambda *cmd: subprocess.run(["git", *cmd], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     checkpoint_id = checkpoint_fingerprint(checkpoint)

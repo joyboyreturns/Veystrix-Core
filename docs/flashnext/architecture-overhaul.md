@@ -688,6 +688,19 @@ and prompt at 8K; the memory margin while it runs is thin (about 1-3 GB availabl
 (`--enable layer-major --enable layer-prefetch`). Not yet measured: 16K, a restart from the stored system snapshot after an inner-snapshot
 prefill on the real checkpoint (unit-tested on the small model only), competing applications.
 
+**16K paired gate (complete, exact; `results/flashnext/20261110-025312-layer-gate-manual/`).** Same configuration as the 8K gate above
+(`--candidate layer-major --prefetch`, AC, pool 2 GB, uncached prefill reads), 16,139-token prompt (`--source-tokens 14000`; the gate's
+workload-shape check was widened to 12,288-20,480 tokens for this run, no memory or swap rule changed), three reversed pairs, exactness
+passed on all three. Chunk-major 361.0 / 361.5 / 359.7 s (**44.7 tok/s**, spread 0.5%), layer-major + overlap + inner snapshots
+239.5 / 232.7 / 233.3 s (67.4 / 69.4 / 69.2, median **69.2 tok/s**, spread 2.9%): **1.547x**. Physical prefill reads 538 vs 177 GB; MLX peak
+10.35 vs 11.92 GB. Trace of a layer arm: window 1 (0-8,119) 86.4 s, window 2 (8,119-16,132) 148.4 s, 7-token tail 4.2 s; snapshots
+at every planned boundary. The 80-100 tok/s target is **not** met at 16K (69 tok/s): the second window computes slower (attention over 8K+
+context, thermal pressure 2 for most of each arm) and each window still reads every expert once (88 GB each).
+**Machine margin is thin at 16K.** Swap in use reached 2,848 MB (2.78 GiB, limit 3 GiB) in the first layer arm and 2.2-2.7 GiB in the
+chunk-major arms, memory pressure level 2 in every arm, minimum available 1.4-2.0 GB. The gate did not stop, but the run is within about 0.2 GiB of the
+owner's swap ceiling; part of that is ambient drift (swap started each arm at 1.2-1.6 GiB). Do not repeat or lengthen 16K runs without first
+clearing swap headroom; layer-major stays opt-in.
+
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the
 machine already barely accommodates, so it is not worth building before the exactness gate has passed and a measured candidate
 footprint exists. Decode cache-policy work needs a current-checkpoint route trace, which needs the same headroom.
