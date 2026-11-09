@@ -29,6 +29,8 @@ Nothing here is wired into inference unless ``PrefixCache`` is constructed and c
 """
 from __future__ import annotations
 
+import copy
+
 import hashlib
 import fcntl
 import json
@@ -286,6 +288,36 @@ def capture(cache_list, tokens, fp: str, parent: Entry | None = None, language=N
     mx.eval([a for layer in layers for a in (*layer.states, *layer.kv.values()) if a is not None]
             + list(lang.values()))
     return entry
+
+
+def freeze_cache(cache):
+    """A stand-in for ``cache`` as it is right now, for a snapshot taken after the live cache has moved on.
+
+    Layer-major prefill reaches a chunk edge in the middle of a window layer by layer; the snapshot for that edge is assembled
+    after the window from these per-layer stand-ins. Same class (so ``kind_of`` and ``capture`` treat it as the real thing), array
+    attributes replaced by new objects over the same values cut to the cache's own offset (the arrays are immutable values, so no
+    later in-place update reaches them). The caller must have evaluated the cache already."""
+    kind = kind_of(cache)
+    frozen = copy.copy(cache)
+    if kind == "arrays":
+        frozen.cache = [_own(a) for a in cache.cache]
+        return frozen
+    offset = int(cache.offset)
+    if kind == "qsa_quantized_kv":
+        for attr in ("keys", "values"):
+            parts = getattr(cache, attr)
+            if parts is not None:
+                setattr(frozen, attr, tuple(_own(_slice(part, f"{attr}_{i}", 0, offset)) for i, part in enumerate(parts)))
+        for attr in ("index_keys", "index_position_ids"):
+            value = getattr(cache, attr)
+            if value is not None:
+                setattr(frozen, attr, _own(_slice(value, attr, 0, offset)))
+        return frozen
+    for name in KV_FIELDS:
+        value = getattr(cache, name)
+        if value is not None:
+            setattr(frozen, name, _own(_slice(value, name, 0, offset)))
+    return frozen
 
 
 def parent_prefix(entry: Entry) -> tuple:

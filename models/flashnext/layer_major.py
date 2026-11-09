@@ -41,6 +41,7 @@ FLAG_ORDER = "FLASHNEXT_PREFILL_ORDER"                  # "chunk" (default) | "l
 FLAG_WINDOW = "FLASHNEXT_PREFILL_WINDOW_TOKENS"         # tokens per layer-major window
 FLAG_HYBRID = "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS"  # opt-in: reference path for small windows
 FLAG_PREFETCH = "FLASHNEXT_PREFILL_LAYER_PREFETCH"      # opt-in: read layer l+1's experts while layer l computes
+FLAG_INNER_SNAPSHOTS = "FLASHNEXT_PREFILL_INNER_SNAPSHOTS"  # "1" (default): snapshot chunk edges inside a window; "0": cut windows there
 FLAG_TAIL_CHUNK = "FLASHNEXT_PREFILL_TAIL_CHUNK"        # "1" (default): a trailing tiny chunk runs chunk-major after the last window
 ORDERS = ("chunk", "layer")
 PLAN_VERSION = "layer-major-v1"
@@ -95,6 +96,18 @@ def tail_chunk_enabled() -> bool:
     value = os.environ.get(FLAG_TAIL_CHUNK, "1") or "1"
     if value not in ("0", "1"):
         raise ValueError(f"{FLAG_TAIL_CHUNK} must be 0 or 1")
+    return value == "1"
+
+
+def inner_snapshots_enabled() -> bool:
+    """Snapshot a boundary that falls on a chunk edge inside a window instead of ending the window there.
+
+    Ending a window at the system-prompt boundary makes every expert be read once more (a 75 GB pass at 8K). Each layer's
+    cache is instead frozen the moment that layer finishes the chunk ending at the boundary, and the snapshot is assembled
+    after the window (``prefix_cache.freeze_cache``). The stored state is the same one the chunk-major order stores there."""
+    value = os.environ.get(FLAG_INNER_SNAPSHOTS, "1") or "1"
+    if value not in ("0", "1"):
+        raise ValueError(f"{FLAG_INNER_SNAPSHOTS} must be 0 or 1")
     return value == "1"
 
 
@@ -385,6 +398,7 @@ class WindowReport:
     ring_layers: int = 0
     fallback_layers: int = 0
     prefetch_layers: int = 0
+    frozen: dict = field(default_factory=dict)              # relative chunk edge -> per-layer frozen caches (inner snapshots)
 
 
 def _streamed_glu(layer):
@@ -394,7 +408,7 @@ def _streamed_glu(layer):
     return glu if isinstance(glu, expert_cache.StreamingSwitchGLU) else None
 
 
-def run_window(language, ids, cache, chunk_spans, offset: int, window=None, checkpoint=None, after_layer=None):
+def run_window(language, ids, cache, chunk_spans, offset: int, window=None, checkpoint=None, after_layer=None, freeze_edges=()):
     """Advance every layer's cache over ``ids`` (shape ``(1, T)``) layer-major and return the final hidden states.
 
     ``chunk_spans`` are relative ``(start, end)`` chunks covering ``ids``; ``offset`` is how many tokens the cache already
@@ -414,6 +428,7 @@ def run_window(language, ids, cache, chunk_spans, offset: int, window=None, chec
     # traffic and timings rather than its lifetime totals.
     stats_before = dict(window.stats) if window is not None else None
     reads_before = len(window.layer_reads) if window is not None and hasattr(window, "layer_reads") else 0
+    freeze_edges = {int(e) for e in freeze_edges}
     began = time.perf_counter()
     inputs = [ids[:, a:b] for a, b in chunk_spans]
     states = []
@@ -448,6 +463,10 @@ def run_window(language, ids, cache, chunk_spans, offset: int, window=None, chec
                 states[c] = layer(states[c], chunk, mask=mask, cache=cache[index], position_ids=positions[c])
                 # One evaluation per (layer, chunk): bounds the lazy graph and keeps the cache arrays concrete.
                 mx.eval(states[c], cache[index].state)
+                if chunk_spans[c][1] in freeze_edges and c + 1 < len(chunk_spans):
+                    from models.flashnext import prefix_cache
+
+                    report.frozen.setdefault(chunk_spans[c][1], [None] * count)[index] = prefix_cache.freeze_cache(cache[index])
                 chunk_times.append(round(time.perf_counter() - chunk_began, 3))
                 try:
                     chunk_memory.append(round(mx.get_active_memory() / 1e6))

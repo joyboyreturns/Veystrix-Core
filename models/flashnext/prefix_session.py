@@ -280,12 +280,12 @@ class PrefixSession:
             base = tuple(e for e in edges if e <= offset) if offset else ()
             return base + trace.edges_before(position)
 
-        def snapshot(position):
+        def snapshot(position, frozen=None):
             if not restore:
                 return
             # Chain each snapshot to the previous one (or to the restored hit) so KV is stored once.
             stored = time.perf_counter()
-            entry = store.put(prompt[:position], cache, parent=last[-1] if last else hit, language=language,
+            entry = store.put(prompt[:position], cache if frozen is None else frozen, parent=last[-1] if last else hit, language=language,
                               plan=history(position),
                               kind="system" if position == system else None)
             report.snapshot_seconds += time.perf_counter() - stored

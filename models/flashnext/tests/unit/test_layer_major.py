@@ -36,6 +36,16 @@ class FlagTests(unittest.TestCase):
                                          layer_major.FLAG_HYBRID: "1"}):
             self.assertEqual(layer_major.identity(), f"{layer_major.PLAN_VERSION}/w4096/hybrid-small-v1")
 
+    def test_inner_snapshot_flag_defaults_on_and_validates(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(layer_major.FLAG_INNER_SNAPSHOTS, None)
+            self.assertTrue(layer_major.inner_snapshots_enabled())
+        with mock.patch.dict(os.environ, {layer_major.FLAG_INNER_SNAPSHOTS: "0"}):
+            self.assertFalse(layer_major.inner_snapshots_enabled())
+        with mock.patch.dict(os.environ, {layer_major.FLAG_INNER_SNAPSHOTS: "x"}):
+            with self.assertRaises(ValueError):
+                layer_major.inner_snapshots_enabled()
+
     def test_bad_values_raise(self):
         with mock.patch.dict(os.environ, {layer_major.FLAG_ORDER: "wavefront"}):
             with self.assertRaises(ValueError):
@@ -337,19 +347,26 @@ class PrefillIntegrationTests(unittest.TestCase):
         cls.ids = [int(t) for t in mx.random.randint(2, 512, (700,)).tolist()]
 
     def run_prefill(self, order, window=None, boundaries=(), required=(), anchors=None, prompt=None, offset=0, cache=None,
-                    hybrid=False):
+                    hybrid=False, inner=False, states=None):
         from models.flashnext import prefill
 
         env = {"FLASHNEXT_PREFILL_CHUNK_TOKENS": "64", "FLASHNEXT_PREFILL_CHUNK_POLICY": "grid",
-               layer_major.FLAG_ORDER: order, layer_major.FLAG_HYBRID: "1" if hybrid else "0"}
+               layer_major.FLAG_ORDER: order, layer_major.FLAG_HYBRID: "1" if hybrid else "0",
+               layer_major.FLAG_INNER_SNAPSHOTS: "1" if inner else "0"}
         seen, trace = [], prefill.PlanTrace()
         cache = cache if cache is not None else self.model.make_cache()
         prompt = prompt or self.ids
+
+        def on_boundary(position, frozen=None):
+            seen.append(position)
+            if states is not None:                      # what a snapshot would store at this position
+                states[position] = cache_bits(cache if frozen is None else frozen)
+
         with mock.patch.dict(os.environ, env):
             with mock.patch.object(layer_major, "window_tokens", return_value=window or 128):
                 _, _, token = prefill.prefill_target(
                     self.model, mx.array([prompt[offset:]]), cache, boundaries=tuple(boundaries),
-                    on_boundary=seen.append, offset=offset, anchors=anchors, trace=trace, required=required)
+                    on_boundary=on_boundary, offset=offset, anchors=anchors, trace=trace, required=required)
         return int(token.item()), cache, seen, trace
 
     def test_token_and_cache_equal_chunk_major(self):
@@ -417,17 +434,66 @@ class PrefillIntegrationTests(unittest.TestCase):
 
     def test_snapshots_happen_only_at_window_ends(self):
         every_chunk_edge = tuple(range(64, 700, 64))                    # what snapshot mode "all" asks for
-        _, _, seen, trace = self.run_prefill("layer", window=256, boundaries=every_chunk_edge)
+        _, _, seen, trace = self.run_prefill("layer", window=256, boundaries=every_chunk_edge)      # inner snapshots off
         ends = [end for _, end in trace.windows[:-1]]
         self.assertEqual(seen, ends)
         _, _, seen_chunk, _ = self.run_prefill("chunk", boundaries=every_chunk_edge)
         self.assertGreater(len(seen_chunk), len(seen))                  # chunk-major snapshots at every edge
         self.assertTrue(set(seen) <= set(every_chunk_edge))
 
-    def test_window_ends_at_the_required_system_boundary(self):
+    def test_window_ends_at_the_required_system_boundary_without_inner_snapshots(self):
         _, _, seen, trace = self.run_prefill("layer", window=512, boundaries=(192,), required=(192,))
         self.assertEqual(trace.windows[0][1], 192)
         self.assertEqual(seen[0], 192)
+
+    def test_inner_snapshots_keep_one_window_across_the_system_boundary_and_store_the_chunk_major_state(self):
+        edges = (192, 256)                                              # neither is an anchor in the window's second half
+        want_states = {}
+        want_token, want_cache, want_seen, _ = self.run_prefill("chunk", boundaries=edges, states=want_states)
+        states = {}
+        token, cache, seen, trace = self.run_prefill("layer", window=512, boundaries=edges, required=(192,), inner=True,
+                                                     states=states)
+        self.assertEqual(trace.windows[0], (0, 512))                    # the boundary no longer ends the window
+        self.assertEqual(seen, want_seen)
+        self.assertEqual(states, want_states)                           # every cache array at both edges, byte for byte
+        self.assertEqual(token, want_token)
+        self.assertEqual(cache_bits(cache), cache_bits(want_cache))
+
+    def test_inner_snapshot_stays_correct_after_later_chunks_update_the_live_cache(self):
+        # The frozen state is taken mid-window; the live cache then moves on (KV buffers are updated in place).
+        states = {}
+        _, cache, seen, _ = self.run_prefill("layer", window=700, boundaries=(128,), inner=True, states=states)
+        want = {}
+        self.run_prefill("chunk", boundaries=(128,), states=want)
+        self.assertEqual(seen, [128])
+        self.assertEqual(states[128], want[128])
+        self.assertNotEqual(states[128], cache_bits(cache))
+
+    def test_a_restore_from_an_inner_snapshot_resumes_exactly(self):
+        from models.flashnext import prefix_cache
+
+        taken = {}
+
+        def run_and_keep():
+            from models.flashnext import prefill
+
+            env = {"FLASHNEXT_PREFILL_CHUNK_TOKENS": "64", "FLASHNEXT_PREFILL_CHUNK_POLICY": "grid",
+                   layer_major.FLAG_ORDER: "layer", layer_major.FLAG_INNER_SNAPSHOTS: "1"}
+            cache = self.model.make_cache()
+
+            def keep(position, frozen=None):
+                entry = prefix_cache.capture(cache if frozen is None else frozen, self.ids[:position], "fp", None, self.model)
+                taken[position] = entry
+
+            with mock.patch.dict(os.environ, env), mock.patch.object(layer_major, "window_tokens", return_value=700):
+                prefill.prefill_target(self.model, mx.array([self.ids]), cache, boundaries=(192,), on_boundary=keep)
+
+        run_and_keep()
+        want_token, want_cache, _, _ = self.run_prefill("chunk")
+        restored = prefix_cache.restore([taken[192]], self.model.make_cache)
+        token, cache, _, _ = self.run_prefill("layer", window=700, offset=192, cache=restored, inner=True)
+        self.assertEqual(token, want_token)
+        self.assertEqual(cache_bits(cache), cache_bits(want_cache))
 
     def test_a_snapshot_at_a_window_end_resumes_exactly(self):
         # State at the window end equals chunk-major's state there, so a restore continues to the same final result.

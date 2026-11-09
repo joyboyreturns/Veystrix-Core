@@ -671,6 +671,23 @@ available at the minimum), so it stays **opt-in** (`--enable layer-major --enabl
 stress, other applications competing for memory. Remaining prefill budget at 8K: window 1 is read-bound (the forced system-prompt
 boundary makes the 75.5 GB pass happen twice, about 26 s), layer 1 (n-gram rows) about 8 s, thermal throttling in window 2.
 
+**Inner snapshots: one window across the system-prompt boundary (complete, exact; `results/flashnext/20261110-022214-layer-gate-manual/`).**
+Ending a window at the system-prompt boundary made every expert be read a second time (window 1 was read-bound, about 26 s). A boundary on a
+chunk edge inside a window is now snapshotted without ending the window: each layer is frozen (`prefix_cache.freeze_cache`, a new Python object
+over the same immutable arrays, cut to the layer's offset) the moment it finishes the chunk that ends at the boundary, and the snapshot is assembled
+after the window (`prefix_session.snapshot(position, frozen)`). Default on inside layer-major, rollback `FLASHNEXT_PREFILL_INNER_SNAPSHOTS=0`
+(the old cut at `required` positions). Unit tests: the stored state at both edges equals the chunk-major state byte for byte, stays correct after
+later chunks update the live KV buffers, and a restore from it resumes to the same token and cache.
+Paired 8K gate, `--candidate layer-major --prefetch`, AC, pool 2 GB, 8,139 tokens, three reversed pairs, **exactness passed on all three**:
+chunk-major 155.7 / 170.5 / 168.5 s (52.3 / 47.7 / 48.3 tok/s) against layer-major + overlap + inner snapshots 85.5 / 90.9 / 92.9 s
+(**95.2 / 89.5 / 87.6 tok/s**): medians 48.3 vs **89.5 tok/s, 1.853x**, pair ratios 1.82 / 1.88 / 1.81, spread 8.2%; prefill physical reads 277-279
+vs 89 GB; the prefill is one 8,132-token window (83.8 s) plus the 7-token tail (1.6 s); MLX peak 9.74 vs 8.16 GB. Machine: swap 1.2-1.7 GiB in every arm
+(limit 3 GiB), memory pressure level 1 except one sample at level 2 in the first layer arm (minimum available 1.2 GB in that arm, 2.2-3.3 GB in the
+others), compressor up to 3.8 GB, OS thermal pressure up to 2 in every arm (chunk-major too). Status: validated exact and faster on this checkpoint
+and prompt at 8K; the memory margin while it runs is thin (about 1-3 GB available at the minimum), so it stays **opt-in**
+(`--enable layer-major --enable layer-prefetch`). Not yet measured: 16K, a restart from the stored system snapshot after an inner-snapshot
+prefill on the real checkpoint (unit-tested on the small model only), competing applications.
+
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the
 machine already barely accommodates, so it is not worth building before the exactness gate has passed and a measured candidate
 footprint exists. Decode cache-policy work needs a current-checkpoint route trace, which needs the same headroom.

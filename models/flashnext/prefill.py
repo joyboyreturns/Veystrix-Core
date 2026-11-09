@@ -490,7 +490,8 @@ def _run_layer_major(language, ids, cache, sampler, boundaries, on_boundary, off
 
     total = int(ids.shape[1])
     absolute_end = offset + total
-    windows = layer_major.plan_windows(spans, offset, layer_major.window_tokens(), required=required,
+    inner = layer_major.inner_snapshots_enabled()
+    windows = layer_major.plan_windows(spans, offset, layer_major.window_tokens(), required=() if inner else required,
                                        anchors=tuple(anchors if anchors is not None else boundaries))
     if trace is not None:
         trace.planned_edges = [offset + e for _, e in spans[:-1]]
@@ -537,8 +538,14 @@ def _run_layer_major(language, ids, cache, sampler, boundaries, on_boundary, off
                         trace.throttles.append({"at": offset + b, **waited})
                     _uncache_reads_when_elevated(language, trace)
         else:
+            freeze = [b - start for _, b in group[:-1] if inner and offset + b in boundary_set]
             states, report = layer_major.run_window(language, ids[:, start:end], cache, relative, offset + start,
-                                                    window=window, checkpoint=checkpoint)
+                                                    window=window, checkpoint=checkpoint, freeze_edges=freeze)
+            if on_boundary is not None:
+                # Boundaries on chunk edges inside the window: assembled from the layers' frozen caches, in order.
+                for edge in sorted(report.frozen):
+                    on_boundary(offset + start + edge, report.frozen[edge])
+            report.frozen = {}
         seconds = time.perf_counter() - began
         if trace is not None:
             if not use_chunk:
