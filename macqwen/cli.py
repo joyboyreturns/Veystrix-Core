@@ -328,7 +328,9 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     environment = dict(os.environ)
     if plan:
         modes.apply_mode(environment, plan)
-    if known.auto_purge:
+    if known.no_auto_purge:
+        environment["FLASHNEXT_AUTO_PURGE"] = "0"
+    elif known.auto_purge:
         environment["FLASHNEXT_AUTO_PURGE"] = "1"
     elif model == "flashnext" and not known.no_auto_purge and "FLASHNEXT_AUTO_PURGE" not in environment:
         # Autonomous memory preparation: a conditional, authorized file-cache purge is part of normal startup. It never

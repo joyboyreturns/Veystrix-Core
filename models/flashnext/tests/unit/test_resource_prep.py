@@ -408,7 +408,8 @@ class SessionStartupTests(unittest.TestCase):
         from macqwen import cli
 
         for argv, environ, expected in ((["--mode", "chat"], {}, "1"), (["--mode", "agentic"], {}, "1"),
-                                        (["--mode", "chat", "--no-auto-purge"], {}, None),
+                                        (["--mode", "chat", "--no-auto-purge"], {}, "0"),
+                                        (["--mode", "chat", "--no-auto-purge"], {"FLASHNEXT_AUTO_PURGE": "1"}, "0"),
                                         (["--mode", "chat"], {"FLASHNEXT_AUTO_PURGE": "0"}, "0")):
             with self.subTest(argv=argv, environ=environ), mock.patch.dict(os.environ, environ, clear=False):
                 if "FLASHNEXT_AUTO_PURGE" not in environ:

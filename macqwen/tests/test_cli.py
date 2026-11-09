@@ -12,6 +12,12 @@ from macqwen import cli
 
 
 class LauncherTests(unittest.TestCase):
+    def test_no_auto_purge_overrides_inherited_enabled_flag(self):
+        with patch.dict(os.environ, {"FLASHNEXT_AUTO_PURGE": "1"}), \
+                patch("macqwen.cli._supports_python", return_value=True):
+            _, environment = cli.command(["--model", "flashnext", "--no-auto-purge"])
+        self.assertEqual(environment["FLASHNEXT_AUTO_PURGE"], "0")
+
     def test_default_launch_uses_the_only_installed_checkpoint(self):
         checkpoint = Path("/models/only")
         with patch("macqwen.cli.installed_checkpoints", return_value=[

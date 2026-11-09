@@ -100,6 +100,33 @@ class FlashNextBackendTests(unittest.TestCase):
 
         self.assertEqual(prompt_lengths, [1, 2])
 
+    def test_diagnostic_refusal_does_not_consume_pending_prompt(self):
+        backend = self.backend()
+        backend.pending = [10]
+        backend.sampling = Sampling(temperature=1.0)
+        with patch.dict("os.environ", {"VEYSTRIX_LAYER_GATE_PROBE": "/unused"}):
+            with self.assertRaisesRegex(RuntimeError, "requires greedy"):
+                backend._generate(1)
+        self.assertEqual(backend.pending, [10])
+        self.assertEqual(backend.tape, [])
+
+    def test_diagnostic_failure_after_prefill_invalidates_live_cache(self):
+        backend = self.backend()
+        backend.pending = [10]
+        probe = SimpleNamespace(prefilled=lambda *_: (_ for _ in ()).throw(RuntimeError("probe failure")))
+        def prefill(_language, _ids, cache, sampler):
+            cache[0].offset = 1
+            return None, mx.array([7], dtype=mx.uint32)
+        with patch.dict("os.environ", {"VEYSTRIX_LAYER_GATE_PROBE": "/unused"}), \
+                patch("models.flashnext.tests.bench.layer_gate_probe.Probe", return_value=probe), \
+                patch("models.flashnext.prefill.prefill_language", prefill), \
+                patch("models.flashnext.expert_cache.set_prefill_progress", lambda _callback: None):
+            with self.assertRaisesRegex(RuntimeError, "probe failure"):
+                backend._generate(1)
+        self.assertEqual(backend.tape, [10])
+        self.assertTrue(backend._replay_needed)
+        self.assertEqual(backend.cache[0].offset, 0)
+
     def test_loaded_session_clears_pending_replay(self):
         backend = self.backend()
         backend.tape = [1, 2, 3]

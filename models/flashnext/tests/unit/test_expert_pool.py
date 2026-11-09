@@ -135,5 +135,66 @@ class ConfigTests(unittest.TestCase):
                 self.assertIsNone(getattr(store, "_flashnext_expert_pool", None))
 
 
+class BufferedFillTests(unittest.TestCase):
+    """The opt-in buffered fill reads the same bytes through separate descriptors; the uncached ones stay for the ring."""
+
+    def _run(self, buffered):
+        mx.random.seed(11)
+        tensors = {}
+        for projection in ("gate_proj", "up_proj", "down_proj"):
+            for part, size in ROWS.items():
+                tensors[f"{PREFIX}.{projection}.{part}"] = mx.random.randint(0, 255, (5, size)).astype(mx.uint8)
+        with tempfile.TemporaryDirectory() as directory:
+            shard = "model-00001-of-00001.safetensors"
+            mx.save_safetensors(os.path.join(directory, shard), tensors)
+            with open(os.path.join(directory, "model.safetensors.index.json"), "w") as out:
+                json.dump({"weight_map": {key: shard for key in tensors}}, out)
+            store = SafeTensorStore(directory)
+            layout = get_slab_layout(32)
+            pool = expert_pool.ExpertPool(store, expert_pool.HEADER + 16 * layout.record_stride)
+            workers = ThreadPoolExecutor(4)
+            env = {expert_pool.BUFFERED_FILL_FLAG: "1"} if buffered else {expert_pool.BUFFERED_FILL_FLAG: "0"}
+            try:
+                with mock.patch.dict(os.environ, env):
+                    slots, misses = pool.assign(4, [3, 0, 4])
+                    for future in pool.fill(PREFIX, misses, workers.submit, chunk=2):
+                        future.result()
+                    data = {}
+                    for expert, slot in slots.items():
+                        base = expert_pool.HEADER + slot * layout.record_stride
+                        for projection in ("gate_proj", "up_proj", "down_proj"):
+                            for part, size in ROWS.items():
+                                start = base + layout.offset(projection, part)
+                                data[(expert, projection, part)] = bytes(pool.array[start:start + size])
+                    return data, dict(pool._fds), dict(pool._fill_fds)
+            finally:
+                workers.shutdown()
+                pool.close()
+                store.close()
+
+    def test_off_by_default(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(expert_pool.BUFFERED_FILL_FLAG, None)
+            self.assertFalse(expert_pool.buffered_fill_enabled())
+
+    def test_buffered_fill_is_byte_identical_and_uses_separate_descriptors(self):
+        reference, ref_uncached, ref_buffered = self._run(False)
+        candidate, cand_uncached, cand_buffered = self._run(True)
+        self.assertEqual(reference, candidate)
+        self.assertTrue(ref_uncached and not ref_buffered)       # reference: only the shared F_NOCACHE descriptors
+        self.assertTrue(cand_buffered and not cand_uncached)     # opt-in: own descriptors, shared ones untouched
+
+    def test_close_releases_both_descriptor_sets(self):
+        stride = get_slab_layout(32).record_stride
+        pool = expert_pool.ExpertPool(_Store(), expert_pool.HEADER + 16 * stride)
+        read, write = os.pipe()
+        os.close(write)
+        pool._fill_fds["x"] = read
+        pool.close()
+        self.assertEqual(pool._fill_fds, {})
+        with self.assertRaises(OSError):
+            os.fstat(read)
+
+
 if __name__ == "__main__":
     unittest.main()

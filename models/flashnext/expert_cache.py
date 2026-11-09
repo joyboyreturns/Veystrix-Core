@@ -263,6 +263,9 @@ def set_route_trace(callback=None) -> None:
 
 
 _PREFILL_RING = [None]
+# Layer-major prefill (``layer_major.ExpertWindow``): while set, a prompt-sized MoE call uses the layer's COMPLETE expert set,
+# read once per window, with the router's indices as-is. No router sync, no per-chunk read. None (the default) changes nothing.
+_LAYER_WINDOW = [None]
 
 
 def set_prefill_ring(ring) -> None:
@@ -1700,6 +1703,17 @@ class StreamingSwitchGLU(nn.Module):
     ) -> mx.array:
         self._last_fused_shared = False
         flat_input = x.reshape(-1, x.shape[-1])
+        window = _LAYER_WINDOW[0]
+        if window is not None and scores is None and self.layer_id >= 0 and flat_input.shape[0] > 8:
+            observer = _PREFILL_PROGRESS
+            if observer is not None:
+                observer(self.layer_id)             # cancellation point and watchdog tick, before the layer's read
+            weights = window.weights_for(self)
+            return self._issue(
+                mx.expand_dims(x, (-2, -3)), indices,
+                (self.gate_proj, self.up_proj, self.down_proj), indices.astype(mx.uint32), weights, allow_sort,
+                time.perf_counter() if _PROFILE else 0.0,
+            )
         x = mx.expand_dims(x, (-2, -3))
         handed = getattr(self, "_routed_host", None)
         routed = None

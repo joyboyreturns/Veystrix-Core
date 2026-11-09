@@ -33,6 +33,10 @@ import numpy as np
 from .slab_pack import get_slab_layout, libc_mlock
 
 SIZE_FLAG = "FLASHNEXT_EXPERT_POOL_GB"
+# Opt-in: decode-phase pool fills read through the file cache (no F_NOCACHE), so experts the pool evicted can still be
+# served from free file-cache memory (a second-level victim cache) at no reserved memory. The bytes and their order are
+# unchanged, so results are identical; the prefill ring keeps its own uncached descriptors. Unset/0 = the existing behaviour.
+BUFFERED_FILL_FLAG = "FLASHNEXT_EXPERT_POOL_BUFFERED_FILL"
 LOCK_FLAG = "FLASHNEXT_EXPERT_POOL_LOCK"
 HEADER = 4096
 SLOT_BIT = 0x80000000
@@ -50,6 +54,10 @@ _BUDGET_GB = [None]
 
 def set_budget_gb(value) -> None:
     _BUDGET_GB[0] = None if value is None else max(0.0, float(value))
+
+
+def buffered_fill_enabled() -> bool:
+    return os.environ.get(BUFFERED_FILL_FLAG, "0") == "1"
 
 
 def configured_gb() -> float:
@@ -93,6 +101,7 @@ class ExpertPool:
         self._slot_of: "OrderedDict[tuple, int]" = OrderedDict()
         self._free = list(range(self.slots - 1, -1, -1))
         self._fds: dict = {}
+        self._fill_fds: dict = {}
         self.hits = 0
         self.misses = 0
 
@@ -132,9 +141,23 @@ class ExpertPool:
             self._fds[shard] = fd
         return fd
 
+    def _fill_fd(self, shard: str) -> int:
+        """Descriptor for decode fills: the shared uncached one, or (opt-in) a separate buffered one."""
+        if not buffered_fill_enabled():
+            return self._fd(shard)
+        fd = self._fill_fds.get(shard)
+        if fd is None:
+            fd = os.open(os.path.join(self.store.dir, shard), os.O_RDONLY)
+            try:
+                fcntl.fcntl(fd, getattr(fcntl, "F_RDAHEAD", 45), 0)     # read-ahead stays off, as for the uncached ones
+            except OSError:
+                pass
+            self._fill_fds[shard] = fd
+        return fd
+
     def _fill_part(self, name, targets) -> None:
         ref = self.store.refs[name]
-        fd = self._fd(ref.shard)
+        fd = self._fill_fd(ref.shard)
         view = self._view
         size = ref.row_bytes
         for expert, base in targets:
@@ -156,9 +179,10 @@ class ExpertPool:
         return futures
 
     def close(self) -> None:
-        for fd in self._fds.values():
+        for fd in (*self._fds.values(), *self._fill_fds.values()):
             os.close(fd)
         self._fds.clear()
+        self._fill_fds.clear()
 
 
 AUTO_FLAG = "FLASHNEXT_EXPERT_POOL_AUTO"

@@ -115,7 +115,12 @@ def usage_counts(service, stats) -> dict:
     prefilled = int(getattr(stats, "prompt_tokens", 0) or 0)
     total = getattr(service, "last_prompt_tokens", None)
     total = max(int(total), prefilled) if isinstance(total, int) and not isinstance(total, bool) else prefilled
-    return {"prompt": total, "cached": total - prefilled, "completion": int(getattr(stats, "tokens", 0) or 0)}
+    # A request restored from an SSD snapshot reports the whole prompt as prefilled, so the live-state arithmetic alone says
+    # "0 cached". ``last_cached_tokens`` is the prefix the server matched (live state or snapshot) when it adopted the request.
+    matched = getattr(service, "last_cached_tokens", 0)
+    matched = int(matched) if isinstance(matched, int) and not isinstance(matched, bool) else 0
+    cached = min(total, max(total - prefilled, matched))
+    return {"prompt": total, "cached": cached, "completion": int(getattr(stats, "tokens", 0) or 0)}
 
 
 def chat_usage(service, stats) -> dict:
@@ -950,6 +955,7 @@ class ModelService:
         self.max_cold_prefill = max_cold_prefill
         self.max_incremental_prefill = max_incremental_prefill
         self.last_prompt_tokens = None
+        self.last_cached_tokens = 0
         self.last_divergence = None         # why the last request could not reuse the live tape (see _adopt)
         self.last_budget = None             # context_budget.Budget (as dict) of the last request that reached the model
         self.sessions = SessionRegistry()
@@ -1245,6 +1251,7 @@ class ModelService:
                     cache_outcome = "ERROR"
         needed_prefill = len(ids) - shared if extends else max(0, len(ids) - cached_tokens)
         matched_prefix = shared if extends else cached_tokens
+        self.last_cached_tokens = int(matched_prefix)
         had_state = self.warm_tokens() > 0 or bool(getattr(self, "session_hint", None))
         is_cold = (not extends) and (matched_prefix == 0) and (not had_state)
         self._check_prefill(

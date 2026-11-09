@@ -97,6 +97,9 @@ def _profiled_preadv(fd: int, buffers, offset: int) -> int:
     return count
 
 
+FLAG_UNCACHED_EXPERT_READS = "FLASHNEXT_UNCACHED_EXPERT_READS"   # opt-in: shard reads use F_NOCACHE for the whole run
+
+
 class TensorRef:
     __slots__ = ("shard", "dtype", "shape", "start", "row_bytes")
 
@@ -161,6 +164,18 @@ class SafeTensorStore:
         # Kernel read-ahead on the shard descriptors. Off measured 1.3% faster,
         # flat across miss rates, inside the band; the default stays on.
         self._rdahead = os.environ.get("FLASHNEXT_RDAHEAD", "1") != "0"
+        # Opt-in (FLASHNEXT_UNCACHED_EXPERT_READS=1): every shard descriptor is opened with F_NOCACHE for the whole run, and a
+        # later set_uncached_reads(False) (the memory manager's end-of-request restore) cannot turn it back off.
+        # "prefill" scopes it: uncached while a prefill runs, buffered again for decode (decode reuses experts, so the page
+        # cache helps it; a streaming prefill does not reuse them and only fills the cache).
+        mode = os.environ.get(FLAG_UNCACHED_EXPERT_READS, "0")
+        if mode not in ("0", "1", "prefill"):
+            raise ValueError(f"{FLAG_UNCACHED_EXPERT_READS} must be 0, 1 or prefill")
+        self._uncached_always = mode == "1"
+        self._uncached_prefill = mode == "prefill"
+        self._uncached = self._uncached_always
+        self._prefill_depth = 0                 # prefill-scoped uncached mode is reference counted (never overlaps in the server)
+        self._prefill_lock = threading.Lock()
         self._dlpack = os.environ.get("FLASHNEXT_DLPACK", "1") == "1"
         self._mmap_advice = os.environ.get("FLASHNEXT_MMAP_ADVICE", "random")
         self._pinned_rows: set = set()
@@ -386,6 +401,29 @@ class SafeTensorStore:
                     self._fds[shard] = fd
         return fd
 
+    def begin_prefill_reads(self) -> None:
+        """Prefill-scoped uncached mode: read experts with F_NOCACHE for the prefill that is starting."""
+        if getattr(self, "_uncached_prefill", False):
+            with self._prefill_guard():
+                self._prefill_depth += 1
+                if self._prefill_depth == 1:
+                    self.set_uncached_reads(True)
+
+    def end_prefill_reads(self) -> None:
+        """Prefill-scoped uncached mode: buffered reads again, so decode's reused experts can hit the page cache."""
+        if getattr(self, "_uncached_prefill", False) and not getattr(self, "_uncached_always", False):
+            with self._prefill_guard():
+                self._prefill_depth = max(0, self._prefill_depth - 1)
+                if self._prefill_depth == 0:
+                    self.set_uncached_reads(False)
+
+    def _prefill_guard(self):
+        lock = self.__dict__.get("_prefill_lock")
+        if lock is None:                        # stores built without __init__ (tests)
+            lock = self.__dict__.setdefault("_prefill_lock", threading.Lock())
+        self.__dict__.setdefault("_prefill_depth", 0)
+        return lock
+
     def set_uncached_reads(self, enabled: bool) -> int:
         """Opt-in (memory manager): read expert rows with F_NOCACHE so they do not fill the file cache.
 
@@ -394,9 +432,9 @@ class SafeTensorStore:
         Returns the number of descriptors that were open.
         """
         with self._fd_lock:
-            self._uncached = bool(enabled)
+            self._uncached = bool(enabled) or bool(getattr(self, "_uncached_always", False))
             for fd in list(self._fds.values()):
-                fcntl.fcntl(fd, fcntl.F_NOCACHE, 1 if enabled else 0)
+                fcntl.fcntl(fd, fcntl.F_NOCACHE, 1 if self._uncached else 0)
             return len(self._fds)
 
     def _mark_read(self, name: str, rows) -> None:

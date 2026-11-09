@@ -163,6 +163,24 @@ SETTINGS = (
         flag("FLASHNEXT_UNCACHE_WHEN_ELEVATED"), None, "FLASHNEXT_UNCACHE_WHEN_ELEVATED", __file__,
     ),
     Setting(
+        "layer-prefetch", ("FLASHNEXT_PREFILL_LAYER_PREFETCH",), "0",
+        choice(("0", "1"), "layer-prefetch"), "startup", "runtime", "research-only",
+        "flashnext", env("FLASHNEXT_PREFILL_LAYER_PREFETCH", "0"), None,
+        flag("FLASHNEXT_PREFILL_LAYER_PREFETCH"), None, "FLASHNEXT_PREFILL_LAYER_PREFETCH", __file__,
+    ),
+    Setting(
+        "uncached-expert-reads", ("FLASHNEXT_UNCACHED_EXPERT_READS",), "0",
+        choice(("0", "1", "prefill"), "uncached-expert-reads"), "startup", "runtime", "research-only",
+        "flashnext", env("FLASHNEXT_UNCACHED_EXPERT_READS", "0"), None,
+        lambda _backend: os.environ.get("FLASHNEXT_UNCACHED_EXPERT_READS", "0") != "0", None, "FLASHNEXT_UNCACHED_EXPERT_READS", __file__,
+    ),
+    Setting(
+        "pool-buffered-fill", ("FLASHNEXT_EXPERT_POOL_BUFFERED_FILL",), "0",
+        choice(("0", "1"), "pool-buffered-fill"), "startup", "runtime", "research-only",
+        "flashnext", env("FLASHNEXT_EXPERT_POOL_BUFFERED_FILL", "0"), None,
+        flag("FLASHNEXT_EXPERT_POOL_BUFFERED_FILL"), None, "FLASHNEXT_EXPERT_POOL_BUFFERED_FILL", __file__,
+    ),
+    Setting(
         "auto-memory-reclaim", ("FLASHNEXT_AUTO_MEMORY_RECLAIM",), "0",
         choice(("0", "1"), "auto-memory-reclaim"), "startup", "runtime", "research-only",
         "flashnext", env("FLASHNEXT_AUTO_MEMORY_RECLAIM", "0"), None,
@@ -200,5 +218,19 @@ SETTINGS = (
         choice(("0", "1"), "prefill-adaptive-chunks"), "startup", "runtime", "research-only",
         "flashnext", env("FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS", "0"), None,
         flag("FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS"), None, "FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS", __file__,
+    ),
+    Setting(
+        "prefill-order", ("FLASHNEXT_PREFILL_ORDER",), "chunk",
+        choice(("chunk", "layer"), "prefill-order"), "startup", "runtime", "research-only",
+        "flashnext", env("FLASHNEXT_PREFILL_ORDER", "chunk"), None,
+        lambda _backend: os.environ.get("FLASHNEXT_PREFILL_ORDER", "chunk") != "chunk", None,
+        "FLASHNEXT_PREFILL_ORDER", __file__,
+    ),
+    Setting(
+        "prefill-window-tokens", ("FLASHNEXT_PREFILL_WINDOW_TOKENS",), "8192",
+        integer, "startup", "runtime", "research-only",
+        "flashnext", env("FLASHNEXT_PREFILL_WINDOW_TOKENS", "8192"), None,
+        lambda _backend: "FLASHNEXT_PREFILL_WINDOW_TOKENS" in os.environ, None,
+        "FLASHNEXT_PREFILL_WINDOW_TOKENS", __file__,
     ),
 )

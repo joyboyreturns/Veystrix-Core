@@ -89,6 +89,9 @@ class Report:
     plan_edges: list = field(default_factory=list)      # internal chunk edges of this prompt's cold plan
     executed_edges: list = field(default_factory=list)  # internal chunk edges that really ran (differs if the guard re-planned)
     chunk_trace: list = field(default_factory=list)     # per-chunk measurements (seconds, peak increment, headroom)
+    execution_order: str = ""
+    execution_windows: list = field(default_factory=list)
+    execution_segments: list = field(default_factory=list)
     plan_deviated: bool = False                         # the live guard changed the plan mid-prefill
     stepdowns: list = field(default_factory=list)
 
@@ -117,7 +120,10 @@ class PrefixSession:
                 # The plan is a function of this budget and the candidate sizes; a different budget is a different plan.
                 plan["chunk_budget_mb"] = prefill_module.chunk_budget_bytes() / 1e6
                 plan["chunk_candidates"] = list(prefill_module.CANDIDATE_CHUNKS)
-            from . import quantized_kv
+            from . import layer_major, quantized_kv
+            # Layer-major execution is a different (versioned) execution plan until its states are proven equal on the real
+            # checkpoint: its snapshots never mix with chunk-major ones. Chunk-major keeps the existing key.
+            plan = {**plan, **({"prefill_order": layer_major.identity()} if layer_major.enabled() else {})}
             kv_part = quantized_kv.fingerprint_parts()      # bf16: empty (unchanged); else dtype, bits, group size
             fp = P.fingerprint(
                 **self._compatibility(), prefix_cache=P.FORMAT_VERSION,
@@ -301,8 +307,11 @@ class PrefixSession:
                 held.enter_context(store.lease(hit.chain))
             _, _, token = prefill_module.prefill_target(
                 language, suffix, cache, sampler=sampler, boundaries=boundaries,
-                on_boundary=snapshot, offset=offset, anchors=self.anchors(prompt), trace=trace)
+                on_boundary=snapshot, offset=offset, anchors=self.anchors(prompt), trace=trace,
+                required=tuple(x for x in (system,) if x is not None))
         report.executed_edges, report.chunk_trace = list(trace.edges), list(trace.chunks)
+        report.execution_order, report.execution_windows = trace.order, list(trace.windows)
+        report.execution_segments = list(trace.layers)
         report.plan_deviated, report.stepdowns = trace.deviated, list(trace.stepdowns)
         report.prefill_seconds = time.perf_counter() - began
         if restore:

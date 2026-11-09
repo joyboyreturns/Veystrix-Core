@@ -21,6 +21,16 @@ class UsageHelperTests(unittest.TestCase):
         service = SimpleNamespace(last_prompt_tokens=9569)
         self.assertEqual(server.usage_counts(service, stats(110, 7)), {"prompt": 9569, "cached": 9459, "completion": 7})
 
+    def test_snapshot_restore_counts_the_matched_prefix_as_cached(self):
+        # Real DSH run, 2026-11-09: a request restored from an SSD snapshot (matched 5,392 of 5,602 tokens) reported
+        # stats.prompt_tokens == 5,602 and so "0 cached" until the adopted prefix was taken into account.
+        service = SimpleNamespace(last_prompt_tokens=5602, last_cached_tokens=5392)
+        self.assertEqual(server.usage_counts(service, stats(5602)), {"prompt": 5602, "cached": 5392, "completion": 5})
+
+    def test_matched_prefix_never_exceeds_the_prompt(self):
+        service = SimpleNamespace(last_prompt_tokens=100, last_cached_tokens=500)
+        self.assertEqual(server.usage_counts(service, stats(10))["cached"], 100)
+
     def test_unknown_prompt_length_reports_no_cache(self):
         self.assertEqual(server.usage_counts(SimpleNamespace(), stats(7))["cached"], 0)
         self.assertEqual(server.usage_counts(SimpleNamespace(last_prompt_tokens=None), stats(7))["prompt"], 7)

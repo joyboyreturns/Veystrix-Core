@@ -55,6 +55,19 @@ class Base(unittest.TestCase):
 
 
 class WorkflowTests(Base):
+    def test_layer_order_report_records_the_executed_windows(self):
+        from models.flashnext import layer_major
+
+        with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_ORDER": "layer"}), \
+                mock.patch.object(layer_major, "window_tokens", return_value=128):
+            model, session = self.engine()
+            _, _, report = self.go(model, session, self.system + self.suffix_a)
+        self.assertEqual(report.execution_order, "layer-major-v1/w128")
+        self.assertTrue(report.execution_windows)
+        self.assertTrue(all(segment["execution"] == "layer" for segment in report.execution_segments))
+        self.assertEqual(report.execution_windows[0][0], 0)
+        self.assertEqual(report.execution_windows[-1][1], len(self.system + self.suffix_a))
+
     def test_cold_prompt_snapshots_at_the_system_boundary_and_hits_nothing(self):
         model, session = self.engine()
         _, _, report = self.go(model, session, self.system + self.suffix_a)

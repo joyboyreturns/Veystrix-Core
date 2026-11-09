@@ -1,6 +1,6 @@
 # Automatic cache recovery (`FLASHNEXT_AUTO_PURGE=1`)
 
-Opt-in, off by default, works in CHAT and AGENTIC (same process path). Implemented in `models/flashnext/purge_recovery.py`.
+On by default for flashnext launches through `macqwen/cli.py` (`--no-auto-purge` or `FLASHNEXT_AUTO_PURGE=0` turns it off); the engine module itself stays off unless the flag is set. Works in CHAT and AGENTIC (same process path). Implemented in `models/flashnext/purge_recovery.py`.
 It exists so a blocked start (or a squeezed idle engine) recovers without a password prompt or a manual `sudo purge`.
 It is **not** a periodic purge: `FLASHNEXT_PURGE_CHECK_SECONDS` (default 5) is how often memory is *looked at*.
 

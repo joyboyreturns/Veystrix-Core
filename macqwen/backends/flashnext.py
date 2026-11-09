@@ -559,6 +559,11 @@ class FlashNextBackend(Conversation):
 
                 def prefilled():
                     trace_phase.set_phase("decode")      # the safety trace labels each stage of the request
+                    try:
+                        from models.flashnext import decode_profile
+                        decode_profile.begin()           # opt-in (FLASHNEXT_DECODE_PROFILE_DIR); never raises
+                    except Exception:
+                        pass
                     if on_prefilled is not None:
                         on_prefilled()
 
@@ -567,6 +572,11 @@ class FlashNextBackend(Conversation):
                     return self._generate(max_tokens, out, prefilled, on_prefill_progress,
                                           on_decode_token, should_cancel)
                 finally:
+                    try:
+                        from models.flashnext import decode_profile
+                        decode_profile.finish()          # writes the decode profile when one was started
+                    except Exception:
+                        pass
                     try:
                         try:
                             if os.environ.get("FLASHNEXT_CHAT_GUARD") == "1":
@@ -854,6 +864,13 @@ class FlashNextBackend(Conversation):
         ids = mx.array(prompt)[None]
         prompt_tokens = int(ids.shape[1])
         fresh_for_pool = decoder is None and (self._replay_needed or not self.tape) and self.cache_tokens == 0
+        gate_probe = None
+        if os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
+            from models.flashnext.tests.bench.layer_gate_probe import Probe
+
+            if decoder is not None or not getattr(self.sampling, "greedy", False):
+                raise RuntimeError("layer gate requires greedy target-model decoding")
+            gate_probe = Probe(os.environ["VEYSTRIX_LAYER_GATE_PROBE"])
         self.tape.extend(self.pending)
         self.pending = []
         self._replay_needed = False
@@ -923,9 +940,19 @@ class FlashNextBackend(Conversation):
         except GenerationCancelled:
             preserve_or_replay()
             raise
+        except Exception:
+            if gate_probe is not None:
+                self._mark_replay_needed()
+            raise
         finally:
             set_prefill_progress(None)
         prefill_seconds = time.perf_counter() - prefill_began
+        if gate_probe is not None:
+            try:
+                gate_probe.prefilled(self, token, prefill_seconds)
+            except Exception:
+                self._mark_replay_needed()
+                raise
         if on_prefill_progress is not None:
             on_prefill_progress(prompt_tokens, prompt_tokens)
         if on_prefilled is not None:
@@ -1059,5 +1086,11 @@ class FlashNextBackend(Conversation):
             pinned_bytes=self.routing.pinned_bytes,
             pinned_signature=self.routing.pinned_signature,
         )
+        if gate_probe is not None:
+            try:
+                gate_probe.finished(produced, stats)
+            except Exception:
+                self._mark_replay_needed()
+                raise
         text = "".join(pieces)
         return text, stats

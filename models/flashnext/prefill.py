@@ -1,6 +1,7 @@
 """Flash-Next prompt ingestion without the interactive chat."""
 from __future__ import annotations
 
+import functools
 import os
 import time
 from dataclasses import dataclass, field
@@ -196,6 +197,7 @@ def _prefill_target(
     want_hidden: bool = False,
     sampler=None,
     total_tokens: int | None = None,
+    forward=None,
 ):
     """Push one target prompt through the model and seed its next token.
 
@@ -228,7 +230,8 @@ def _prefill_target(
     # keyword absent for ordinary large prefills, which use the fast path.
     if want_hidden:
         call["capture_layer_ids"] = []
-    output = language(ids, **call)
+    # ``forward`` replaces the model call when the layers already ran (layer-major order): it returns the same output object.
+    output = language(ids, **call) if forward is None else forward(**call)
     logits = output.logits if full_logits else None
     hidden_states = output.hidden_states if (want_hidden or not full_logits) else None
 
@@ -238,6 +241,9 @@ def _prefill_target(
             mx.eval(hidden_states)
         token = pick(logits[:, -1, :])
         mx.eval(token)
+        if os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
+            from models.flashnext.tests.bench.layer_gate_probe import record_logits
+            record_logits(logits[:, -1, :])
         release_cache = int(logits.nbytes) >= PREFILL_RELEASE_BYTES
         if release_cache or (not short_prompt and PREFILL_CLEAR_CACHE):
             mx.clear_cache()
@@ -251,8 +257,16 @@ def _prefill_target(
                 last_hidden
             ).reshape(-1).astype(mx.uint32)
         else:
-            token = pick(language.speculative_logits_from_hidden(last_hidden))
+            final_logits = language.speculative_logits_from_hidden(last_hidden)
+            token = pick(final_logits)
         mx.eval(token, [entry.state for entry in cache])
+        if os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
+            if sampler is None:
+                raise RuntimeError("layer gate requires the actual sampler logits")
+            from models.flashnext.tests.bench.layer_gate_probe import record_logits
+            record_logits(final_logits)
+        if sampler is not None:
+            del final_logits
         # A short prompt leaves no large temporaries. Keep the allocator's
         # buffer cache, as the full-logit short path always has.
         if PREFILL_CLEAR_CACHE and not short_prompt:
@@ -296,13 +310,16 @@ class PlanTrace:
     stepdowns: list = field(default_factory=list)
     deviated: bool = False
     throttles: list = field(default_factory=list)      # bounded waits at chunk edges while the memory controller was ELEVATED
+    order: str = ""                                    # execution-plan identity of a layer-major run ("" = chunk-major)
+    windows: list = field(default_factory=list)        # layer-major windows (absolute start, end)
+    layers: list = field(default_factory=list)         # per-window layer-major measurements
 
     def edges_before(self, position: int) -> tuple:
         return tuple(e for e in self.edges if e < position)
 
     def as_dict(self) -> dict:
         return {k: getattr(self, k) for k in ("policy", "cap", "budget_mb", "planned_edges", "edges", "chunks",
-                                              "stepdowns", "deviated", "throttles")}
+                                              "stepdowns", "deviated", "throttles", "order", "windows", "layers")}
 
 
 def _active_memory():
@@ -380,7 +397,7 @@ def _log_chunk(start, end, seconds, data, trace=None) -> None:
 
 
 def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundaries, on_boundary, offset,
-                anchors=None, trace=None, scheduler=None):
+                anchors=None, trace=None, scheduler=None, required=()):
     """The prefill body. One call unless chunking or boundaries split it.
 
     With a ``scheduler`` (budgeted policy + FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS) the live guard may re-plan the REST of the
@@ -400,6 +417,10 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
         result = _prefill_target(language, ids, cache, want_logits, want_hidden, sampler)
         _measured(trace, offset, offset + total, time.perf_counter() - began, active)
         return result
+    from models.flashnext import layer_major
+
+    if layer_major.enabled() and not (want_logits or want_hidden):
+        return _run_layer_major(language, ids, cache, sampler, boundaries, on_boundary, offset, spans, anchors, required, trace)
     absolute_end = offset + total
     wanted = tuple(boundaries if anchors is None else anchors)
     boundary_set = set(boundaries)
@@ -446,7 +467,157 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
     return result
 
 
-def prefill_target(
+def _head_output(language, out, call):
+    """What ``LanguageModel.__call__`` returns after its layers: the mixed hidden state, plus logits unless skipped."""
+    from types import SimpleNamespace
+
+    if call.get("skip_logits"):
+        logits = None
+    elif language.args.tie_word_embeddings:
+        logits = language.model.embed_tokens.as_linear(out)
+    else:
+        logits = language.lm_head(out)
+    return SimpleNamespace(logits=logits, hidden_states=[out] if call.get("return_hidden") else None)
+
+
+def _run_layer_major(language, ids, cache, sampler, boundaries, on_boundary, offset, spans, anchors, required, trace):
+    """Opt-in layer-major body, with the same chunk plan as the reference.
+
+    Windows cut at the system boundary and preferably at message anchors.
+    Real-checkpoint exactness and traffic savings remain unverified.
+    """
+    from models.flashnext import expert_cache, layer_major
+
+    total = int(ids.shape[1])
+    absolute_end = offset + total
+    windows = layer_major.plan_windows(spans, offset, layer_major.window_tokens(), required=required,
+                                       anchors=tuple(anchors if anchors is not None else boundaries))
+    if trace is not None:
+        trace.planned_edges = [offset + e for _, e in spans[:-1]]
+        trace.order = layer_major.identity()
+        trace.windows = [(offset + w[0][0], offset + w[-1][1]) for w in windows]
+    window = layer_major.ExpertWindow(ring=expert_cache._PREFILL_RING[0])
+    boundary_set = set(boundaries)
+
+    def checkpoint(_layer):
+        waited = memory_controller.checkpoint("prefill-layer")
+        if waited["waited_s"] > 0 and trace is not None:
+            trace.throttles.append({"layer": _layer, **waited})
+
+    result = None
+    for number, group in enumerate(windows):
+        last = number == len(windows) - 1
+        tail = None
+        if last and not (layer_major.hybrid_enabled() and group[-1][1] - group[0][0] <= layer_major.HYBRID_SMALL_WINDOW_TOKENS):
+            group, tail = layer_major.peel_tail(group)      # a trailing tiny chunk runs chunk-major after the window
+        start, end = group[0][0], group[-1][1]
+        began, active = time.perf_counter(), _active_memory()
+        relative = [(a - start, b - start) for a, b in group]
+        # A short window may touch far fewer than all 512 experts. In the
+        # explicit hybrid experiment, retain its original chunk shapes and
+        # route each chunk through the reference path instead of eagerly
+        # staging the full layer. The small-window threshold is a heuristic,
+        # not a claim of measured I/O savings.
+        use_chunk = layer_major.hybrid_enabled() and end - start <= layer_major.HYBRID_SMALL_WINDOW_TOKENS
+        report = None
+        if use_chunk:
+            for group_index, (a, b) in enumerate(group):
+                final_chunk = last and group_index == len(group) - 1
+                if final_chunk:
+                    result = _prefill_target(language, ids[:, a:b], cache, False, False, sampler,
+                                             total_tokens=absolute_end)
+                else:
+                    _prefill_chunk(language, ids[:, a:b], cache)
+                    if trace is not None:
+                        trace.edges.append(offset + b)
+                    if on_boundary is not None and offset + b in boundary_set:
+                        on_boundary(offset + b)
+                    waited = memory_controller.checkpoint("prefill-chunk")
+                    if waited["waited_s"] > 0 and trace is not None:
+                        trace.throttles.append({"at": offset + b, **waited})
+                    _uncache_reads_when_elevated(language, trace)
+        else:
+            states, report = layer_major.run_window(language, ids[:, start:end], cache, relative, offset + start,
+                                                    window=window, checkpoint=checkpoint)
+        seconds = time.perf_counter() - began
+        if trace is not None:
+            if not use_chunk:
+                trace.edges.extend(offset + b for _, b in group if offset + b < absolute_end)
+            item = {"start": offset + start, "end": offset + end, "seconds": round(seconds, 2),
+                    "execution": "chunk" if use_chunk else "layer"}
+            if report is not None:
+                item.update(expert_gb=round(report.expert_bytes / 1e9, 2),
+                            read_seconds=round(report.read_seconds, 2),
+                            ring_layers=report.ring_layers, fallback_layers=report.fallback_layers)
+                if report.layer_seconds:
+                    # Trace only (no extra synchronisation): wall seconds per layer for this window, and which layers are attention.
+                    item["layer_seconds"] = list(report.layer_seconds)
+                    if report.layer_memory_mb:
+                        item["layer_memory_mb"] = list(report.layer_memory_mb)
+                    if report.layer_reads:
+                        item["layer_reads"] = list(report.layer_reads)
+                    if report.chunk_seconds:
+                        item["chunk_seconds"] = [list(row) for row in report.chunk_seconds]
+                    if report.chunk_memory_mb:
+                        item["chunk_memory_mb"] = [list(row) for row in report.chunk_memory_mb]
+                    item["attention_layers"] = [i for i, layer in enumerate(language.model.layers) if not layer.is_linear]
+            trace.layers.append(item)
+        _log_chunk(offset + start, offset + end, seconds, None)
+        _measured(trace, offset + start, offset + end, seconds, active)
+        if last and tail is not None:
+            states = None
+            if on_boundary is not None and (offset + end) in boundary_set:
+                on_boundary(offset + end)
+            tail_began, tail_active = time.perf_counter(), _active_memory()
+            result = _prefill_target(language, ids[:, tail[0]:tail[1]], cache, False, False, sampler,
+                                     total_tokens=absolute_end)
+            tail_seconds = time.perf_counter() - tail_began
+            if trace is not None:
+                trace.layers.append({"start": offset + tail[0], "end": offset + tail[1], "seconds": round(tail_seconds, 2),
+                                     "execution": "chunk"})
+            _log_chunk(offset + tail[0], offset + tail[1], tail_seconds, None)
+            _measured(trace, offset + tail[0], offset + tail[1], tail_seconds, tail_active)
+            break
+        if last:
+            if not use_chunk:
+                out = language.model.hyper_connection_mixer(states[-1])
+                states = None
+                result = _prefill_target(language, ids[:, group[-1][0]:group[-1][1]], cache, False, False, sampler,
+                                         total_tokens=absolute_end, forward=lambda **call: _head_output(language, out, call))
+            break
+        if not use_chunk:
+            states = None
+        if not use_chunk and on_boundary is not None and (offset + end) in boundary_set:
+            on_boundary(offset + end)
+        if not use_chunk:
+            waited = memory_controller.checkpoint("prefill-window")
+            if waited["waited_s"] > 0 and trace is not None:
+                trace.throttles.append({"at": offset + end, **waited})
+    return result
+
+
+def _scoped_uncached_reads(language, begin: bool) -> None:
+    """``FLASHNEXT_UNCACHED_EXPERT_READS=prefill``: uncached expert reads for the prefill only. Never raises."""
+    try:
+        from models.flashnext import pool_lifecycle
+
+        store = pool_lifecycle.store_of(language)
+        if store is not None:
+            (store.begin_prefill_reads if begin else store.end_prefill_reads)()
+    except Exception:
+        pass
+
+
+def prefill_target(language, ids, cache, *args, **kwargs):
+    """See ``_prefill_target_checked``; this only scopes the opt-in uncached expert reads to the prefill."""
+    _scoped_uncached_reads(language, True)
+    try:
+        return _prefill_target_checked(language, ids, cache, *args, **kwargs)
+    finally:
+        _scoped_uncached_reads(language, False)
+
+
+def _prefill_target_checked(
     language,
     ids,
     cache,
@@ -458,8 +629,11 @@ def prefill_target(
     offset: int = 0,
     anchors=None,
     trace=None,
+    required=(),
 ):
     """Push one target prompt through the model and seed its next token.
+
+    ``required`` (layer-major order only) are absolute positions a window must end at, normally the system-prompt boundary.
 
     ``trace`` (a ``PlanTrace``) is filled with the chunks that really ran; see its docstring.
 
@@ -493,7 +667,7 @@ def prefill_target(
     def body():
         return _run_chunks(language, ids, cache, want_logits, want_hidden, sampler,
                            tuple(boundaries), on_boundary, int(offset),
-                           None if anchors is None else tuple(anchors), trace, scheduler)
+                           None if anchors is None else tuple(anchors), trace, scheduler, tuple(required))
 
     if not ring_on and not cap_on:
         return body()
@@ -507,3 +681,8 @@ def prefill_target(
                 mx.eval([item for item in result if item is not None])
                 prefill_ring.fence()
             return result
+
+
+# The wrapper above is defined before its target, so it takes the target's signature, docstring and annotations here
+# (inspect.signature follows __wrapped__; its name stays prefill_target). Behaviour is unchanged.
+functools.update_wrapper(prefill_target, _prefill_target_checked, assigned=("__doc__", "__annotations__"), updated=())

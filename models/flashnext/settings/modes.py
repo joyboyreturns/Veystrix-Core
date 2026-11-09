@@ -84,6 +84,11 @@ EXPERIMENTAL_OFF = {
     "FLASHNEXT_PREFIX_PROFILES": "0",
     "FLASHNEXT_AUTO_MEMORY_RECLAIM": "0",
     "FLASHNEXT_SHORT_PREFILL_POOL_REUSE": "0",
+    "FLASHNEXT_PREFILL_ORDER": "chunk",             # chunk-major is the reference order; layer-major is an explicit opt-in below
+    "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "0",
+    "FLASHNEXT_PREFILL_LAYER_PREFETCH": "0",        # layer prefetch overlaps reads with compute; explicit opt-in below
+    "FLASHNEXT_UNCACHED_EXPERT_READS": "0",         # buffered reads are the reference; uncached reads are an explicit opt-in below
+    "FLASHNEXT_EXPERT_POOL_BUFFERED_FILL": "0",     # decode pool fills bypass the file cache (F_NOCACHE); buffered fills are an opt-in below
 }
 # Offline-tested only. Each is explicit (--enable NAME), never a default, and labelled in the banner.
 EXPERIMENTAL = {
@@ -91,6 +96,28 @@ EXPERIMENTAL = {
                       "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB": "1000", "FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS": "1"},
                      "deterministic memory-budgeted chunk plan (2048/1024/512/256) with live step-down and a 'long' "
                      "admission tier (16K context, 14K cold prefill); offline-tested only, no real run above 2K"),
+    "layer-major": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "8192"},
+                    "layer-major prefill: each window of up to 8,192 tokens reads a layer's experts once for all its chunks "
+                    "(about 3x less SSD traffic at 16K); snapshots only at window ends; offline-tested bit-identical on a "
+                    "small model, no real-checkpoint run yet (docs/flashnext/architecture-overhaul.md)"),
+    "layer-major-4k": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096"},
+                       "experimental layer-major prefill with a 4,096-token window; real-checkpoint validation pending"),
+    "layer-major-hybrid-4k": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096",
+                              "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "1"},
+                             "experimental 4K layer-major windows with chunk-major execution for windows up to 2K; unmeasured"),
+    "layer-prefetch": ({"FLASHNEXT_PREFILL_LAYER_PREFETCH": "1"},
+                       "layer-major only: read layer l+1's experts on the worker threads while layer l computes (about +1.5 GB "
+                       "resident, same bytes so same results); the cost model predicts up to ~1.8x over serial layer-major; "
+                       "unmeasured on the real checkpoint"),
+    "uncached-reads": ({"FLASHNEXT_UNCACHED_EXPERT_READS": "1"},
+                       "read every expert row with F_NOCACHE so streaming does not fill the file cache or push the server's own "
+                       "pages into the compressor; same bytes in the same order, so results are identical; speed effect unmeasured"),
+    "uncached-prefill-reads": ({"FLASHNEXT_UNCACHED_EXPERT_READS": "prefill"},
+                               "F_NOCACHE expert reads during prefill only; decode goes back to buffered reads so reused experts can "
+                               "hit the page cache (the all-phases uncached mode measured decode 1.1-2.0 tok/s); unmeasured"),
+    "pool-buffered-fill": ({"FLASHNEXT_EXPERT_POOL_BUFFERED_FILL": "1"},
+                           "decode expert-pool fills read through the file cache so free memory acts as a second-level cache for "
+                           "experts the pool evicted; same bytes, same results; replay predicts fewer SSD bytes per token; unmeasured live"),
     "kv-affine8": ({"FLASHNEXT_KV_CACHE_DTYPE": "affine8"},
                    "8-bit affine attention KV (about 1.9x smaller K/V); saves ~0.15 GB at 12K; quality on the real "
                    "checkpoint unmeasured, never mixed with bf16 snapshots"),
@@ -107,7 +134,7 @@ EXPERIMENTAL = {
                          "reuse resident pool experts in short prefills; replay predicts under 5% hits"),
 }
 OWNED = frozenset({*COMMON, *PREFILL_OFF, *AGENTIC_PREFILL, *EXPERIMENTAL_OFF,
-                   "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB", "FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_BITS",
+                   "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB", "FLASHNEXT_PREFILL_WINDOW_TOKENS", "FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_BITS",
                    "FLASHNEXT_EXPERT_POOL_GB", "FLASHNEXT_EXPERT_POOL_AUTO", "FLASHNEXT_PREFIX_CACHE_DIR", "FLASHNEXT_PREFIX_CACHE_RAM_GB",
                    "FLASHNEXT_PREFIX_CACHE_DISK_GB", "FLASHNEXT_PREFIX_PROFILES_MAX_GB",
                    "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB", "FLASHNEXT_WATCHDOG"})
@@ -197,6 +224,12 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
     for name in enable:
         if name not in EXPERIMENTAL:
             raise ModeError(f"unknown experimental feature {name!r}; choose from {', '.join(EXPERIMENTAL)}")
+    if len({"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable)) > 1:
+        raise ModeError("choose only one layer-major window size")
+    if {"uncached-reads", "uncached-prefill-reads"} <= set(enable):
+        raise ModeError("choose one of uncached-reads (all phases) and uncached-prefill-reads (prefill only)")
+    if "layer-prefetch" in enable and not {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
+        raise ModeError("layer-prefetch needs a layer-major mode (layer-major, layer-major-4k or layer-major-hybrid-4k)")
     if mode == CHAT and "prefix-profiles" in enable:
         raise ModeError("prefix-profiles needs the AGENTIC prefix cache")
     if mode == CHAT and "long-context" in enable:

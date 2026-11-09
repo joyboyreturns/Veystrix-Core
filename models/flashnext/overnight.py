@@ -38,7 +38,7 @@ from collections import deque
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-LOG_DIR = Path(os.path.expanduser("~/.flashnext/logs"))
+LOG_DIR = Path(os.path.expanduser(os.environ.get("VEYSTRIX_SUPERVISOR_LOG_DIR", "~/.flashnext/logs")))
 DEFAULT_CHECKPOINT = "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
 GUARD_EXIT = 75
 ADMISSION_EXIT = 69
@@ -54,6 +54,14 @@ def server_command(args) -> list:
                "--context-limit", "262144",
                "--max-cold-prefill", "32768", "--max-incremental-prefill", "32768",
                "--model", "flashnext", "--checkpoint", args.checkpoint]
+    for name in getattr(args, "enable", None) or ():
+        command += ["--enable", name]          # an explicit experimental option, e.g. layer-major
+    if getattr(args, "prefix_dir", None):
+        command += ["--prefix-dir", args.prefix_dir]
+    if getattr(args, "preferences_file", None):
+        command += ["--preferences-file", args.preferences_file]
+    if getattr(args, "no_auto_purge", False):
+        command.append("--no-auto-purge")
     return command
 
 
@@ -418,7 +426,12 @@ def build_parser():
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=int(os.environ.get("VEYSTRIX_PORT", "8080")))
     p.add_argument("--pool-gb", default=os.environ.get("VEYSTRIX_POOL_GB", "0"))
+    p.add_argument("--enable", action="append", default=[], metavar="NAME",
+                   help="pass an experimental option to chat.sh (see its --help), e.g. --enable layer-major")
     p.add_argument("--checkpoint", default=os.environ.get("VEYSTRIX_CHECKPOINT", DEFAULT_CHECKPOINT))
+    p.add_argument("--prefix-dir", help="separate prefix-cache directory (default: normal AGENTIC cache)")
+    p.add_argument("--preferences-file", help="preferences file for the child server")
+    p.add_argument("--no-auto-purge", action="store_true", help="disable automatic file-cache purge")
     p.add_argument("--max-restarts", type=int, default=8)
     p.add_argument("--window-minutes", type=float, default=30.0)
     p.add_argument("--max-guard-stops", type=int, default=4)
