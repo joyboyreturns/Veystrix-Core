@@ -200,6 +200,7 @@ class ExpertWindow:
         self._prefetched = {}                   # layer_id -> (projections, pending reads); at most two layers ahead
         self.stats = {"layers": 0, "bytes": 0, "ring_layers": 0, "fallback_layers": 0, "read_seconds": 0.0,
                       "prefetch_layers": 0, "prefetch_used": 0}
+        self._staged = {}                       # layer_id -> prefill_ring.Staging begun on the second ring half
         self.layer_reads = []                   # trace only: [layer_id, read seconds, MLX active MB before, after]
 
     def prefetch(self, glu) -> bool:
@@ -212,6 +213,8 @@ class ExpertWindow:
         ``l`` the window holds layer ``l`` (queued earlier, consumed by its MoE call) and layer ``l+1`` (queued now): never
         more than two, never the same layer twice.
         """
+        if glu is not None and self.ring is not None and prefetch_enabled():
+            return self._prefetch_ring(glu)
         if (glu is None or self.ring is not None or not prefetch_enabled() or getattr(glu, "layer_id", -1) < 0
                 or glu.layer_id in self._prefetched or len(self._prefetched) >= 2):
             return False
@@ -226,8 +229,30 @@ class ExpertWindow:
         self.stats["prefetch_layers"] += 1
         return True
 
+    def _prefetch_ring(self, glu) -> bool:
+        """Begin the next layer's read on a free ring half (two-half ring only; at most two begun stagings).
+
+        The half is FILLING until ``weights_for`` consumes it, so the layer being computed never shares memory with the
+        reads. The bytes, their order and the destination layout are those of the blocking ``stage``: results are identical."""
+        layer = getattr(glu, "layer_id", -1)
+        ring = self.ring
+        # At the start of layer l+1 its own staging is still waiting to be consumed, and layer l+2 may begin on the half layer
+        # l just released: at most two begun stagings (never more than the ring has halves; ``begin_fill`` refuses otherwise).
+        if layer < 0 or layer in self._staged or len(self._staged) >= 2 or not getattr(ring, "overlap_capable", False):
+            return False
+        experts = list(range(glu.gate_proj.num_experts))
+        staging = ring.stage_begin(glu.gate_proj.cache.store, glu.gate_proj.cache.prefix.rsplit(".", 1)[0], experts)
+        if staging is None:
+            return False
+        self._staged[layer] = staging
+        self.stats["prefetch_layers"] += 1
+        return True
+
     def drain(self) -> None:
         """Wait for any queued prefetch to stop writing, then drop it. Safe to call at any time and on every exit path."""
+        staged, self._staged = getattr(self, "_staged", None) or {}, {}
+        for staging in staged.values():
+            self.ring.cancel_stage(staging)     # waits for its workers, then releases the half; never raises
         held, self._prefetched = self._prefetched, {}
         if not held:
             return
@@ -271,7 +296,13 @@ class ExpertWindow:
             self.stats["fallback_layers"] += 1
             self.stats["prefetch_used"] += 1
         elif self.ring is not None:
-            weights = self.ring.stage(glu.gate_proj.cache.store, glu.gate_proj.cache.prefix.rsplit(".", 1)[0], experts)
+            staging = self._staged.pop(layer, None)
+            if staging is not None:
+                weights = self.ring.stage_finish(staging)           # the read began a layer earlier; waits only for its tail
+                if weights is not None:
+                    self.stats["prefetch_used"] += 1
+            if weights is None:
+                weights = self.ring.stage(glu.gate_proj.cache.store, glu.gate_proj.cache.prefix.rsplit(".", 1)[0], experts)
             if weights is not None:
                 self.stats["ring_layers"] += 1
         if weights is None:

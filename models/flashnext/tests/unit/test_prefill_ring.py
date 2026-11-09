@@ -300,6 +300,138 @@ class FallbackTests(RingCase):
             self.assertIsNone(ring.stage(self.store, prefix_of(1), []))
 
 
+class OverlapStagingTests(RingCase):
+    """Two-half ring for layer-major prefetch: the next layer's rows are read on the other half while one computes."""
+
+    extra_env = {"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_LAYER_PREFETCH": "1",
+                 "FLASHNEXT_PREFILL_RING_EXPERTS": "12"}
+
+    def rows_equal(self, weights, prefix, wanted):
+        for projection, parts in zip(PROJECTIONS, weights):
+            for kind, array in zip(prefill_ring.KINDS, parts):
+                name = f"{prefix}.{projection}.{kind}"
+                expected = self.store.rows_np(name, wanted)
+                got = np.array(array.view(mx.uint16) if kind != "weight" else array)
+                self.assertEqual(got.tobytes(), expected.tobytes(), name)
+
+    def test_two_halves_only_when_layer_major_prefetch_is_on(self):
+        with prefill_ring.session(self.language, 1024) as ring:
+            self.assertIsNotNone(ring, prefill_ring.LAST_REASON[0])
+            self.assertEqual(ring.ring.halves, 2)
+            self.assertTrue(ring.overlap_capable)
+        for env in ({"FLASHNEXT_PREFILL_LAYER_PREFETCH": "0"}, {"FLASHNEXT_PREFILL_ORDER": "chunk"}):
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(prefill_ring.ring_halves(), 1)
+        self.assertRestored()
+
+    def test_overlapped_staging_is_byte_identical_and_uses_the_other_half(self):
+        wanted = list(range(12))
+        with prefill_ring.session(self.language, 1024) as ring:
+            first = ring.stage_begin(self.store, prefix_of(1), wanted)
+            self.assertIsNotNone(first)
+            w1 = ring.stage_finish(first)                       # layer 1 is computing on half A
+            self.rows_equal(w1, prefix_of(1), wanted)
+            second = ring.stage_begin(self.store, prefix_of(2), wanted)     # layer 2 reads on half B meanwhile
+            self.assertIsNotNone(second)
+            self.assertNotEqual(first.lease.index, second.lease.index)
+            self.assertEqual(sorted(h.state for h in ring.ring._halves), ["computing", "filling"])
+            self.assertIsNone(ring.stage_begin(self.store, prefix_of(1), wanted))   # no free half: no third staging
+            self.assertEqual(ring.stats()["fallback_busy"], 1)
+            ring._retire()                                      # layer 1's GPU work is done
+            w2 = ring.stage_finish(second)
+            self.rows_equal(w2, prefix_of(2), wanted)
+            self.assertEqual(ring.stats()["staged_layers"], 2)
+        self.assertRestored()
+
+    def test_cancel_waits_for_the_workers_and_frees_the_half(self):
+        with prefill_ring.session(self.language, 1024) as ring:
+            staging = ring.stage_begin(self.store, prefix_of(1), list(range(12)))
+            self.assertIsNotNone(staging)
+            ring.cancel_stage(staging)
+            self.assertTrue(all(f.done() for f in staging.futures))
+            self.assertEqual([h.state for h in ring.ring._halves], [FREE, FREE])
+        self.assertRestored()
+
+    def test_a_failed_read_at_finish_releases_the_half_and_reports_it(self):
+        with prefill_ring.session(self.language, 1024) as ring:
+            with mock.patch.object(prefill_ring, "_read_rows", side_effect=OSError("boom")):
+                staging = ring.stage_begin(self.store, prefix_of(1), list(range(12)))
+                self.assertIsNotNone(staging)
+                self.assertIsNone(ring.stage_finish(staging))   # the caller then reads the layer the ordinary way
+            self.assertIn("boom", ring.stats()["last_error"])
+            self.assertEqual(ring.stats()["fallback_error"], 1)
+            self.assertEqual([h.state for h in ring.ring._halves], [FREE, FREE])
+        self.assertRestored()
+
+    def test_one_half_ring_never_overlaps(self):
+        with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_LAYER_PREFETCH": "0"}):
+            with prefill_ring.session(self.language, 1024) as ring:
+                self.assertEqual(ring.ring.halves, 1)
+                self.assertFalse(ring.overlap_capable)
+                self.assertIsNone(ring.stage_begin(self.store, prefix_of(1), [0, 1]))
+        self.assertRestored()
+
+    def test_window_prefetches_the_next_layer_and_consumes_it_exactly(self):
+        from models.flashnext import layer_major
+
+        wanted = list(range(12))
+        with prefill_ring.session(self.language, 1024) as ring:
+            window = layer_major.ExpertWindow(ring=ring)
+            self.assertTrue(window.prefetch(self.layers[1]))             # layer id 2, begun a layer early
+            self.assertFalse(window.prefetch(self.layers[1]))            # never the same layer twice
+            weights = window.weights_for(self.layers[1])
+            self.rows_equal(weights, prefix_of(2), wanted)
+            self.assertEqual(window.stats["prefetch_used"], 1)
+            self.assertEqual(window.stats["ring_layers"], 1)
+            self.assertEqual(window.stats["fallback_layers"], 0)
+            window.end_layer()
+            window.drain()
+        self.assertRestored()
+
+    def test_window_keeps_one_staging_waiting_while_the_next_begins(self):
+        """The steady state at the start of layer l+1: its own staging not yet consumed, layer l+2 begins on the freed half."""
+        from models.flashnext import layer_major
+
+        with prefill_ring.session(self.language, 1024) as ring:
+            window = layer_major.ExpertWindow(ring=ring)
+            self.assertTrue(window.prefetch(self.layers[0]))             # layer id 1 -> half B
+            first = window.weights_for(self.layers[0])                   # computing on B
+            self.assertTrue(window.prefetch(self.layers[1]))             # layer id 2 -> half A, filling meanwhile
+            self.assertEqual(sorted(h.state for h in ring.ring._halves), ["computing", "filling"])
+            self.assertFalse(window.prefetch(self.layers[0]))            # no free half for a third
+            window.end_layer()                                           # layer 1's GPU work done: B is free again
+            self.assertTrue(window.prefetch(self.layers[0]))             # the next layer's read may begin
+            second = window.weights_for(self.layers[1])
+            self.rows_equal(second, prefix_of(2), list(range(12)))
+            self.assertEqual(window.stats["prefetch_used"], 2)
+            window.end_layer()
+            window.drain()
+        self.assertRestored()
+
+    def test_window_drain_cancels_an_unconsumed_staging(self):
+        from models.flashnext import layer_major
+
+        with prefill_ring.session(self.language, 1024) as ring:
+            window = layer_major.ExpertWindow(ring=ring)
+            self.assertTrue(window.prefetch(self.layers[0]))
+            window.abort_layer()
+            self.assertEqual([h.state for h in ring.ring._halves], [FREE, FREE])
+            self.assertEqual(window._staged, {})
+        self.assertRestored()
+
+    def test_window_falls_back_to_the_blocking_stage_when_nothing_was_begun(self):
+        from models.flashnext import layer_major
+
+        with prefill_ring.session(self.language, 1024) as ring:
+            window = layer_major.ExpertWindow(ring=ring)
+            weights = window.weights_for(self.layers[0])
+            self.rows_equal(weights, prefix_of(1), list(range(12)))
+            self.assertEqual(window.stats["prefetch_used"], 0)
+            self.assertEqual(window.stats["ring_layers"], 1)
+            window.end_layer()
+        self.assertRestored()
+
+
 class AcquireTests(RingCase):
     def reason(self):
         return prefill_ring.LAST_REASON[0]

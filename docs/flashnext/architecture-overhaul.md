@@ -640,6 +640,37 @@ this prompt**, lower peak memory than the reference; still opt-in (`--enable lay
 cross-mode snapshot test. Remaining prefill budget per window: expert reads are unoverlapped (about 26 s per window, 58 s of about
 140), layer 1 (n-gram rows) about 8 s, thermal throttling 10-20%.
 
+**Two-half ring overlap, first measurement (partial overlap; `results/flashnext/20261110-012814-layer-gate-manual/`).** New opt-in form of
+`--enable layer-prefetch` with the prefill ring: a second ring half (scratch pool +1.5 GB while prefilling) so layer l+1's rows are read
+with direct I/O while layer l computes (`PrefillRing.stage_begin` / `stage_finish` / `cancel_stage`, `ExpertWindow._prefetch_ring`;
+bytes, order and destination layout are those of the blocking stage). Paired gate with `--candidate layer-major --prefetch`, 8K, AC
+power, pool 2 GB: **exactness passed on all three pairs**; prefill 62.0 / 57.1 / 64.6 tok/s against chunk-major 52.5 / 48.5 / 47.2 (medians
+61.98 vs 48.53, **1.277x**; pair ratios 1.180, 1.176, 1.368; the previous layer-major run without overlap was 1.214x in another
+session); MLX peak 9.05 GB (+1.5 GB), minimum available 1.8-2.1 GB, compressor up to 3.4-6.8 GB, pressure level 1, swap flat (1,255 to
+1,279 MiB). The per-layer wait trace showed **only every other layer overlapped**: waits of 0.0 s on odd layers and 0.8-1.0 s on even
+layers (the blocking read also got slower, 0.95 s against 0.53 s, under the higher memory pressure). Cause, a bug of mine: the guard
+"one begun staging at a time" refused to begin layer l+2 at the start of layer l+1 because layer l+1's own staging had not been
+consumed yet. Two outstanding stagings are legal with two halves (one waiting, one filling; `begin_fill` refuses when no half is
+free), so the guard now allows two. Window 1 (2,107 tokens) stays read-bound at about 26 s (compute 0.3 s per layer against 0.53 s
+read); window 2 is compute-bound, so a fully overlapped schedule is predicted at about 105 s for the 8K prefill (about 77 tok/s)
+against the measured 126-143 s; the corrected guard is re-measured next.
+
+**Two-half ring overlap with the corrected guard: paired gate at 8K (complete, exact; `results/flashnext/20261110-015335-layer-gate-manual/`).**
+Same design as the partial-overlap run, `--candidate layer-major --prefetch`, AC power, pool 2 GB, 8,139-token prompt, three reversed
+pairs, **exactness passed on all three** (token IDs, final logits, every cache hash, executed edges). Raw arms, chunk-major /
+layer-major + overlap: prefill 161.7 / 172.8 / 168.5 s (50.3 / 47.1 / 48.3 tok/s) against 110.8 / 115.0 / 115.7 s (73.4 / 70.7 /
+70.3 tok/s): medians 48.30 vs 70.75 tok/s, **1.465x**, pair ratios 1.458, 1.502, 1.456, spreads 6.7% and 4.4%; prefill physical reads
+279 / 277 / 277 against 168 / 168 / 168 GB; decode unchanged (2.49 vs 2.51 tok/s). The per-layer trace shows the overlap working:
+window 2 (tokens 2,107-8,132) waited **1.0 s in total** for expert reads (it was 26.3 s without overlap), window 1 (2,107 tokens, compute
+0.3 s per layer against 0.53 s of read) still waited 9.7-10.8 s because it is read-bound; window times 29.6-30.1 s and 79.2-83.6 s
+against 42.6 s and 94-108 s without overlap. Memory cost: MLX peak 9.05 GB against 8.16 GB for the reference (+1.5 GB, the second half),
+minimum available 1.9-2.7 GB, compressor 3.3-3.7 GB at its peak, **pressure level 1, swap flat at 1,255 MiB** in every arm (OS thermal
+pressure reached 2 in each layer arm, as in the earlier runs). Status: validated exact and faster at 8K (**about 70 tok/s cold
+prefill against 47 for the reference**) on this checkpoint and prompt; the machine has little headroom while it runs (about 2 GB
+available at the minimum), so it stays **opt-in** (`--enable layer-major --enable layer-prefetch`). Not yet measured: 16K, a 3 GiB-swap
+stress, other applications competing for memory. Remaining prefill budget at 8K: window 1 is read-bound (the forced system-prompt
+boundary makes the 75.5 GB pass happen twice, about 26 s), layer 1 (n-gram rows) about 8 s, thermal throttling in window 2.
+
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the
 machine already barely accommodates, so it is not worth building before the exactness gate has passed and a measured candidate
 footprint exists. Decode cache-policy work needs a current-checkpoint route trace, which needs the same headroom.

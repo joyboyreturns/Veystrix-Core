@@ -110,6 +110,16 @@ def enabled() -> bool:
     return configured_experts() > 0
 
 
+def ring_halves() -> int:
+    """Ring halves for this prefill: 2 when layer-major prefetch asks for the overlapped ring, else 1.
+
+    Two halves let the next layer's rows be read while the current layer computes; the scratch pool grows by one half
+    (about 1.5 GB at 512 experts). Off unless layer-major and layer-prefetch are both enabled."""
+    from . import layer_major
+
+    return 2 if layer_major.enabled() and layer_major.prefetch_enabled() else 1
+
+
 def scratch_enabled() -> bool:
     """Whether a first-turn prefill may use a temporary right-sized pool."""
     raw = os.environ.get(FLAG_SCRATCH, "0") or "0"
@@ -229,6 +239,17 @@ def _read_rows(lease, view, fd, base, file_start, row_bytes, rows) -> None:
                 raise OSError(f"short expert read: {got} of {row_bytes} bytes")
 
 
+class Staging:
+    """A begun, not yet consumed staging: the leased half and the queued reads."""
+
+    __slots__ = ("lease", "futures", "count")
+
+    def __init__(self, lease, futures, count):
+        self.lease = lease
+        self.futures = futures
+        self.count = count
+
+
 class PrefillRing:
     """Reads one layer's routed experts into the ring and hands back views."""
 
@@ -321,6 +342,84 @@ class PrefillRing:
         self._stats["staged_bytes"] += count * self.ring.expert_bytes
         self.pending = lease
         return weights
+
+    # -- overlapped staging (two-half ring, layer-major prefetch) -----------
+
+    @property
+    def overlap_capable(self) -> bool:
+        return self.ring.halves >= 2 and not self.disabled
+
+    def stage_begin(self, store, switch_prefix: str, wanted):
+        """Lease a FREE half and queue its reads without waiting. Returns a ``Staging`` or None.
+
+        None means "no overlap for this layer": the caller stages it with ``stage`` when its turn comes. The half is in the
+        FILLING state, so nothing computes on it; ``stage_finish`` (or ``cancel_stage``) must follow.
+        """
+        if not self.overlap_capable:
+            return None
+        count = len(wanted)
+        if count == 0 or count > self.ring.half_experts:
+            self._stats["fallback_capacity"] += 1
+            return None
+        if self._over_limit():
+            self.disabled = "working set"
+            self._stats["fallback_memory"] += 1
+            return None
+        lease = self.ring.begin_fill()
+        if lease is None:
+            self._stats["fallback_busy"] += 1
+            return None
+        futures = []
+        try:
+            futures = self._queue_reads(lease, store, switch_prefix, wanted)
+        except BaseException as error:
+            if futures:
+                wait(futures)
+            lease.release()
+            if isinstance(error, Exception):
+                self._stats["fallback_error"] += 1
+                self.last_error = repr(error)
+                return None
+            raise
+        return Staging(lease, futures, count)
+
+    def stage_finish(self, staging):
+        """Wait for a begun staging and return its zero-copy views, or None (the half is released; use the read path)."""
+        self._retire()                          # the previous layer's half: its GPU work has finished
+        lease, futures, count = staging.lease, staging.futures, staging.count
+        began = time.perf_counter()
+        try:
+            if self._keepwarm is not None:
+                self._keepwarm(futures)
+            for future in futures:
+                self._resolve(future, None)
+            lease.mark_filled(timeout=CLOSE_TIMEOUT)
+            lease.begin_compute()
+            weights = self._views(lease, count)
+        except BaseException as error:
+            wait(futures)
+            lease.release()
+            if isinstance(error, Exception):
+                self._stats["fallback_error"] += 1
+                self.last_error = repr(error)
+                return None
+            raise
+        self._stats["wait_seconds"] += time.perf_counter() - began
+        self._stats["staged_layers"] += 1
+        self._stats["staged_experts"] += count
+        self._stats["staged_bytes"] += count * self.ring.expert_bytes
+        self.pending = lease
+        return weights
+
+    def cancel_stage(self, staging) -> None:
+        """Abandon a begun staging: no worker may still write when the half is released. Never raises."""
+        try:
+            wait(staging.futures)
+        finally:
+            try:
+                staging.lease.release()
+            except Exception:
+                pass
 
     def _over_limit(self) -> bool:
         if self._limit is None or self._active_memory is None:
@@ -481,6 +580,7 @@ def acquire(language, tokens: int):
     group_size = first.gate_proj.group_size
     expert_bytes = sum(plan.row_bytes for plan in plans)
     wanted_experts = min(requested, first.gate_proj.num_experts)
+    halves = ring_halves()
     stride = expert_pool.get_slab_layout(group_size).record_stride
     limit = metal_working_set_limit()
     if limit is None:
@@ -502,7 +602,7 @@ def acquire(language, tokens: int):
         # is created. Refusing here leaves nothing allocated.
         if scratch:
             scratch_size = expert_pool.HEADER + stride * (
-                slots_per_half(wanted_experts, expert_bytes, stride) + MIN_DECODE_SLOTS
+                slots_per_half(wanted_experts, expert_bytes, stride) * halves + MIN_DECODE_SLOTS
             )
             new_bytes = pool_length(scratch_size, stride)
             kind = "scratch pool"
@@ -531,7 +631,7 @@ def acquire(language, tokens: int):
         return None
     half_experts = plan_ring(
         pool.slots, pool.stride, expert_bytes, wanted_experts,
-        max_pool_fraction=1.0 if scratch else 0.5, halves=1,
+        max_pool_fraction=1.0 if scratch else 0.5, halves=halves,
     )
     ring = None
     if half_experts <= 0:
@@ -540,7 +640,7 @@ def acquire(language, tokens: int):
         try:
             ring = PoolRing(
                 pool, [(plan.name, plan.row_bytes) for plan in plans], half_experts,
-                header=expert_pool.HEADER, halves=1,
+                header=expert_pool.HEADER, halves=halves,
             )
         except RingError as error:
             LAST_REASON[0] = f"lease refused: {error}"

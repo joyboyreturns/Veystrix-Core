@@ -106,9 +106,11 @@ EXPERIMENTAL = {
                               "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "1"},
                              "experimental 4K layer-major windows with chunk-major execution for windows up to 2K; unmeasured"),
     "layer-prefetch": ({"FLASHNEXT_PREFILL_LAYER_PREFETCH": "1"},
-                       "layer-major only: read layer l+1's experts on the worker threads while layer l computes (about +1.5 GB "
-                       "resident, same bytes so same results); the cost model predicts up to ~1.8x over serial layer-major; "
-                       "unmeasured on the real checkpoint"),
+                       "layer-major only: read layer l+1's experts while layer l computes. With the prefill ring (the agentic "
+                       "preset) the scratch ring gets a second half (+1.5 GB while prefilling) and the read goes to it with direct "
+                       "I/O; without a ring it reads into fresh arrays (+1.5 GB). Same bytes in the same order, so results are "
+                       "identical. The fresh-array form measured no gain at pool 0 (0.989x); the two-half ring form is unmeasured "
+                       "on the real checkpoint"),
     "uncached-reads": ({"FLASHNEXT_UNCACHED_EXPERT_READS": "1"},
                        "read every expert row with F_NOCACHE so streaming does not fill the file cache or push the server's own "
                        "pages into the compressor; same bytes in the same order, so results are identical; speed effect unmeasured"),
