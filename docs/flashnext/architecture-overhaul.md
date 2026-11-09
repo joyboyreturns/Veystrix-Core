@@ -710,6 +710,22 @@ generated token IDs, final-row logits and **every attention and recurrent cache 
 available 4.7 GB. Prefill seconds A / B / C: 33.0 / 29.1 / 68.5 (one run, not a speed result). Scope: one system prompt, one restart, text-only prompts; it does not cover a
 tool-call turn, a RAM hit across turns inside one process, or a restore after a deviated (re-planned) prefill.
 
+**Integration smoke through the normal server with the layer-major opt-ins: partial, then a memory-safety stop (`results/flashnext/20261110-034221-integration-smoke-manual/`; the first attempt, `...-034012-...`, was invalid).**
+`bench_integration_smoke.py` drives one supervised server (`--enable layer-major --enable layer-prefetch`, pool 2 GB, `--no-auto-purge` as in every gate arm) through
+tool turn, streamed follow-up, a cancel in the middle of an 8K prefill, then Anthropic and Responses requests. The first attempt's later requests all failed with HTTP 500
+because the layer-gate state probe records exactly one request and raised `FileExistsError` on the second; that was my harness, not the server, and the probe is now
+off for driver runs. In the second attempt: (1) the tool-enabled turn returned a `tool_calls` finish with `read_file` and correct JSON arguments (2,393-token cold prefill, 32 s);
+(2) the streamed follow-up with the tool result matched 2,424 of 2,452 prompt tokens in the prefix cache, prefilled 28, streamed 40 events, `[DONE]`, and a coherent
+answer about the tool result. (3) The cancel step then started an 8,139-token cold prefill (new content) in the same process: 12 s in it had done 169 tokens, swap in use
+went from 1,452 MiB to 3,326 MiB within about 10 s (compressor 0.6 -> 7.7 GB, pressure level 2), the server's own guard stopped the request gracefully ("swap grew 1.84 GiB over the
+session baseline, hard limit 1.53 GiB") and the harness stopped at the same sample. **That is a transient overshoot of the owner's 3 GiB swap ceiling by about 250 MiB** (swap was 1.4 GiB again
+once the server had exited; no process was left running). The cancel recovery, `/v1/messages` and `/v1/responses` steps were therefore **not exercised**.
+Cause not proven. Observed: before the prefill the machine had 4.9-5.0 GB available (12 GB in a fresh gate arm), after two requests including ~95 buffered decode tokens, with auto-purge
+off; the 8K layer-major prefill peaks at about 9.7 GB MLX. Hypothesis: file cache left by decode's buffered reads plus the layer-major working set; the readiness model
+deliberately treats file-backed memory as reclaimable and its figures are chunk-major's (4.99 GiB at 4,096 tokens), not layer-major's. Consequences: do **not** run layer-major in a long-lived multi-request
+process without purge; it stays opt-in; no retry of this scenario until a layer-major-aware admission step (purge before a large cold prefill, layer-major peak in the readiness
+figures) exists and is tested offline. Cancel safety of layer-major is covered by unit tests only so far.
+
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the
 machine already barely accommodates, so it is not worth building before the exactness gate has passed and a measured candidate
 footprint exists. Decode cache-policy work needs a current-checkpoint route trace, which needs the same headroom.

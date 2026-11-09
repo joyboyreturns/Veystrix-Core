@@ -430,7 +430,7 @@ def runtime_fingerprint():
     return digest.hexdigest()
 
 
-def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None):
+def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None, driver=None):
     from models.flashnext.progress import process_identity
 
     probe = result_dir / f"{index}-{name}-probe.jsonl"
@@ -465,7 +465,8 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
             command += ["--enable", candidate]
             if prefetch:
                 command += ["--enable", "layer-prefetch"]
-        env = dict(os.environ, VEYSTRIX_LAYER_GATE_PROBE=str(probe), VEYSTRIX_SUPERVISOR_LOG_DIR=str(log_dir),
+        # The state probe records exactly one request and refuses a second, so a multi-request driver runs without it.
+        env = dict(os.environ, VEYSTRIX_SUPERVISOR_LOG_DIR=str(log_dir),
                    VEYSTRIX_WARM_DIR=str(Path(temporary) / "warm"), VEYSTRIX_API_KEY="local",
                    FLASHNEXT_SWAP_GROWTH_STOP_GIB="2.5")
         # The launcher's mode owns the reference/candidate settings; inherited
@@ -476,6 +477,8 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
         # Purge (if short) before the server exists; arms themselves keep --no-auto-purge so no purge lands inside a run.
         # Diagnostic observer only (one JSON line per finished chunk: MLX active/peak, available, pressure); no behavior change.
         env["FLASHNEXT_CHUNK_LOG"] = str(result_dir / f"{index}-{name}-chunks.jsonl")
+        if driver is None:
+            env["VEYSTRIX_LAYER_GATE_PROBE"] = str(probe)
         # Diagnostic-only additions chosen by the caller (the decode-profile harness); nothing by default.
         env.update(extra_env or {})
         before, reason, purge = prepare_headroom(sampler, candidate=name == "layer", memory_rules=memory_rules, power_rules=power_rules)
@@ -527,7 +530,8 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
                 result = {}
                 def request():
                     try:
-                        result["response"] = http_json(url + "/v1/chat/completions", payload, timeout=900)
+                        # driver (integration smoke): any sequence of requests against this one supervised server.
+                        result["response"] = driver(url) if driver is not None else http_json(url + "/v1/chat/completions", payload, timeout=900)
                     except urllib.error.HTTPError as exc:
                         result["error"] = f"HTTP {exc.code}: {exc.read().decode(errors='replace')[:2000]}"
                     except Exception as exc:
@@ -548,9 +552,9 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
                         raise RuntimeError("arm exceeded 900-second limit")
                 if "error" in result:
                     raise RuntimeError("request failed: " + result["error"])
-                rows = probe_rows(probe)
+                rows = probe_rows(probe) if driver is None else result["response"]
                 return command, rows, {"before": before, "after": sample("after"), "health": ready, "preflight_purge": purge,
-                                       "watchdog_pid": pid, "response_usage": result["response"].get("usage")}
+                                       "watchdog_pid": pid, "response_usage": result["response"].get("usage") if driver is None else None}
             finally:
                 if proc is not None and proc.poll() is None:
                     try:
