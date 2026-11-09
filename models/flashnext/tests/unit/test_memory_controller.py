@@ -95,13 +95,34 @@ class StageTests(unittest.TestCase):
         self.assertIn("level 4", f.step(pressure=4))
 
     def test_swap_increase_stops_at_two_and_a_half_gib_over_the_baseline_not_the_absolute_total(self):
-        f = Feed()
+        f = Feed()                                           # the growth rule alone: the absolute guard is off by default
         self.assertIsNone(f.step(swap=3000.0))               # baseline 3000 MB already in swap from before the session
         self.assertIsNone(f.step(swap=3000.0 + 2559.0))
         self.assertEqual(f.c.state, M.ELEVATED)              # fresh swap growth is a signal ...
         reason = f.step(swap=3000.0 + 2560.0)                # ... and a hard stop at +2.5 GiB
         self.assertIn("swap grew 2.50 GiB", reason)
         self.assertEqual(f.c.ledger()["peak"]["swap_increase_mib"], 2560.0)
+
+    def test_absolute_swap_guard_stops_below_the_owner_ceiling_whatever_the_baseline(self):
+        f = Feed(swap_ceiling_mib=3072.0)                    # ceiling 3072 MiB, default margin 256 MiB -> stop at 2816
+        self.assertIsNone(f.step(swap=1500.0))               # baseline 1.5 GiB: the 2.5 GiB growth rule alone would allow 4 GiB
+        self.assertIsNone(f.step(swap=2815.0))
+        reason = f.step(swap=2816.0)
+        self.assertIn("absolute guard 2816 MiB", reason)
+        self.assertIn("ceiling 3072 MiB", reason)
+        self.assertTrue(f.c.stop_reason)
+
+    def test_absolute_swap_guard_is_configurable_and_can_be_disabled(self):
+        self.assertEqual(M.Policy.from_environment({}).swap_ceiling_mib, 0.0)            # off unless asked for
+        self.assertEqual(M.Policy.from_environment({M.FLAG_SWAP_CEILING: "3072"}).swap_ceiling_mib, 3072.0)
+        self.assertEqual(M.Policy.from_environment({M.FLAG_SWAP_CEILING_MARGIN: "512"}).swap_ceiling_margin_mib, 512.0)
+        with self.assertRaises(ValueError):
+            M.Policy.from_environment({M.FLAG_SWAP_CEILING: "-5"})
+        f = Feed(swap_ceiling_mib=0, swap_growth_stop_gib=64)    # disabled: only the (here huge) growth rule is left
+        f.step(swap=500.0)
+        self.assertIsNone(f.step(swap=3500.0))
+        ledger = Feed(swap_ceiling_mib=3072.0).c.ledger()
+        self.assertEqual((ledger["swap_ceiling_mib"], ledger["swap_ceiling_margin_mib"]), (3072.0, 256.0))
 
     def test_swap_growth_limit_is_configurable_and_strict(self):
         f = Feed(swap_growth_stop_gib=1.0)

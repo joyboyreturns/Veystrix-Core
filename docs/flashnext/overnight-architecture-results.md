@@ -57,8 +57,7 @@ tokens and prefilled 632 (`bench_restore_check.py`).
 
 ## 4. Tests
 
-* flashnext unit discovery: **1,750 tests, OK (3 skipped)**; macqwen: **686 tests, OK** (last full run after the final source change except two later
-  edits to bench harness files, which the 20 gate-probe tests cover).
+* flashnext unit discovery: **1,754 tests, OK (3 skipped)** on the final tree; macqwen: **686 tests, OK** (run before the last two small flashnext-only edits, which do not touch macqwen).
 * New offline tests: layer-major equivalence incl. inner snapshots (stored state equals chunk-major byte for byte, survives in-place KV updates,
   restore resumes exactly), staging/overlap (9), peel-tail, flag validation, restore-check validator.
 * Real-checkpoint, exact: 8K pairs x3, 16K pairs x3, 2.7K decode A/B, 8K decode A/B, restore from an inner snapshot in a new process (SSD_HIT).
@@ -122,7 +121,12 @@ Qwen Code: provider `modelProviders.openai[]` in `~/.qwen/settings.json` with `b
 
 ## 7. Ranked remaining work
 
-1. Layer-major-aware admission: a purge (the passwordless `sudo -n /usr/sbin/purge` rule exists) before a large cold prefill, layer-major peak (9.7 GB, +1.5 GB with overlap) in the
+0. Done offline after the smoke stop (unit-tested, **not yet validated live**): (a) `FLASHNEXT_SWAP_CEILING_MIB=3072` (+ `FLASHNEXT_SWAP_CEILING_MARGIN_MIB`, default 256) adds an
+   absolute swap guard to the server's memory controller on top of the shipped baseline-relative 2.5 GiB rule, which with 1.5 GiB already in swap allows about 4 GiB in total. It is **off
+   by default** (it would refuse to run when swap is already high for other reasons) and cannot bound a fast spike (the smoke saw about 340-420 MiB/s while a stop takes seconds), so
+   it narrows the overshoot rather than preventing it. (b) The pre-request purge requirement (`purge_recovery.request_required_bytes`) adds 1.6 GB (the measured layer-major peak
+   delta at 8K and 16K) when `FLASHNEXT_PREFILL_ORDER=layer` and the prefill exceeds 1,024 tokens; production's auto-purge was off in the smoke, so this has not been exercised.
+1. Layer-major-aware admission (remaining): a purge (the passwordless `sudo -n /usr/sbin/purge` rule exists) before a large cold prefill, layer-major peak (9.7 GB, +1.5 GB with overlap) in the
    readiness figures, and a proactive margin so a fast swap spike cannot overshoot 3 GiB; then re-run the smoke (cancel, Anthropic, Responses) and a 3-turn session.
 2. Decode capacity: a pool above 2 GB (needs an owner decision on memory) or a native read path; this is the only lever the profile supports (75% SSD wait).
 3. Overlap the layer-1 n-gram row reads (about 8 s of an 8K prefill) with the previous window's compute.

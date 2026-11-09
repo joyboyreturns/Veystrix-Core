@@ -49,6 +49,17 @@ class RequestBoundaryTests(unittest.TestCase):
         self.assertGreater(big, small)
         self.assertEqual(P.request_required_bytes(cfg, 1024), huge)       # capped at one 1,024-token chunk
 
+    def test_layer_major_adds_its_measured_working_set_only_for_a_large_prefill(self):
+        import os
+        from unittest import mock
+
+        cfg = P.Config()
+        with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_ORDER": "chunk"}):
+            chunk_large, chunk_small = P.request_required_bytes(cfg, 8000), P.request_required_bytes(cfg, 500)
+        with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_ORDER": "layer"}):
+            self.assertEqual(P.request_required_bytes(cfg, 8000), chunk_large + P.LAYER_MAJOR_EXTRA_BYTES)
+            self.assertEqual(P.request_required_bytes(cfg, 500), chunk_small)      # a short prefill never runs a window
+
     def test_anonymous_memory_shortage_never_causes_a_purge_loop(self):
         m = machine_for(free=2.0, cache=0.05, anonymous=9.0)             # nothing to recover: other apps hold the memory
         P.register(m.recovery_for())

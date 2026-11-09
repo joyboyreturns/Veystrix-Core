@@ -43,6 +43,8 @@ MIB = 2 ** 20
 from . import memory_policy
 
 FLAG_SWAP_GROWTH = "FLASHNEXT_SWAP_GROWTH_STOP_GIB"
+FLAG_SWAP_CEILING = "FLASHNEXT_SWAP_CEILING_MIB"                # absolute swap in use (not growth): the owner's 3 GiB rule; 0 disables
+FLAG_SWAP_CEILING_MARGIN = "FLASHNEXT_SWAP_CEILING_MARGIN_MIB"  # stop this far below the ceiling so a fast spike cannot cross it
 FLAG_PERSIST = "FLASHNEXT_PRESSURE_PERSIST_S"
 FLAG_CRITICAL_CONFIRM = "FLASHNEXT_CRITICAL_CONFIRM_S"
 FLAG_RECOVER = "FLASHNEXT_PRESSURE_RECOVER_S"
@@ -50,7 +52,7 @@ FLAG_SWAP_WINDOW = "FLASHNEXT_SWAP_WINDOW_S"
 FLAG_SWAP_ACTIVITY = "FLASHNEXT_SWAP_ACTIVITY_STOP_MIB"
 FLAG_THROTTLE_WAIT = "FLASHNEXT_THROTTLE_MAX_WAIT_S"
 FLAG_THROTTLE_REQUEST = "FLASHNEXT_THROTTLE_REQUEST_CAP_S"
-FLAGS = (FLAG_SWAP_GROWTH, FLAG_PERSIST, FLAG_CRITICAL_CONFIRM, FLAG_RECOVER, FLAG_SWAP_WINDOW, FLAG_SWAP_ACTIVITY,
+FLAGS = (FLAG_SWAP_GROWTH, FLAG_SWAP_CEILING, FLAG_SWAP_CEILING_MARGIN, FLAG_PERSIST, FLAG_CRITICAL_CONFIRM, FLAG_RECOVER, FLAG_SWAP_WINDOW, FLAG_SWAP_ACTIVITY,
          FLAG_THROTTLE_WAIT, FLAG_THROTTLE_REQUEST)
 
 
@@ -83,6 +85,11 @@ class Policy:
     throttle_max_wait_s: float = 20.0     # longest single wait at a safe boundary
     throttle_request_cap_s: float = 120.0  # total waiting per request
     elevated_scale: float = 0.5           # factor on future chunk / scratch budgets while elevated
+    # Absolute guard (owner's rule: swap in use must not reach 3 GiB). The growth limit above is relative to the session baseline, so
+    # with 1.5 GiB already in use it would allow 4 GiB; a 2026-11-10 smoke saw swap rise 1.8 GiB in about 10 s at 340 MiB/s and the
+    # stop itself takes seconds, hence the margin. 0 (the default) disables it; the baseline-relative rule above is the shipped decision.
+    swap_ceiling_mib: float = 0.0         # opt-in: FLASHNEXT_SWAP_CEILING_MIB=3072 enforces the owner's 3 GiB rule as an absolute number
+    swap_ceiling_margin_mib: float = 256.0
     swap_only: bool = False               # approved agentic policy: only the swap-growth hard stop (and missing probe) can stop
 
     def telemetry_only_checks(self) -> list[str]:
@@ -99,6 +106,8 @@ class Policy:
         return cls(
             swap_only=effective_swap_only,
             swap_growth_stop_gib=_number(FLAG_SWAP_GROWTH, d.swap_growth_stop_gib, 0.25, 64, environ),
+            swap_ceiling_mib=_number(FLAG_SWAP_CEILING, d.swap_ceiling_mib, 0, 1048576, environ),
+            swap_ceiling_margin_mib=_number(FLAG_SWAP_CEILING_MARGIN, d.swap_ceiling_margin_mib, 0, 65536, environ),
             persist_s=_number(FLAG_PERSIST, d.persist_s, 5, 3600, environ),
             critical_confirm_s=_number(FLAG_CRITICAL_CONFIRM, d.critical_confirm_s, 1, 60, environ),
             recover_s=_number(FLAG_RECOVER, d.recover_s, 1, 300, environ),
@@ -214,6 +223,9 @@ class Controller:
             if effective_swap >= p.swap_growth_stop_gib * 1024:
                 return self._stop(f"swap grew {effective_swap / 1024:.2f} GiB over the session baseline "
                                   f"(hard limit {p.swap_growth_stop_gib:g} GiB)")
+            if p.swap_ceiling_mib > 0 and float(swap_used_mb) >= p.swap_ceiling_mib - p.swap_ceiling_margin_mib:
+                return self._stop(f"swap in use {float(swap_used_mb):.0f} MiB reached the absolute guard "
+                                  f"{p.swap_ceiling_mib - p.swap_ceiling_margin_mib:.0f} MiB (ceiling {p.swap_ceiling_mib:.0f} MiB)")
             if not p.swap_only:
                 if out_mib >= p.swap_activity_stop_mib:
                     return self._stop(f"active swap-out: {out_mib:.0f} MiB in {span:.0f}s "
@@ -361,6 +373,8 @@ class Controller:
                 "peak": dict(self.peak),
                 "last": dict(self.last),
                 "swap_growth_stop_gib": self.policy.swap_growth_stop_gib,
+                "swap_ceiling_mib": self.policy.swap_ceiling_mib,
+                "swap_ceiling_margin_mib": self.policy.swap_ceiling_margin_mib,
             }
 
 

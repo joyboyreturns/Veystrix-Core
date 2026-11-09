@@ -553,13 +553,22 @@ def register(recovery: PurgeRecovery | None) -> None:
     _REGISTERED[0] = recovery
 
 
+LAYER_MAJOR_EXTRA_BYTES = int(1.6e9)
+
+
 def request_required_bytes(cfg: Config, prefill_tokens: int) -> int:
     """Available memory a request should start with: the idle headroom plus what its largest prefill chunk adds
     (ESTIMATE from the budget model; the unchanged runtime guards still decide during the request)."""
     from .prefill_budget import chunk_increment_bytes
 
     chunk = min(max(int(prefill_tokens), 0), 1024)
-    return int(cfg.idle_headroom_bytes + (chunk_increment_bytes(chunk, 0) if chunk else 0))
+    required = int(cfg.idle_headroom_bytes + (chunk_increment_bytes(chunk, 0) if chunk else 0))
+    if (os.environ.get("FLASHNEXT_PREFILL_ORDER", "") or "").strip().lower() == "layer" and int(prefill_tokens) > 1024:
+        # Layer-major keeps a window's activations and one layer's experts (plus the ring's second half with layer-prefetch):
+        # measured MLX peak 9.74 vs 8.16 GB at 8K and 11.92 vs 10.35 GB at 16K, +1.6 GB either way (results/flashnext/
+        # 20261110-022214, -025312). ESTIMATE added to the idle headroom so the pre-request purge fires earlier for it.
+        required += LAYER_MAJOR_EXTRA_BYTES
+    return required
 
 
 def prepare_for_request(prefill_tokens: int) -> Outcome | None:
