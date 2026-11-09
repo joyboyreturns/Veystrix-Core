@@ -1,0 +1,18 @@
+{
+ "state": "stopped",
+ "pid": 44486,
+ "server_pid": 44500,
+ "starts": 1,
+ "since": "2026-11-10T03:57:14+0530",
+ "updated": "2026-11-10T04:00:15+0530",
+ "recent": [
+  {
+   "at": "04:00:15",
+   "exit": 0,
+   "action": "stop",
+   "reason": "stopped by the owner"
+  }
+ ],
+ "reason": "stopped by the owner",
+ "exit": 0
+}

@@ -726,6 +726,10 @@ deliberately treats file-backed memory as reclaimable and its figures are chunk-
 process without purge; it stays opt-in; no retry of this scenario until a layer-major-aware admission step (purge before a large cold prefill, layer-major peak in the readiness
 figures) exists and is tested offline. Cancel safety of layer-major is covered by unit tests only so far.
 
+**Integration smoke, third attempt: passed (`results/flashnext/20261110-035709-integration-smoke-manual/`).** Premise changed after the stop above: auto-purge on (production default), the opt-in absolute swap guard live (3072 MiB ceiling, 768 MiB margin, verified through
+`/health` before the first request; the first launch of this attempt failed closed because `/health` did not yet expose the ceiling, a reporting bug fixed in `macqwen/server.py`), and a 4,638-token cancel prompt. Tool turn, streamed follow-up (2,424/2,452 tokens reused),
+**cancel 15 s into the prefill (clean `request_cancelled`, ready after 2 s, next request fine)**, `/v1/messages` and `/v1/responses` all passed; swap flat at about 1.26 GiB, pressure 1. The earlier 8K-after-decode breach is not explained by this run.
+
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the
 machine already barely accommodates, so it is not worth building before the exactness gate has passed and a measured candidate
 footprint exists. Decode cache-policy work needs a current-checkpoint route trace, which needs the same headroom.

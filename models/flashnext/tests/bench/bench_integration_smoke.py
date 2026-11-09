@@ -1,12 +1,12 @@
 """Supervised protocol/integration smoke on the real checkpoint with the layer-major opt-ins. Not a speed or exactness result.
 
 One supervised AGENTIC server (``bench_layer_gate.run_arm``: independent watchdog, swap/power/thermal stops) started with
-``--enable layer-major --enable layer-prefetch`` and driven through, in order:
+``--enable layer-major --enable layer-prefetch``, production auto-purge ON and the absolute swap guard (3072 MiB ceiling, 768 MiB margin) ON, and driven through, in order:
 
 1. a tool-enabled chat request (non-streaming): does the model return a tool call, and is the HTTP envelope sound;
 2. the follow-up turn with the tool result, streaming (SSE): chunks, finish reason, ``[DONE]``, and the prefix-cache counters
    before and after (a follow-up should reuse the first turn's prefix);
-3. a CANCEL in the middle of an ~8K layer-major prefill (the client drops the connection): the server must stay alive, return to
+3. a CANCEL in the middle of a ~4.6K layer-major prefill (the client drops the connection): the server must stay alive, return to
    ready, and answer the next request;
 4. Anthropic ``/v1/messages`` and OpenAI ``/v1/responses`` requests.
 
@@ -90,9 +90,14 @@ def wait_ready(url, limit=180):
 def make_driver(checkpoint, report):
     base = G.make_prompt(checkpoint, 100)
     system = base["messages"][0]
-    big = G.make_prompt(checkpoint, 6000)
+    big = G.make_prompt(checkpoint, 2500)           # about 4.6K tokens: enough prefill to cancel inside, a smaller working set than 8K
 
     def driver(url):
+        # 0. the absolute swap guard must really be live in the server before any request (fail closed)
+        ledger = (get(url, "/health") or {}).get("memory_policy") or {}
+        report["guard"] = {"swap_ceiling_mib": ledger.get("swap_ceiling_mib"), "margin_mib": ledger.get("swap_ceiling_margin_mib")}
+        if ledger.get("swap_ceiling_mib") != 3072.0 or ledger.get("swap_ceiling_margin_mib") != 768.0:
+            raise RuntimeError(f"absolute swap guard is not active in the server: {report['guard']}")
         # 1. tool-enabled turn
         user = {"role": "user", "content": "Use the read_file tool to read models/flashnext/layer_major.py, then wait for the result."}
         first = {"model": "flashnext", "messages": [system, user], "tools": [TOOL], "tool_choice": "auto", "max_tokens": 96,
@@ -121,9 +126,9 @@ def make_driver(checkpoint, report):
         sock = socket.create_connection((host, int(port)), timeout=30)
         sock.sendall((f"POST /v1/chat/completions HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n"
                       f"Authorization: Bearer local\r\nContent-Length: {len(body)}\r\n\r\n").encode() + body)
-        time.sleep(20)                                # well inside the ~90 s prefill
+        time.sleep(15)                                # well inside the ~55 s prefill
         sock.close()
-        report["cancel"] = {"dropped_after_s": 20}
+        report["cancel"] = {"dropped_after_s": 15}
         ready_after, health = wait_ready(url)
         report["cancel"].update(ready_after_s=ready_after, ready=bool(ready_after is not None))
         after_cancel = post(url, "/v1/chat/completions", {"model": "flashnext", "messages": [
@@ -179,7 +184,9 @@ def main() -> int:
     try:
         command, evidence, machine = G.run_arm("layer", "smoke", checkpoint, None, path.parent, candidate="layer-major",
                                                uncached=True, memory_rules="swap-only", prefetch=True, base_pool_gb=args.pool_gb,
-                                               reads="prefill", power_rules="ac", driver=make_driver(checkpoint, report))
+                                               reads="prefill", power_rules="ac", driver=make_driver(checkpoint, report),
+                                               auto_purge=True,
+                                               extra_env={"FLASHNEXT_SWAP_CEILING_MIB": "3072", "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "768"})
         run.arm(arm_id="smoke", condition="layer", round_index=1, command=command, metrics=evidence, **machine)
         problems = verdict(report)
         run.validation("integration-smoke", "fail" if problems else "pass", reason="; ".join(problems) or None)

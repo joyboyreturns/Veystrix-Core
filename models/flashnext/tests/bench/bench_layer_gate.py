@@ -430,7 +430,7 @@ def runtime_fingerprint():
     return digest.hexdigest()
 
 
-def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None, driver=None):
+def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None, driver=None, auto_purge=False):
     from models.flashnext.progress import process_identity
 
     probe = result_dir / f"{index}-{name}-probe.jsonl"
@@ -451,7 +451,7 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
         preferences.write_text(json.dumps({"temperature": 0.0, "thinking_enabled": False}))
         command = [str(ROOT / "serve.sh"), "--port", str(port), "--pool-gb", pool_gb if (name == "layer" and pool_ab) else base_pool_gb, "--checkpoint", str(checkpoint),
                    "--prefix-dir", str(prefix_dir if prefix_dir is not None else Path(temporary) / "prefix"),
-                   "--preferences-file", str(preferences), "--no-auto-purge"]
+                   "--preferences-file", str(preferences)] + ([] if auto_purge else ["--no-auto-purge"])
         # Both arms read experts with F_NOCACHE (same bytes, same order, so exactness is unaffected): three owner/agent runs
         # stopped on compressor growth while the file cache filled with streamed experts. Symmetric, recorded, opt-in.
         if decode_ab:

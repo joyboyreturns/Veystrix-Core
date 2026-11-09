@@ -73,8 +73,15 @@ tokens and prefilled 632 (`bench_restore_check.py`).
   Anthropic and Responses steps were therefore not exercised. Cause unproven (hypothesis: file cache left by buffered decode plus the layer-major working set; the
   readiness model uses chunk-major peak figures and treats file cache as reclaimable). Not retried. Until a layer-major-aware pre-prefill purge/admission exists and
   is tested, do not use layer-major in a long-lived multi-request server.
+* **Integration smoke under a new premise passed (`results/flashnext/20261110-035709-integration-smoke-manual/`).** Same server flags, but production auto-purge **on**, the absolute swap guard
+  on (`FLASHNEXT_SWAP_CEILING_MIB=3072`, margin 768 MiB, confirmed live through `/health` before any request) and a smaller cancel prompt (4,638 tokens instead of 8,139). Results: tool-call turn valid;
+  streamed tool-result follow-up matched 2,424 of 2,452 tokens, 40 SSE events, `[DONE]`, coherent text; **client disconnect 15 s into a 4.6K layer-major prefill: `request_cancelled` (no memory stop),
+  server ready again 2 s later, next request answered**; `/v1/messages` and `/v1/responses` both 200 with correct shapes. Swap stayed at 1,262-1,270 MiB (flat), pressure level 1, minimum available
+  3.9 GB. This does **not** explain or retire the earlier stop: the premise differs (purge on, guard on, 4.6K instead of 8K), a pre-request purge was not seen in the flight recorder (memory was ample), and the
+  8K-after-decode scenario that breached the ceiling has not been re-run. Layer-major remains opt-in. Observation: short cold prompts are slow under layer-major (a 471-token prompt took 25 s, about 19 tok/s: the window
+  stages every expert of every layer, a full pass, however few tokens it holds); the hybrid mode (`layer-major-hybrid-4k`, chunk-major below 2,048 tokens) targets this and is unmeasured.
 * An earlier version of that smoke was invalid (a one-request state probe raised on the second request); fixed in the harness.
-* Not validated: real Qwen Code or DeepSeek Harness runs with the opt-ins, cancel of a layer-major prefill on the real model (unit tests only), restart-and-resume with
+* Not validated: real Qwen Code or DeepSeek Harness runs with the opt-ins, cancel of an **8K** layer-major prefill (4.6K was tested), restart-and-resume with
   the opt-ins in a multi-turn session, reasoning-effort variants, 262K (only the architectural limit exists; no 262K conversation was run), the combination of
   `layer-major` with `pool-buffered-fill`, prompts other than the repository-excerpt coding prompt, battery operation (all numbers above are on AC power).
 * 4K windows: two of three pairs valid (+2.8% / +12.5%); the third stopped because I created a source file mid-run (gate fails closed). Hybrid small-window mode was never measured.
