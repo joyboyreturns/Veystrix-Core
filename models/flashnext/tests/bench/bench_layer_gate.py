@@ -430,7 +430,7 @@ def runtime_fingerprint():
     return digest.hexdigest()
 
 
-def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None, driver=None, auto_purge=False):
+def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None, driver=None, auto_purge=False, extra_enables=()):
     from models.flashnext.progress import process_identity
 
     probe = result_dir / f"{index}-{name}-probe.jsonl"
@@ -466,6 +466,8 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
             if prefetch:
                 command += ["--enable", "layer-prefetch"]
         # The state probe records exactly one request and refuses a second, so a multi-request driver runs without it.
+        for name_ in extra_enables:                       # opt-ins a caller adds to this arm's launch (the sustained-decode bench)
+            command += ["--enable", name_]
         env = dict(os.environ, VEYSTRIX_SUPERVISOR_LOG_DIR=str(log_dir),
                    VEYSTRIX_WARM_DIR=str(Path(temporary) / "warm"), VEYSTRIX_API_KEY="local",
                    FLASHNEXT_SWAP_GROWTH_STOP_GIB="2.5")

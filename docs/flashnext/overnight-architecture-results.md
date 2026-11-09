@@ -18,10 +18,17 @@ All of it is **opt-in**; the default server is unchanged chunk-major. Nothing wa
 | same, MLX peak | 10.35 GB | 11.92 GB | +1.6 GB | |
 | Decode tok/s, 2.7K context (3 pairs) | 2.77 | **3.60** (`pool-buffered-fill`) | 1.30x | yes |
 | Decode tok/s, 8K context (3 pairs, ratios 1.36 / 0.97 / 1.14) | 2.50 | 2.84 (`pool-buffered-fill`) | 1.13x | yes |
+| Decode tok/s over three consecutive turns (2 pairs; see below) | 2.13-2.71 | 2.56-3.50 (`pool-buffered-fill`) | 1.19-1.33x per turn | text identical |
 
 Targets were 80-100 tok/s cold prefill at 8K-16K and 5 tok/s decode. **8K prefill meets the target (89.5); 16K does not (69.2);
 decode does not (3.6 at 2.7K, 2.8 at 8K).** These are one prompt on one machine; the second window at 16K is slower because
 attention covers 8K+ context and the machine is thermally throttled (OS thermal pressure 2 for most of each arm).
+
+Sustained decode (`bench_sustained_decode.py`, `results/flashnext/20261110-040253-sustained-decode-manual/`, 2 reversed pairs, one process per arm, three consecutive turns of 82 / 64 / 96 generated
+tokens on a 2.5K-token coding prompt, swap guards on, swap flat at 1.12 GiB, identical generated text in all four arms; server-side decode tok/s): default 2.64 / 2.28 / 2.32 and 2.71 / 2.16 / 2.13;
+`pool-buffered-fill` 3.50 / 2.80 / 2.94 and 3.27 / 2.56 / 2.64. Per-turn ratios 1.33 / 1.23 / 1.27 and 1.21 / 1.19 / 1.24, so the buffered fill is a steady **+19% to +33% (median about +24%)**
+across the session with no further warm-up gain, but **sustained decode is 2.6-3.5 tok/s, not 5**; the 3.60 of the 32-token A/B is the early, shortest-context part of this curve (speed falls slightly as context grows).
+(The client-side per-turn rates the script also prints count streamed text chunks, not tokens, and read low; use the server-side figures above.)
 
 Cached follow-up (single observation, not a benchmark): a streamed tool-result turn in the same process matched 2,424 of
 2,452 prompt tokens and prefilled 28 (5.8 s to first token). A restore in a **new process** from the SSD tier restored 2,107
@@ -43,7 +50,7 @@ tokens and prefilled 632 (`bench_restore_check.py`).
 5. **Buffered pool fills** (`--enable pool-buffered-fill`, `FLASHNEXT_EXPERT_POOL_BUFFERED_FILL=1`): same bytes, page cache allowed for pool fills: +30% decode at 2.7K,
    +13% at 8K, reads -36% / -29%.
 6. **Measurement tooling**: `bench_layer_gate.py` (paired, exactness-gated; 16K prompt shape added), `bench_prefill_profile.py` (per layer/chunk),
-   `bench_decode_profile.py` + `decode_profile.py` (decode wall time split), `bench_restore_check.py`, `bench_integration_smoke.py`, OS thermal-pressure sampling.
+   `bench_decode_profile.py` + `decode_profile.py` (decode wall time split), `bench_sustained_decode.py`, `bench_restore_check.py`, `bench_integration_smoke.py`, OS thermal-pressure sampling.
 
 ## 3. Bottleneck breakdown
 
