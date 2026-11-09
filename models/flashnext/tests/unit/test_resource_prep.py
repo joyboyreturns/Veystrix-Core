@@ -359,7 +359,7 @@ class SessionStartupTests(unittest.TestCase):
     def run_prepare(self, agentic, report):
         from macqwen import session
 
-        env = {"VEYSTRIX_MODE": "agentic"} if agentic else {"VEYSTRIX_MODE": "chat"}
+        env = {"VEYSTRIX_MODE": "agentic", "FLASHNEXT_MEMORY_POLICY": "strict-staged"} if agentic else {"VEYSTRIX_MODE": "chat"}
         with mock.patch.dict(os.environ, env), mock.patch.object(RP.ResourcePreparer, "prepare", return_value=report), \
                 mock.patch.object(P, "from_environment", return_value=None), mock.patch.object(R, "log"):
             return session._prepare_startup(self.PREFS, False, io.StringIO())

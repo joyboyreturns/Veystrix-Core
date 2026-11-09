@@ -139,6 +139,20 @@ class Progress:
         self._request = 0
         self._process = None
         self._frames = None
+        # In-process forward-progress view for /health (independent of the out-of-process record, so it works even when
+        # the watchdog is off). Only real work moves it: tick() is called per streamed MoE layer and per decoded token.
+        self._ticks = 0
+        self._last_progress = time.monotonic()
+        self._stage_since = self._last_progress
+        self._in_request = False
+
+    def snapshot(self, clock=time.monotonic) -> dict:
+        """Where the worker is and how long ago it last advanced (for /health and /v1/cache/diagnostics)."""
+        now = clock()
+        return {"stage": self._stage, "detail": self._detail, "request_seq": self._request,
+                "in_request": self._in_request, "progress_ticks": self._ticks,
+                "seconds_since_progress": round(max(0.0, now - self._last_progress), 1),
+                "seconds_in_stage": round(max(0.0, now - self._stage_since), 1)}
 
     # configuration
     def attach(self, record: Record, channel=None) -> None:
@@ -161,12 +175,15 @@ class Progress:
     # stages and progress
     def stage(self, name: str, detail: str = "") -> None:
         self._stage, self._detail = name, detail
+        self._stage_since = self._last_progress = time.monotonic()
         record = self.record
         if record is not None:
             now = time.time_ns()
             record.write(stage=name, detail=detail, entered_ns=now, progress_ns=now)
 
     def tick(self, tokens: int | None = None) -> None:
+        self._ticks += 1
+        self._last_progress = time.monotonic()
         record = self.record
         if record is not None:
             row = record.read(wait=False)
@@ -189,6 +206,9 @@ class Progress:
     # requests and clients
     def request_begin(self, connection=None, path: str = "") -> int:
         self._request += 1
+        self._in_request = True
+        self._stage, self._detail = "request", ""
+        self._stage_since = self._last_progress = time.monotonic()
         record = self.record
         if record is not None:
             now = time.time_ns()
@@ -202,11 +222,12 @@ class Progress:
         return self._request
 
     def request_end(self) -> None:
+        self._in_request = False
         if self.record is not None:
             if self.channel is not None:
                 with contextlib.suppress(Exception):
                     self.channel.send(json.dumps({"op": "end", "seq": self._request}).encode())
-            self.stage("idle")
+        self.stage("idle")
 
     def response_started(self) -> None:
         if self.record is not None:

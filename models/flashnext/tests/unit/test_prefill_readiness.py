@@ -299,7 +299,7 @@ class SessionAdmissionTests(unittest.TestCase):
         from macqwen import session
 
         err = io.StringIO()
-        with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic", R.LOG_FLAG: os.devnull}), \
+        with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic", "FLASHNEXT_MEMORY_POLICY": "strict-staged", R.LOG_FLAG: os.devnull}), \
                 mock.patch.object(R, "live", return_value=self.refused()), redirect_stderr(err):
             with self.assertRaises(SystemExit) as raised:
                 session._admit_agentic(self.PREFS, False, io.StringIO())
@@ -315,7 +315,7 @@ class SessionAdmissionTests(unittest.TestCase):
         ok = R.evaluate(P.Reading(page=1, free=11 * GIB, anonymous=2 * GIB, wired=int(1.9 * GIB), compressor=GIB), TOTAL)
         self.assertTrue(ok.admitted)
         out = io.StringIO()
-        with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic", R.LOG_FLAG: os.devnull}), \
+        with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic", "FLASHNEXT_MEMORY_POLICY": "strict-staged", R.LOG_FLAG: os.devnull}), \
                 mock.patch.object(R, "live", return_value=ok):
             self.assertIs(session._admit_agentic(self.PREFS, False, out), ok)
         self.assertIn("predicted lowest", out.getvalue())

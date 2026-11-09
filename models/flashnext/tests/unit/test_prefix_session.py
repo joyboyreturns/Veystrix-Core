@@ -491,6 +491,183 @@ class BalancedPolicyTests(Base):
             self.assertEqual(session.anchors(prompt), (4,))
 
 
+class _Killed(Exception):
+    """Stands for a cancelled request or a crash in the middle of a prefill."""
+
+
+class _DiesAfter:
+    """Proxy for the small model whose forward pass raises after ``after`` chunks (one call per chunk)."""
+
+    def __init__(self, model, after):
+        self._model, self._after, self.calls = model, after, 0
+
+    def __call__(self, *args, **kwargs):
+        self.calls += 1
+        if self.calls > self._after:
+            raise _Killed
+        return self._model(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._model, name)
+
+
+class ResumablePrefillTests(Base):
+    """AGENTIC boundaries="all": message ends plus every chunk edge, so an interrupted cold prefill resumes."""
+
+    def setUp(self):
+        super().setUp()
+        env = {"FLASHNEXT_PREFILL_CHUNK_POLICY": "balanced", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "128",
+               S.FLAG_MIN_TOKENS: "8", S.FLAG_BOUNDARIES: "all"}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def system_of(length, seed):
+        mx.random.seed(seed)
+        return [int(t) for t in mx.random.randint(5, VOCAB, (length - len(MARK),)).tolist()] + MARK
+
+    def cold_reference(self, prompt):
+        with mock.patch.dict(os.environ, {S.FLAG_DIR: str(self.tmp / "reference")}):
+            return self.go(build_model(), S.PrefixSession(encode, compat), prompt)
+
+    def test_all_snapshots_every_message_end_and_every_chunk_edge(self):
+        system = self.system_of(300, 1)
+        prompt = system + [7] * 100
+        model, session = self.engine()
+        self.assertEqual(session.anchors(prompt), (300,))
+        _, _, report = self.go(model, session, prompt)
+        self.assertEqual(report.snapshots, [100, 200, 300], "three equal pieces of the system message, each stored")
+
+    def test_the_old_modes_are_unchanged(self):
+        system = self.system_of(300, 1)
+        prompt = system + [7] * 100
+        for mode, expected in (("messages", [300]), ("system", [300])):
+            with self.subTest(mode=mode), mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: mode, S.FLAG_DIR: str(self.tmp / mode)}):
+                model, session = self.engine()
+                _, _, report = self.go(model, session, prompt)
+                self.assertEqual(report.snapshots, expected)
+
+    def test_an_interrupted_prefill_resumes_at_its_last_edge_and_matches_a_cold_run_bit_for_bit(self):
+        prompt = self.system_of(300, 1) + [7] * 100
+        model, session = self.engine()
+        dying = _DiesAfter(model, after=2)
+        with self.assertRaises(_Killed):
+            session.prefill(dying, prompt, dying.make_cache())
+        self.assertEqual(dying.calls, 3)
+        # A new process: new model object, new session over the same SSD directory.
+        model2, session2 = self.engine()
+        token, cache, report = self.go(model2, session2, prompt)
+        self.assertEqual(report.hit_tokens, 200, "the work of the two finished chunks was kept")
+        self.assertEqual(report.prefilled_tokens, len(prompt) - 200)
+        ref_token, ref_cache, _ = self.cold_reference(prompt)
+        self.assertEqual(token, ref_token)
+        self.assertTrue(cache_bits(cache) == cache_bits(ref_cache), "a resumed prefill differs from an uninterrupted one")
+
+    def test_a_different_first_question_after_the_same_system_prompt_also_resumes_from_its_edges(self):
+        system = self.system_of(300, 1)
+        model, session = self.engine()
+        dying = _DiesAfter(model, after=2)
+        with self.assertRaises(_Killed):
+            session.prefill(dying, system + [7] * 100, dying.make_cache())
+        model2, session2 = self.engine()
+        question = [9] * 45
+        token, cache, report = self.go(model2, session2, system + question)
+        self.assertEqual(report.hit_tokens, 200)
+        ref_token, ref_cache, _ = self.cold_reference(system + question)
+        self.assertEqual(token, ref_token)
+        self.assertTrue(cache_bits(cache) == cache_bits(ref_cache))
+
+    def test_all_and_messages_share_one_fingerprint_so_stored_entries_survive_the_switch(self):
+        with mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: "messages"}):
+            before = S.PrefixSession(encode, compat).store().fp
+        after = S.PrefixSession(encode, compat).store().fp
+        self.assertEqual(before, after)
+        with mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: "system"}):
+            self.assertNotEqual(before, S.PrefixSession(encode, compat).store().fp, "system mode plans differently")
+
+    def test_entries_written_under_messages_are_found_under_all(self):
+        prompt = self.system_of(300, 1) + [7] * 100
+        with mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: "messages"}):
+            model, session = self.engine()
+            self.go(model, session, prompt)
+        model2, session2 = self.engine()
+        _, _, report = self.go(model2, session2, self.system_of(300, 1) + [5] * 60)
+        self.assertEqual(report.hit_tokens, 300)
+
+
+class EffortTurnSharingTests(Base):
+    """The effort sentence is its own system turn after the system message: every effort shares the whole system prompt."""
+
+    LOW = [201 + i for i in range(18)] + MARK          # a "<|im_start|>system ... <|im_end|>\n" turn, as tokens
+    XHIGH = [221 + i for i in range(30)] + MARK
+
+    def setUp(self):
+        super().setUp()
+        env = {"FLASHNEXT_PREFILL_CHUNK_POLICY": "balanced", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "128",
+               S.FLAG_MIN_TOKENS: "8", S.FLAG_BOUNDARIES: "all"}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        mx.random.seed(11)
+        self.content = [int(t) for t in mx.random.randint(5, VOCAB, (300,)).tolist()] + MARK     # system message, ends at 302
+        self.user = [int(t) for t in mx.random.randint(5, VOCAB, (60,)).tolist()]
+
+    def prompt(self, turn=(), user=None):
+        return self.content + list(turn) + (user or self.user)
+
+    def cold_reference(self, prompt):
+        with mock.patch.dict(os.environ, {S.FLAG_DIR: str(self.tmp / "reference")}):
+            return self.go(build_model(), S.PrefixSession(encode, compat), prompt)
+
+    def test_the_system_end_is_an_anchor_for_every_effort_and_the_shared_plan_is_identical(self):
+        _, session = self.engine()
+        medium = session.cold_edges(self.prompt())
+        for turn in (self.LOW, self.XHIGH):
+            self.assertIn(302, session.anchors(self.prompt(turn)))
+            edges = session.cold_edges(self.prompt(turn))
+            self.assertEqual([e for e in edges if e <= 302], [e for e in medium if e <= 302])
+
+    def test_low_restores_the_whole_system_prompt_medium_stored_and_matches_a_cold_run_bit_for_bit(self):
+        model, session = self.engine()
+        self.go(model, session, self.prompt())
+        model2, session2 = self.engine()                      # a restart: only the SSD tier remains
+        low = self.prompt(self.LOW, user=[9] * 41)
+        token, cache, report = self.go(model2, session2, low)
+        self.assertEqual(report.hit_tokens, 302, "the entire system message comes from the cache")
+        self.assertEqual(report.prefilled_tokens, len(low) - 302)
+        ref_token, ref_cache, _ = self.cold_reference(low)
+        self.assertEqual(token, ref_token)
+        self.assertTrue(cache_bits(cache) == cache_bits(ref_cache), "state restored from another effort differs from a cold run")
+
+    def test_every_order_of_efforts_shares_the_system_prompt_and_equals_cold(self):
+        steps = (("low", self.LOW, [4] * 31), ("xhigh", self.XHIGH, [5] * 47), ("medium", (), [6] * 52), ("low again", self.LOW, [7] * 29))
+        model, session = self.engine()
+        for index, (name, turn, user) in enumerate(steps):
+            with self.subTest(step=name):
+                prompt = self.prompt(turn, user=user)
+                token, cache, report = self.go(model, session, prompt)
+                if index:
+                    self.assertGreaterEqual(report.hit_tokens, 302, "the shared system prompt must come from the cache")
+                ref_token, ref_cache, _ = self.cold_reference(prompt)
+                self.assertEqual(token, ref_token)
+                self.assertTrue(cache_bits(cache) == cache_bits(ref_cache))
+
+    def test_the_same_effort_in_a_new_session_restores_through_its_effort_turn(self):
+        model, session = self.engine()
+        self.go(model, session, self.prompt(self.LOW))
+        model2, session2 = self.engine()
+        _, _, report = self.go(model2, session2, self.prompt(self.LOW, user=[3] * 33))
+        self.assertEqual(report.hit_tokens, 302 + len(self.LOW), "system end plus the effort turn")
+
+    def test_medium_prompts_are_planned_exactly_as_before_so_existing_entries_stay_valid(self):
+        _, session = self.engine()
+        before = session.cold_edges(self.prompt())
+        self.assertEqual(session.anchors(self.prompt()), (302,))
+        with mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: "messages"}):
+            self.assertEqual(session.cold_edges(self.prompt()), before, "all vs messages differ only in extra snapshots")
+
+
 class ProvenanceSessionTests(Base):
     """A prefix is reused only when its chunk history is the one this prompt's cold run would have made."""
 

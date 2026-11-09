@@ -200,3 +200,75 @@ class CompletedTextBuffer:
         final = self.pending
         self.pending = ""
         return [final]
+
+
+class ReasoningStreamFilter:
+    """Separates thinking and visible content without leaking tags split across streamed pieces.
+
+    Yields items as (kind, text) where kind is "thinking" or "content".
+    """
+
+    def __init__(self, thinking_enabled: bool = True):
+        self.inside = bool(thinking_enabled)
+        self.pending = ""
+        self._trim_leading = True
+
+    @staticmethod
+    def _partial_marker(text: str, marker: str) -> int:
+        maximum = min(len(text), len(marker) - 1)
+        for size in range(maximum, 0, -1):
+            if text.endswith(marker[:size]):
+                return size
+        return 0
+
+    def feed(self, piece: str) -> list[tuple[str, str]]:
+        self.pending += piece
+        items: list[tuple[str, str]] = []
+        while self.pending:
+            if self._trim_leading:
+                self.pending = self.pending.lstrip("\r\n")
+                if not self.pending:
+                    break
+                self._trim_leading = False
+            marker = "</think>" if self.inside else "<think>"
+            index = self.pending.find(marker)
+            if index >= 0:
+                before = self.pending[:index]
+                if before:
+                    kind = "thinking" if self.inside else "content"
+                    items.append((kind, before))
+                self.pending = self.pending[index + len(marker):]
+                self.inside = not self.inside
+                self._trim_leading = True
+                continue
+            keep = self._partial_marker(self.pending, marker)
+            safe = self.pending[:-keep] if keep else self.pending
+            remainder = self.pending[-keep:] if keep else ""
+            if safe:
+                kind = "thinking" if self.inside else "content"
+                items.append((kind, safe))
+            self.pending = remainder
+            break
+        return items
+
+    def finish(self) -> list[tuple[str, str]]:
+        items = []
+        if self.pending:
+            kind = "thinking" if self.inside else "content"
+            items.append((kind, self.pending))
+            self.pending = ""
+        return items
+
+
+def extract_reasoning_and_content(full_text: str, thinking_enabled: bool = True) -> tuple[str, str]:
+    """Split raw generated text into (reasoning_content, visible_content)."""
+    if not thinking_enabled:
+        return "", full_text
+    if "</think>" in full_text:
+        think_part, _, content_part = full_text.partition("</think>")
+        if think_part.startswith("<think>"):
+            think_part = think_part[len("<think>"):]
+        return think_part.strip(), content_part.lstrip("\r\n")
+    if full_text.startswith("<think>"):
+        return full_text[len("<think>"):].strip(), ""
+    return full_text.strip(), ""

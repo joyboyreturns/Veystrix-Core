@@ -10,13 +10,31 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 from models.flashnext import memory_controller as MC
+from models.flashnext import memory_policy
 from models.flashnext import memory_waiver
 from models.flashnext.tests.bench import prefill_memory_harness as H
 from models.flashnext.tests.bench.bench_prefill_memory import MemoryTracer, RealProbe
+
+
+GRACE_FLAG = "FLASHNEXT_GUARD_CANCEL_GRACE_S"
+DEFAULT_GRACE_S = 20.0           # longest a swap-growth stop waits for the worker to cancel at a layer boundary
+FLUSH_S = 1.5                    # after the worker is idle, time to deliver the error to the client before exiting
+
+
+def cancel_grace_seconds(environ=None) -> float:
+    raw = (os.environ if environ is None else environ).get(GRACE_FLAG)
+    if raw in (None, ""):
+        return DEFAULT_GRACE_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_GRACE_S
+    return value if 0.0 <= value <= 120.0 else DEFAULT_GRACE_S
 
 
 class StrictProbe(RealProbe):
@@ -59,6 +77,11 @@ class ChatGuard:
         self.closed = False
         self.controller = controller
         self.clock = clock
+        self.stop_started = None          # monotonic time of the first stop reason (None: not stopping)
+        self.stop_mode = None             # "hard" | "graceful"
+        self.stop_reason = None
+        self.sleep = time.sleep
+        self._stop_lock = threading.Lock()
 
     @staticmethod
     def _read_command(command):
@@ -70,7 +93,7 @@ class ChatGuard:
                 return f"critical probe unavailable: {key}"
         if not row.get("metal_limit_bytes"):
             return "critical probe unavailable: Metal working-set limit"
-        waived = memory_waiver.active()
+        waived = memory_policy.is_swap_growth_policy() or memory_waiver.active()
         reason = H.guard_reason(row, min_available_gb=0.0 if waived else H.MIN_AVAILABLE_GB,
                                 compressor_stop_available_mib=0.0 if waived else H.COMPRESSOR_STOP_AVAILABLE_GIB * 1024)
         if reason:
@@ -123,10 +146,56 @@ class ChatGuard:
             return stop or controller_stop
         return None
 
-    def _stop(self, reason):
-        print(f"FlashNext safety guard stopped the process: {reason}\nTrace: {self.path}",
+    def _graceful_ok(self, reason) -> bool:
+        """Only the owner-approved swap-growth stop is cancelled cooperatively. A blind guard (missing probe, monitor failure),
+        thermal, battery and Metal-limit stops keep the immediate exit: waiting could cost the very resource they protect."""
+        c = self.controller
+        return bool(c is not None and c.stop_reason == reason and reason.startswith("swap grew")
+                    and cancel_grace_seconds() > 0)
+
+    def _hard_exit(self, reason, why):
+        print(f"FlashNext safety guard stopped the process ({why}): {reason}\nTrace: {self.path}",
               file=sys.stderr, flush=True)
+        try:
+            from models.flashnext import flight_recorder
+            flight_recorder.record("guard_exit", reason=reason, why=why)
+        except Exception:
+            pass
         self.exit_fn(H.GUARD_EXIT_CODE)
+
+    def _stop(self, reason):
+        """First stop wins. Work admission is already closed (the controller's CRITICAL state). For a swap-growth stop with
+        a job in flight the process stays up for a bounded grace period so the job can cancel at its next streamed-layer
+        boundary (``GenerationCancelled``) and its client gets an actionable 503 instead of a dead socket; it exits as soon as
+        the worker is idle (plus a short flush) or when the grace period ends, whichever is first. A Metal call that does not
+        return cannot be interrupted from Python: the grace period bounds that delay and the exit then ends it."""
+        with self._stop_lock:
+            if self.stop_started is not None:
+                return
+            self.stop_started, self.stop_reason = self.clock(), reason
+            graceful = self._graceful_ok(reason) and MC.worker_busy()
+            self.stop_mode = "graceful" if graceful else "hard"
+        try:
+            from models.flashnext import flight_recorder
+            flight_recorder.record("guard_stop", reason=reason, mode=self.stop_mode)
+        except Exception:
+            pass
+        if not graceful:
+            self._hard_exit(reason, "immediate")
+            return
+        print(f"FlashNext safety guard: {reason}. Cancelling the in-flight request (up to {cancel_grace_seconds():g}s), "
+              f"then exiting. Do not retry automatically.", file=sys.stderr, flush=True)
+        threading.Thread(target=self._grace_then_exit, args=(reason,), name="guard-grace", daemon=True).start()
+
+    def _grace_then_exit(self, reason):
+        deadline = self.stop_started + cancel_grace_seconds()
+        while self.clock() < deadline and MC.worker_busy():
+            self.sleep(0.1)
+        if MC.worker_busy():
+            self._hard_exit(reason, f"worker did not cancel within {cancel_grace_seconds():g}s (uninterruptible call)")
+            return
+        self.sleep(FLUSH_S)
+        self._hard_exit(reason, "worker cancelled")
 
     def start(self):
         metal = self.probe.metal_limit()

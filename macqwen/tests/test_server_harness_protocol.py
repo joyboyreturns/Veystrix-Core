@@ -208,7 +208,9 @@ class ChatRouteTests(unittest.TestCase):
         handler, _, _ = self.run_chat(dict(self.BASE, stream_options={"include_usage": True}))
         chunks, body = self.chunks(handler)
         self.assertEqual(chunks[-1]["choices"], [])
-        self.assertEqual(chunks[-1]["usage"], {"prompt_tokens": 7, "completion_tokens": 5, "total_tokens": 12})
+        self.assertEqual(chunks[-1]["usage"], {
+            "prompt_tokens": 7, "completion_tokens": 5, "total_tokens": 12,
+            "prompt_tokens_details": {"cached_tokens": 0}, "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 7})
         self.assertTrue(body.rstrip().endswith("data: [DONE]"))
         handler, _, _ = self.run_chat(dict(self.BASE))
         chunks, _ = self.chunks(handler)

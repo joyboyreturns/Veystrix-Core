@@ -40,6 +40,8 @@ NORMAL, ELEVATED, RECOVERY, CRITICAL = "normal", "elevated", "recovery", "critic
 GIB = 2 ** 30
 MIB = 2 ** 20
 
+from . import memory_policy
+
 FLAG_SWAP_GROWTH = "FLASHNEXT_SWAP_GROWTH_STOP_GIB"
 FLAG_PERSIST = "FLASHNEXT_PRESSURE_PERSIST_S"
 FLAG_CRITICAL_CONFIRM = "FLASHNEXT_CRITICAL_CONFIRM_S"
@@ -81,13 +83,21 @@ class Policy:
     throttle_max_wait_s: float = 20.0     # longest single wait at a safe boundary
     throttle_request_cap_s: float = 120.0  # total waiting per request
     elevated_scale: float = 0.5           # factor on future chunk / scratch budgets while elevated
-    swap_only: bool = False               # owner's waiver: only the swap-growth hard stop (and a missing probe) can stop
+    swap_only: bool = False               # approved agentic policy: only the swap-growth hard stop (and missing probe) can stop
+
+    def telemetry_only_checks(self) -> list[str]:
+        return list(memory_policy.TELEMETRY_ONLY_CHECKS) if self.swap_only else []
 
     @classmethod
-    def from_environment(cls, environ=None, swap_only: bool = False) -> "Policy":
+    def from_environment(cls, environ=None, swap_only: bool | None = None) -> "Policy":
         d = cls()
+        effective_swap_only = (
+            memory_policy.is_swap_growth_policy(environ)
+            if swap_only is None
+            else bool(swap_only)
+        )
         return cls(
-            swap_only=swap_only,
+            swap_only=effective_swap_only,
             swap_growth_stop_gib=_number(FLAG_SWAP_GROWTH, d.swap_growth_stop_gib, 0.25, 64, environ),
             persist_s=_number(FLAG_PERSIST, d.persist_s, 5, 3600, environ),
             critical_confirm_s=_number(FLAG_CRITICAL_CONFIRM, d.critical_confirm_s, 1, 60, environ),
@@ -108,6 +118,7 @@ class Controller:
     def __post_init__(self):
         self._lock = threading.RLock()
         self.state = NORMAL
+        self.admit_work = True
         self.baseline = None              # {"t", "swap_used_mb", "compressor_mb"}
         self.window = deque()             # (t, swapout_pages, swapin_pages, compressor_mb)
         self.pressure_since = None        # start of the current level >= 2 episode
@@ -122,9 +133,11 @@ class Controller:
         self.peak = {"swap_increase_mib": 0.0, "swapout_window_mib": 0.0, "swapin_window_mib": 0.0,
                      "compressor_growth_mib": 0.0, "pressure_level": 1, "pressure_seconds": 0.0}
         self.last = {}
+        self._probes: dict[str, bool] = {}
         self.throttled_s = 0.0
         self.request_throttled_s = 0.0
         self.stop_reason = None
+        self.stopped_at = None            # time.time() of the CRITICAL transition (for the report and the grace period)
         self._calm_started = None         # when the elevated causes cleared (RECOVERY clock)
 
     # -- evaluation ----------------------------------------------------------------------------------------------
@@ -133,11 +146,19 @@ class Controller:
                 compressor_mb) -> str | None:
         """Feed one machine sample. Returns a stop reason (CRITICAL) or None. Raises nothing for missing numbers:
         a missing number is a stop reason, because a controller that cannot see is not allowed to keep going."""
-        missing = [k for k, v in (("pressure", pressure), ("swap_used_mb", swap_used_mb), ("swapout", swapout_pages),
-                                  ("swapin", swapin_pages), ("available_mb", available_mb),
-                                  ("compressor_mb", compressor_mb)) if v is None]
+        self._probes = {
+            "pressure": pressure is not None,
+            "swap_used_mb": swap_used_mb is not None,
+            "swapout": swapout_pages is not None,
+            "swapin": swapin_pages is not None,
+            "available_mb": available_mb is not None,
+            "compressor_mb": compressor_mb is not None,
+        }
+        missing = [k for k, ok in self._probes.items() if not ok]
         if missing:
             return self._stop(f"memory controller probe unavailable: {', '.join(missing)}")
+        if not isinstance(swap_used_mb, (int, float)) or swap_used_mb < 0:
+            return self._stop(f"invalid swap measurement: {swap_used_mb!r}")
         with self._lock:
             if self.baseline is None:
                 self.baseline = {"t": now, "swap_used_mb": float(swap_used_mb), "compressor_mb": float(compressor_mb)}
@@ -189,8 +210,9 @@ class Controller:
                 if pressure_seconds >= p.persist_s:
                     return self._stop(f"memory pressure level >= 2 for {pressure_seconds:.0f}s without a calm spell "
                                       f"(limit {p.persist_s:.0f}s)")
-            if swap_increase >= p.swap_growth_stop_gib * 1024:
-                return self._stop(f"swap grew {swap_increase / 1024:.2f} GiB over the session baseline "
+            effective_swap = max(swap_increase, self.peak["swap_increase_mib"])
+            if effective_swap >= p.swap_growth_stop_gib * 1024:
+                return self._stop(f"swap grew {effective_swap / 1024:.2f} GiB over the session baseline "
                                   f"(hard limit {p.swap_growth_stop_gib:g} GiB)")
             if not p.swap_only:
                 if out_mib >= p.swap_activity_stop_mib:
@@ -240,13 +262,23 @@ class Controller:
     def _stop(self, reason: str) -> str:
         with self._lock:
             self.state = CRITICAL
-            self.stop_reason = reason
+            self.admit_work = False
+            if self.stop_reason is None:
+                self.stop_reason = reason
+                self.stopped_at = time.time()
         if self.emit is not None:
             try:
                 self.emit("memory_state", state=CRITICAL, reasons=[reason], **self.last)
             except Exception:
                 pass
         return reason
+
+    def can_admit(self) -> bool:
+        with self._lock:
+            return self.admit_work and self.state != CRITICAL
+
+    def is_stopped(self) -> bool:
+        return not self.can_admit()
 
     # -- what the rest of the engine may ask ---------------------------------------------------------------------
 
@@ -264,6 +296,10 @@ class Controller:
                    clock=time.monotonic) -> dict:
         """Wait, bounded, at a safe boundary while ELEVATED (not RECOVERY: that has already calmed). The caller holds no
         GPU work that this wait could starve: it is called between evaluated chunks and between requests."""
+        if memory_policy.is_swap_growth_policy():
+            # Swap-growth-only policy: memory pressure and compressor churn are telemetry-only.
+            # Do not artificially stall prefill progress or sleep between evaluated chunks.
+            return {"waited_s": 0.0, "state": self.state}
         started = clock()
         limit = self.policy.throttle_max_wait_s if max_wait is None else max_wait
         waited = 0.0
@@ -279,15 +315,53 @@ class Controller:
             self.emit("memory_throttle", label=label, waited_s=round(waited, 2), state=self.state)
         return {"waited_s": round(waited, 2), "state": self.state}
 
+    def swap_increase_mb(self) -> float:
+        """Current swap growth over the launch baseline in MiB (0 before the first sample)."""
+        with self._lock:
+            return float(self.last.get("swap_increase_mib", 0.0))
+
+    @property
+    def baseline_swap_used_mb(self) -> float:
+        with self._lock:
+            return float((self.baseline or {}).get("swap_used_mb") or 0.0)
+
+    @property
+    def _peak_swap_growth_mb(self) -> float:
+        with self._lock:
+            return float(self.peak.get("swap_increase_mib", 0.0))
+
     def ledger(self) -> dict:
         """Everything the owner asked to see about swap and compression, for the request log and the final report."""
         with self._lock:
             base = self.baseline or {}
-            return {"state": self.state, "reasons": list(self.reasons), "recovery_events": self.recoveries,
-                    "episodes": list(self.episodes[-20:]), "elevated_seconds": round(self.elevated_seconds, 1),
-                    "throttled_seconds": round(self.throttled_s, 1),
-                    "swap_at_launch_mb": base.get("swap_used_mb"), "peak": dict(self.peak), "last": dict(self.last),
-                    "swap_growth_stop_gib": self.policy.swap_growth_stop_gib, "stop_reason": self.stop_reason}
+            cur_swap = self.last.get("swap_increase_mib", 0.0)
+            peak_swap = self.peak.get("swap_increase_mib", 0.0)
+            return {
+                "policy_identifier": (
+                    memory_policy.POLICY_SWAP_GROWTH_ONLY if self.policy.swap_only else "threshold-governed"
+                ),
+                "swap_baseline_mb": base.get("swap_used_mb"),
+                "current_swap_growth_mb": round(cur_swap, 1),
+                "peak_swap_growth_mb": round(peak_swap, 1),
+                "threshold_gib": self.policy.swap_growth_stop_gib,
+                "threshold_mb": self.policy.swap_growth_stop_gib * 1024,
+                "stop_reason": self.stop_reason,
+                "stopped_at": self.stopped_at,
+                "can_admit": self.can_admit(),
+                "probe_availability": dict(self._probes),
+                "telemetry_only_checks": self.policy.telemetry_only_checks(),
+                "disclaimer": memory_policy.DISCLAIMER if self.policy.swap_only else "",
+                "state": self.state,
+                "reasons": list(self.reasons),
+                "recovery_events": self.recoveries,
+                "episodes": list(self.episodes[-20:]),
+                "elevated_seconds": round(self.elevated_seconds, 1),
+                "throttled_seconds": round(self.throttled_s, 1),
+                "swap_at_launch_mb": base.get("swap_used_mb"),
+                "peak": dict(self.peak),
+                "last": dict(self.last),
+                "swap_growth_stop_gib": self.policy.swap_growth_stop_gib,
+            }
 
 
 # -- process-wide handle -------------------------------------------------------------------------------------------
@@ -332,6 +406,38 @@ def begin_request() -> None:
     c = _ACTIVE[0]
     if c is not None:
         c.begin_request()
+
+
+# The server registers how to ask "is an inference job running right now?". The guard uses it to decide between an
+# immediate exit (idle: nothing in flight) and a short cooperative-cancel grace period (a job can stop at its next
+# streamed-layer boundary and tell its client why).
+_WORKER_PROBE: list = [None]
+
+
+def register_worker_probe(probe) -> None:
+    _WORKER_PROBE[0] = probe
+
+
+def worker_busy() -> bool:
+    """True when a job is running. No registered probe (chat, benchmarks, unit tests) means no server job exists, so a stop
+    exits at once exactly as before; a probe that raises counts as busy (the grace period is bounded either way)."""
+    probe = _WORKER_PROBE[0]
+    if probe is None:
+        return False
+    try:
+        return bool(probe())
+    except Exception:
+        return True
+
+
+def can_admit_work() -> bool:
+    c = _ACTIVE[0]
+    return c.can_admit() if c is not None else True
+
+
+def is_stopped() -> bool:
+    c = _ACTIVE[0]
+    return c.is_stopped() if c is not None else False
 
 
 def ledger() -> dict | None:

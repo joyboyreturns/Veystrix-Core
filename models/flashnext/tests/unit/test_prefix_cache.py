@@ -386,6 +386,42 @@ class TierTests(Base):
         self.assertEqual((directory / "notes.json").read_text(), "not a cache manifest")
         self.assertEqual((directory / ".other.tmp").read_text(), "keep")
 
+    def test_disk_headroom_guard_skips_ssd_writes_when_free_space_below_threshold(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        directory = self.tmp / "headroom"
+        # Set min_disk_free_bytes to 50 GB
+        cache = P.PrefixCache(self.fp, ram_budget=10 * 1024 * 1024, directory=directory, min_disk_free_bytes=50 * 1024 * 1024 * 1024)
+
+        # Simulate free disk space as only 20 GB (< 50 GB threshold)
+        mock_usage = SimpleNamespace(free=20 * 1024 * 1024 * 1024, total=500 * 1024 * 1024 * 1024)
+        with patch("shutil.disk_usage", return_value=mock_usage):
+            entry = cache.put(self.ids[:128], self.cold(128))
+            self.assertIn(entry.key, cache._ram)
+            self.assertNotIn(entry.key, cache._disk)
+            self.assertEqual(cache.stats.writes_skipped, 1)
+
+        # Simulate free disk space as 100 GB (>= 50 GB threshold)
+        mock_usage_ok = SimpleNamespace(free=100 * 1024 * 1024 * 1024, total=500 * 1024 * 1024 * 1024)
+        with patch("shutil.disk_usage", return_value=mock_usage_ok):
+            entry2 = cache.put(self.ids[:200], self.cold(200))
+            self.assertIn(entry2.key, cache._disk)
+            self.assertGreater(cache.stats.ssd_writes, 0)
+
+    def test_cache_inspect_and_cleanup_methods(self):
+        directory = self.tmp / "inspect_clean"
+        cache = P.PrefixCache(self.fp, ram_budget=10 * 1024 * 1024, directory=directory)
+        cache.put(self.ids[:128], self.cold(128))
+        cache.put(self.ids[:200], self.cold(200))
+        info = cache.inspect()
+        self.assertEqual(info["fingerprint"], self.fp)
+        self.assertEqual(info["ram_entries"], 2)
+        self.assertEqual(info["ssd_entries"], 2)
+
+        # Cleanup target disk bytes
+        res = cache.cleanup(target_disk_bytes=1000)
+        self.assertGreaterEqual(res["removed_entries"], 1)
+
 
 class CorruptionTests(Base):
     def prepared(self):

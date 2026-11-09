@@ -268,6 +268,10 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     parser.add_argument("--pool-gb", help="auto (default), 0, or a fixed size up to 2")
     parser.add_argument("--enable", action="append", default=[], choices=tuple(modes.EXPERIMENTAL))
     parser.add_argument("--context-limit", type=int)
+    parser.add_argument("--max-cold-prefill", type=int,
+                        help="largest cold prefill in tokens (AGENTIC default 32768; prefill still runs in 2048-token chunks)")
+    parser.add_argument("--max-incremental-prefill", type=int,
+                        help="largest uncached increment per request in tokens (AGENTIC default 32768)")
     parser.add_argument("--prefix-dir")
     parser.add_argument("--auto-purge", action="store_true")
     parser.add_argument("--no-auto-purge", action="store_true",
@@ -285,7 +289,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
             plan = modes.plan_mode(
                 known.mode or modes.CHAT, pool_gb=known.pool_gb, enable=known.enable,
                 prefix_dir=known.prefix_dir, context_limit=known.context_limit,
-                serve="--server" in remaining)
+                serve="--server" in remaining, max_cold_prefill=known.max_cold_prefill,
+                max_incremental_prefill=known.max_incremental_prefill)
         except modes.ModeError as exc:
             raise SystemExit(f"veystrix: {exc}") from exc
     interpreter = _interpreter(model)

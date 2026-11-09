@@ -612,11 +612,13 @@ def _prepare_startup(prefs, benchmarking, display):
     if prefs["model"] != "flashnext" or benchmarking:
         return None, None
     from models.flashnext import prefill_readiness as readiness
-    from models.flashnext import memory_waiver, purge_recovery, resource_prep
+    from models.flashnext import memory_policy, memory_waiver, purge_recovery, resource_prep
     from models.flashnext.app_closer import AppCloser
 
     agentic = _agentic_mode()
     recovery = purge_recovery.from_environment()
+    if agentic and (memory_policy.is_swap_growth_policy() or memory_waiver.active()):
+        return recovery, readiness.live()
     if recovery is not None and agentic:
         recovery._blocker = readiness.purge_blocker_tiered      # no purge for a refusal that file cache cannot fix
     out = lambda text: print(text, file=display, flush=True)
@@ -629,8 +631,6 @@ def _prepare_startup(prefs, benchmarking, display):
                       f"(available {step.available_before / 2 ** 30:.2f} -> {step.available_after / 2 ** 30:.2f} GiB)",
                       file=display, flush=True)
     if agentic:
-        if not report.admitted and memory_waiver.active():
-            return recovery, report.verdict            # _admit_agentic records the waiver and sets the requested tier
         if not report.admitted:
             readiness.log(report.verdict)
             print(report.failure_report(), file=sys.stderr, flush=True)
@@ -651,11 +651,19 @@ def _apply_tier(verdict, display) -> None:
     from models.flashnext.settings import modes
 
     current = modes.context_limit_from_environment()
-    limit = min(tier.context_limit, current) if current else tier.context_limit
+    required = os.environ.get("VEYSTRIX_CONTEXT_REQUIRED") == "1"
+    if required and current:
+        limit = current
+        env_cold = modes.max_cold_prefill_from_environment()
+        cold_prefill = env_cold if env_cold else min(tier.max_cold_prefill, modes.DEFAULT_MAX_COLD_PREFILL)
+    else:
+        limit = min(tier.context_limit, current) if current else tier.context_limit
+        env_cold = modes.max_cold_prefill_from_environment()
+        cold_prefill = env_cold if env_cold else tier.max_cold_prefill
     os.environ["VEYSTRIX_CONTEXT_LIMIT"] = str(limit)
-    os.environ["VEYSTRIX_MAX_COLD_PREFILL"] = str(tier.max_cold_prefill)
-    if tier.name != "standard":
-        print(f"admitted at tier {tier.name}: context limit {limit}, cold prefill up to {tier.max_cold_prefill} tokens "
+    os.environ["VEYSTRIX_MAX_COLD_PREFILL"] = str(cold_prefill)
+    if tier.name != "standard" and not required:
+        print(f"admitted at tier {tier.name}: context limit {limit}, cold prefill up to {cold_prefill} tokens "
               f"(memory does not admit the standard tier right now; larger requests are refused, never truncated)",
               file=display, flush=True)
 
@@ -688,23 +696,28 @@ def _admit_agentic(prefs, benchmarking, display, verdict=None):
     if prefs["model"] != "flashnext" or benchmarking or not _agentic_mode():
         return None
     from models.flashnext import prefill_readiness as readiness
-
+    from models.flashnext import memory_policy
     from models.flashnext import memory_waiver
 
     if verdict is None:
         verdict = readiness.live()
     readiness.log(verdict)
-    if not verdict.admitted and memory_waiver.active():
-        # The owner's waiver: launch at the smallest tier that serves the stated context, whatever the headroom rule says.
-        tiers = readiness.active_tiers()
-        tier = tiers[-1]
-        print(memory_waiver.banner(), file=sys.stderr, flush=True)
-        print(readiness.render(verdict), file=sys.stderr, flush=True)
-        print(f"waived refusal; launching at tier {tier.name} (context {tier.context_limit}, cold prefill up to "
-              f"{tier.max_cold_prefill})", file=sys.stderr, flush=True)
-        import dataclasses
-        readiness.log(dataclasses.replace(verdict, tier=tier, advice=[*verdict.advice, "launched under FLASHNEXT_MEMORY_WAIVER"]))
-        _apply_tier(dataclasses.replace(verdict, tier=tier), display)
+    if memory_policy.is_swap_growth_policy() or memory_waiver.active():
+        print(memory_policy.banner(), file=display, flush=True)
+        tier = getattr(verdict, "tier", None)
+        if tier is None:
+            tiers = readiness.active_tiers()
+            if tiers:
+                import dataclasses
+                tier = tiers[0] if memory_policy.is_swap_growth_policy() else tiers[-1]
+                verdict = dataclasses.replace(verdict, tier=tier)
+        if not verdict.admitted:
+            print(f"memory admission note: former gates are telemetry-only under swap-growth-only policy; "
+                  f"stopping condition is swap growth of 2.5 GiB over session baseline.",
+                  file=display, flush=True)
+        else:
+            print("prefill readiness: " + verdict.checks[0].detail, file=display, flush=True)
+        _apply_tier(verdict, display)
         return verdict
     if not verdict.admitted:
         print(readiness.render(verdict), file=sys.stderr, flush=True)
@@ -995,6 +1008,14 @@ def main() -> int:
         parser.error("benchmark mode requires --profile plain")
     if args.benchmark_chat_parity and prefs["model"] != "flashnext":
         parser.error("chat parity requires --model flashnext")
+    # Fail closed: a flashnext server needs the safety configuration the launcher (./chat.sh --mode agentic) applies. A direct
+    # `session.py --server` launch ran the 2026-11-09 DeepSeek Harness incident with no guard, no chunking, no cache.
+    from models.flashnext import supervision
+
+    refusal = supervision.check(os.environ, model=prefs["model"], server=bool(args.server), benchmarking=benchmarking)
+    if refusal:
+        print(refusal, file=sys.stderr, flush=True)
+        return supervision.EXIT_CODE
     # A benchmark uses temporary command-line conditions. It must not change
     # the user's next interactive chat, as an earlier 20-token probe did.
     if not benchmarking:
@@ -1064,11 +1085,16 @@ def main() -> int:
     if args.server:
         from macqwen.server import serve
 
-        from models.flashnext.settings.modes import context_limit_from_environment, max_cold_prefill_from_environment
+        from models.flashnext.settings.modes import (
+            context_limit_from_environment,
+            max_cold_prefill_from_environment,
+            max_incremental_prefill_from_environment,
+        )
 
         serve(session, args.host, args.port, args.server_api_key,
               args.allow_origin, context_limit=context_limit_from_environment(),
-              max_cold_prefill=max_cold_prefill_from_environment())
+              max_cold_prefill=max_cold_prefill_from_environment(),
+              max_incremental_prefill=max_incremental_prefill_from_environment())
         return 0
     print(commands.render_help(session.profile) + "\n")
 

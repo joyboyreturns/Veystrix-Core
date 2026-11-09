@@ -59,9 +59,16 @@ def _number(name: str, default: str) -> float:
 
 def boundary_mode() -> str:
     mode = os.environ.get(FLAG_BOUNDARIES, "system") or "system"
-    if mode not in ("system", "chunks", "messages"):
-        raise ValueError(f"{FLAG_BOUNDARIES} must be 'system', 'chunks' or 'messages'")
+    if mode not in ("system", "chunks", "messages", "all"):
+        raise ValueError(f"{FLAG_BOUNDARIES} must be 'system', 'chunks', 'messages' or 'all'")
     return mode
+
+
+def anchor_mode() -> str:
+    """Where the chunk plan is forced to cut. "all" is "messages" plus extra snapshots at the plan's own chunk edges: the
+    anchors, and so every plan, are the same, which is why stored entries stay valid when the mode changes between them."""
+    mode = boundary_mode()
+    return "messages" if mode == "all" else mode
 
 
 @dataclass
@@ -70,9 +77,12 @@ class Report:
     hit_tokens: int = 0
     prefilled_tokens: int = 0
     tier: str | None = None
+    outcome: str = "COLD"                               # RAM_HIT, SSD_HIT, PREFIX_MISMATCH, STATE_INVALID, EVICTED, RESTORE_FAILED, COLD
+    lookup_seconds: float = 0.0
     restore_seconds: float = 0.0
     prefill_seconds: float = 0.0
     bytes_loaded: int = 0
+    bytes_restored: int = 0
     snapshots: list = field(default_factory=list)       # token counts stored during this prefill
     snapshot_seconds: float = 0.0                       # time spent storing them (SSD write included)
     plan_rejections: int = 0                            # stored prefixes skipped for an incompatible chunk history
@@ -101,7 +111,7 @@ class PrefixSession:
             # The balanced plan depends on where the anchors are, which depends on these settings, so they
             # are part of the key. The default "grid" policy keeps the original key unchanged.
             plan = {} if policy == "grid" else {
-                "chunk_policy": policy, "boundaries": boundary_mode(),
+                "chunk_policy": policy, "boundaries": anchor_mode(),
                 "min_tokens": int(_number(FLAG_MIN_TOKENS, "512"))}
             if policy == "budgeted":
                 # The plan is a function of this budget and the candidate sizes; a different budget is a different plan.
@@ -127,7 +137,7 @@ class PrefixSession:
             else:
                 self._store = P.PrefixCache(
                     fp, int(_number(FLAG_RAM_GB, "0.75") * 1e9), Path(directory),
-                    int(_number(FLAG_DISK_GB, "20") * 1e9))
+                    int(_number(FLAG_DISK_GB, "24") * 1e9))
         return self._store
 
     @staticmethod
@@ -171,7 +181,7 @@ class PrefixSession:
         """Positions the chunk plan must cut at, whatever the cache already holds (the structural boundaries
         a snapshot is taken at): the system-message end, or every message end in "messages" mode."""
         minimum = int(_number(FLAG_MIN_TOKENS, "512"))
-        if boundary_mode() == "messages":
+        if boundary_mode() in ("messages", "all"):
             chosen = set(self.message_boundaries(prompt))
         else:
             system = self.system_boundary(prompt)
@@ -182,7 +192,7 @@ class PrefixSession:
         """Absolute positions to snapshot at (after ``offset``, before the last token)."""
         minimum = int(_number(FLAG_MIN_TOKENS, "512"))
         chosen = set(self.anchors(prompt))
-        if boundary_mode() == "chunks":
+        if boundary_mode() in ("chunks", "all"):
             chunk = prefill_module.chunk_tokens()
             if chunk:
                 if prefill_module.chunk_policy() == "balanced":
@@ -231,17 +241,24 @@ class PrefixSession:
         if system is not None and system >= int(_number(FLAG_MIN_TOKENS, "512")):
             store.observe(prompt[:system])               # an exact system prompt seen again is a recognised profile
         rejected_before = store.stats.rejected_plan
+        lookup_began = time.perf_counter()
         if restore:
-            hit, restored = store.lookup(prompt, language.make_cache, language=language,
-                                         accept=lambda n, plan: self.compatible(edges, n, plan))
+            res = store.lookup(prompt, language.make_cache, language=language,
+                               accept=lambda n, plan: self.compatible(edges, n, plan))
+            hit, restored = res[0], res[1]
+            outcome = getattr(res, "outcome", ("RAM_HIT" if hit and hit.tier == "ram" else "SSD_HIT" if hit else "COLD"))
         else:                                   # same plan, no restore, no snapshot (test control)
             hit, restored = None, None
+            outcome = "COLD"
+        report.lookup_seconds = time.perf_counter() - lookup_began
+        report.outcome = outcome
         report.plan_rejections = store.stats.rejected_plan - rejected_before
         offset = 0
         if hit is not None:
             cache, offset = restored, hit.n_tokens
             report.hit_tokens, report.tier = hit.n_tokens, hit.tier
             report.restore_seconds, report.bytes_loaded = hit.seconds, hit.bytes_loaded
+            report.bytes_restored = hit.bytes_loaded
         boundaries = self.boundaries(prompt, offset)
 
         last = []
@@ -272,6 +289,12 @@ class PrefixSession:
 
         suffix = mx.array(prompt[offset:])[None]
         report.prefilled_tokens = len(prompt) - offset
+        import logging
+        _prefix_log = logging.getLogger("flashnext.prefix_session")
+        _prefix_log.info(
+            "prefix cache lookup: outcome=%s matching_prefix_length=%d restored_token_count=%d newly_prefilled_token_count=%d lookup_seconds=%.4f restore_seconds=%.4f bytes_restored=%d",
+            report.outcome, report.hit_tokens, report.hit_tokens, report.prefilled_tokens, report.lookup_seconds, report.restore_seconds, report.bytes_restored,
+        )
         began = time.perf_counter()
         with held:                                       # leases end however the prefill ends (error, cancellation)
             if hit is not None:

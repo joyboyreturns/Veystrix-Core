@@ -189,8 +189,12 @@ class StatedContextTests(unittest.TestCase):
         explicit = M.plan_mode(M.AGENTIC, context_limit=8192, free_disk_gb=200)
         default = M.plan_mode(M.AGENTIC, free_disk_gb=200)
         self.assertTrue(explicit.context_required)
-        self.assertFalse(default.context_required)
-        applied = M.apply_mode({"VEYSTRIX_CONTEXT_REQUIRED": "1"}, default)
+        # Owner decision 2026-11-09: the AGENTIC default is the native 262,144 window and is a stated requirement, so memory
+        # tiers may not silently shrink it. A mode without a context limit (CHAT) is never a requirement, and an inherited
+        # VEYSTRIX_CONTEXT_REQUIRED does not turn it into one.
+        self.assertTrue(default.context_required)
+        self.assertEqual(default.context_limit, 262144)
+        applied = M.apply_mode({"VEYSTRIX_CONTEXT_REQUIRED": "1"}, M.plan_mode(M.CHAT, free_disk_gb=200))
         self.assertNotIn("VEYSTRIX_CONTEXT_REQUIRED", applied)
         applied = M.apply_mode({}, explicit)
         self.assertEqual((applied["VEYSTRIX_CONTEXT_LIMIT"], applied["VEYSTRIX_CONTEXT_REQUIRED"]), ("8192", "1"))
@@ -250,7 +254,9 @@ class WaiverAdmissionTests(unittest.TestCase):
         code, _ = self.run_admit({})
         self.assertEqual(code, R.ADMISSION_EXIT_CODE)
 
-    def test_with_the_waiver_the_launch_proceeds_at_the_8k_tier(self):
+    def test_with_the_waiver_the_launch_proceeds_at_the_largest_tier(self):
+        """Owner decision 2026-11-09 (swap-growth-only policy): the largest tier is chosen, memory gates are telemetry-only.
+        This test expected the 8K tier (10240) from before that decision; the approved behaviour is the standard tier."""
         code, env = self.run_admit({"FLASHNEXT_MEMORY_WAIVER": "swap-only"})
         self.assertIsNone(code)
-        self.assertEqual((env["VEYSTRIX_CONTEXT_LIMIT"], env["VEYSTRIX_MAX_COLD_PREFILL"]), ("12288", "10240"))
+        self.assertEqual((env["VEYSTRIX_CONTEXT_LIMIT"], env["VEYSTRIX_MAX_COLD_PREFILL"]), ("12288", "14336"))

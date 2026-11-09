@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest.mock import patch
 
 from models.flashnext.settings import modes as M
 
@@ -128,6 +130,16 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(M.plan_mode(M.AGENTIC, free_disk_gb=500).prefix_disk_gb, M.PREFIX_DISK_GB)
         self.assertEqual(M.plan_mode(M.AGENTIC, free_disk_gb=60).prefix_disk_gb, 10)
 
+    def test_the_default_ssd_quota_is_50_gb_and_the_owner_can_override_it(self):
+        self.assertEqual(M.PREFIX_DISK_GB, 50.0)
+        self.assertEqual(M.plan_mode(M.AGENTIC, free_disk_gb=500).prefix_disk_gb, 50.0)
+        self.assertEqual(M.cache_quota_gb({"VEYSTRIX_CACHE_GB": "80"}), 80.0)
+        for bad in ("", "abc", "0", "-5"):
+            self.assertEqual(M.cache_quota_gb({"VEYSTRIX_CACHE_GB": bad}), 50.0, bad)
+        with patch.dict(os.environ, {"VEYSTRIX_CACHE_GB": "30"}):
+            self.assertEqual(M.plan_mode(M.AGENTIC, free_disk_gb=500).prefix_disk_gb, 30.0)
+            self.assertEqual(M.plan_mode(M.AGENTIC, free_disk_gb=70).prefix_disk_gb, 20.0)   # reserve still wins
+
     def test_a_full_disk_turns_the_cache_off_never_to_an_unlimited_budget(self):
         plan = M.plan_mode(M.AGENTIC, free_disk_gb=50.5)
         self.assertEqual(plan.env["FLASHNEXT_PREFIX_CACHE"], "0")
@@ -150,7 +162,7 @@ class PlanTests(unittest.TestCase):
 
     def test_context_limit_above_the_validated_path_warns(self):
         plan = M.plan_mode(M.AGENTIC, free_disk_gb=200)
-        self.assertTrue(any("real-model evidence" in w for w in plan.warnings))
+        self.assertTrue(any("real-checkpoint evidence" in w for w in plan.warnings))   # 32K cold prefill is unvalidated
         self.assertFalse(M.plan_mode(M.AGENTIC, context_limit=2048, free_disk_gb=200).warnings)
 
 

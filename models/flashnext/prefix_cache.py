@@ -34,6 +34,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import tempfile
 import threading
 import time
@@ -528,6 +529,35 @@ def read_entry(directory: Path, key: str, fp: str, verify_hash: bool = True) -> 
 # -- the two-tier cache ----------------------------------------------------------------------
 
 
+OUTCOME_RAM_HIT = "RAM_HIT"
+OUTCOME_SSD_HIT = "SSD_HIT"
+OUTCOME_PREFIX_MISMATCH = "PREFIX_MISMATCH"
+OUTCOME_STATE_INVALID = "STATE_INVALID"
+OUTCOME_EVICTED = "EVICTED"
+OUTCOME_RESTORE_FAILED = "RESTORE_FAILED"
+OUTCOME_COLD = "COLD"
+ALL_OUTCOMES = (
+    OUTCOME_RAM_HIT,
+    OUTCOME_SSD_HIT,
+    OUTCOME_PREFIX_MISMATCH,
+    OUTCOME_STATE_INVALID,
+    OUTCOME_EVICTED,
+    OUTCOME_RESTORE_FAILED,
+    OUTCOME_COLD,
+)
+
+
+class LookupResult(tuple):
+    """2-tuple (hit, caches) exposing .outcome, .hit, .caches for backward compatibility."""
+
+    def __new__(cls, hit, caches, outcome: str):
+        obj = super().__new__(cls, (hit, caches))
+        obj.hit = hit
+        obj.caches = caches
+        obj.outcome = outcome
+        return obj
+
+
 @dataclass
 class Hit:
     n_tokens: int                 # prompt tokens whose state was restored
@@ -535,6 +565,7 @@ class Hit:
     seconds: float                # restoration time (not prefill speed)
     bytes_loaded: int
     chain: tuple                  # entry keys, root first
+    outcome: str = ""             # "RAM_HIT" or "SSD_HIT"
 
 
 @dataclass
@@ -545,6 +576,11 @@ class Stats:
     missed_tokens: int = 0
     ram_hits: int = 0
     ssd_hits: int = 0
+    prefix_mismatches: int = 0
+    state_invalids: int = 0
+    evicted_hits: int = 0
+    restore_failures: int = 0
+    cold_lookups: int = 0
     puts: int = 0
     deduped_puts: int = 0
     ssd_writes: int = 0
@@ -583,13 +619,18 @@ class PrefixCache:
     """
 
     def __init__(self, fp: str, ram_budget: int, directory=None, disk_budget: int = 0,
-                 verify_hash: bool = True, write_through: bool = True):
+                 verify_hash: bool = True, write_through: bool = True,
+                 min_disk_free_bytes: int | None = None):
         self.fp = fp
         self.ram_budget = int(ram_budget)
         self.disk_budget = int(disk_budget)
         self.directory = Path(directory) if directory else None
         self.verify_hash = verify_hash
         self.write_through = write_through
+        self.min_disk_free_bytes = (
+            int(min_disk_free_bytes) if min_disk_free_bytes is not None
+            else int(float(os.environ.get("FLASHNEXT_DISK_RESERVE_GB", "50.0")) * 1e9)
+        )
         self.stats = Stats()
         self._lock = threading.RLock()
         self._ram: OrderedDict[str, Entry] = OrderedDict()
@@ -599,6 +640,7 @@ class PrefixCache:
         self._plans: dict[str, tuple | None] = {}     # key -> chunk-plan provenance of the stored state
         self._lengths: set[int] = set()
         self._leases: dict[str, int] = {}             # key -> holders; a leased entry is never evicted or dropped
+        self._evicted_keys: OrderedDict[str, float] = OrderedDict()
         if self.directory is not None:
             owner = _claim_directory(self.directory)
             self._owner_finalizer = weakref.finalize(self, _release_directory, *owner)
@@ -773,6 +815,14 @@ class PrefixCache:
     def _persist(self, entry: Entry) -> None:
         if entry.key in self._disk:
             return
+        if self.directory is not None:
+            try:
+                usage = shutil.disk_usage(self.directory)
+                if usage.free < self.min_disk_free_bytes:
+                    self.stats.writes_skipped += 1
+                    return
+            except OSError:
+                pass
         written = write_entry(self.directory, entry, self.fp)
         self._disk[entry.key] = {"n": entry.n_tokens, "parent": entry.parent, "bytes": written,
                                  "atime": time.time()}
@@ -794,6 +844,9 @@ class PrefixCache:
             self._ram_bytes -= resident.nbytes()
         self._tokens.pop(victim, None)
         self._plans.pop(victim, None)
+        self._evicted_keys[victim] = time.time()
+        if len(self._evicted_keys) > 2048:
+            self._evicted_keys.popitem(last=False)
         self.stats.evicted_ssd += 1
         self.stats.evicted_ssd_bytes += meta["bytes"]
         return meta["bytes"]
@@ -815,11 +868,12 @@ class PrefixCache:
             self._disk[key]["atime"] = time.time()
 
     # ---- lookup ----
-    def _longest_prefix(self, tokens, strictly_shorter=False, accept=None):
-        """Longest stored prefix of ``tokens``. ``accept(n, plan)`` may veto a candidate (its plan
-        provenance does not fit the caller's continuation); a vetoed entry stays stored for other plans."""
+    def _longest_prefix_with_reason(self, tokens, strictly_shorter=False, accept=None):
         limit = len(tokens) - (1 if strictly_shorter else 0)
-        for n in sorted((n for n in self._lengths if n <= limit), reverse=True):
+        saw_plan_mismatch = False
+        saw_evicted = False
+        candidates = sorted((n for n in self._lengths if n <= limit), reverse=True)
+        for n in candidates:
             key = chain_key(self.fp, tokens[:n])
             if key in self._ram or key in self._disk:
                 if self._tokens.get(key, tokens[:n]) == tuple(tokens[:n]):
@@ -829,9 +883,22 @@ class PrefixCache:
                             plan = self._ram[key].plan
                         if not accept(n, plan):
                             self.stats.rejected_plan += 1
+                            saw_plan_mismatch = True
                             continue
-                    return key, n
-        return None
+                    return (key, n), "hit"
+            elif key in self._evicted_keys:
+                saw_evicted = True
+        if saw_plan_mismatch:
+            return None, "plan_mismatch"
+        if saw_evicted:
+            return None, "evicted"
+        return None, "cold"
+
+    def _longest_prefix(self, tokens, strictly_shorter=False, accept=None):
+        """Longest stored prefix of ``tokens``. ``accept(n, plan)`` may veto a candidate (its plan
+        provenance does not fit the caller's continuation); a vetoed entry stays stored for other plans."""
+        found, _ = self._longest_prefix_with_reason(tokens, strictly_shorter=strictly_shorter, accept=accept)
+        return found
 
     def peek(self, ids, accept=None) -> int:
         """How many leading tokens of ``ids`` a lookup would reuse, without loading, restoring or counting anything.
@@ -847,7 +914,7 @@ class PrefixCache:
             return 0 if found is None else found[1]
 
     def lookup(self, ids, make_cache, language=None, accept=None) -> tuple:
-        """Return ``(hit, caches)``. ``hit`` is None on a miss (then ``caches`` is None).
+        """Return ``LookupResult(hit, caches, outcome)``. ``hit`` is None on a miss (then ``caches`` is None).
 
         ``accept(n_tokens, plan)`` vetoes candidates whose chunk-plan provenance does not fit (see ``put``).
 
@@ -858,11 +925,28 @@ class PrefixCache:
         with self._lock:
             ids = tuple(int(t) for t in ids)
             self.stats.lookups += 1
+            saw_invalid = False
+            saw_restore_fail = False
             while True:
-                found = self._longest_prefix(ids, strictly_shorter=True, accept=accept)
+                found, reason = self._longest_prefix_with_reason(ids, strictly_shorter=True, accept=accept)
                 if found is None:
                     self.stats.missed_tokens += len(ids)
-                    return None, None
+                    if saw_invalid:
+                        outcome = OUTCOME_STATE_INVALID
+                        self.stats.state_invalids += 1
+                    elif saw_restore_fail:
+                        outcome = OUTCOME_RESTORE_FAILED
+                        self.stats.restore_failures += 1
+                    elif reason == "plan_mismatch":
+                        outcome = OUTCOME_PREFIX_MISMATCH
+                        self.stats.prefix_mismatches += 1
+                    elif reason == "evicted":
+                        outcome = OUTCOME_EVICTED
+                        self.stats.evicted_hits += 1
+                    else:
+                        outcome = OUTCOME_COLD
+                        self.stats.cold_lookups += 1
+                    return LookupResult(None, None, outcome)
                 key, n = found
                 holding = self._chain_keys(key)
                 self._acquire(holding)                  # nothing in this chain may be evicted while it is restored
@@ -873,6 +957,7 @@ class PrefixCache:
                         self._release(holding)
                         holding = ()
                         self._invalidate(key)
+                        saw_invalid = True
                         continue
                     try:
                         caches = restore(chain, make_cache)
@@ -880,12 +965,15 @@ class PrefixCache:
                         self._release(holding)
                         holding = ()
                         self._invalidate(key)
+                        saw_restore_fail = True
                         continue
                 finally:
-                    self._release(holding)
+                    if holding:
+                        self._release(holding)
                 if language is not None:
                     apply_language(language, chain[-1].lang)
                 tier = "ssd" if loaded else "ram"
+                outcome = OUTCOME_SSD_HIT if loaded else OUTCOME_RAM_HIT
                 self._touch(key)
                 seconds = time.perf_counter() - started
                 self.stats.hits += 1
@@ -896,7 +984,8 @@ class PrefixCache:
                 self.stats.ssd_hits += tier == "ssd"
                 self.stats.ssd_bytes_read += loaded
                 self._on_hit(key, n, tier, seconds)
-                return Hit(n, tier, seconds, loaded, tuple(e.key for e in chain)), caches
+                hit = Hit(n, tier, seconds, loaded, tuple(e.key for e in chain), outcome=outcome)
+                return LookupResult(hit, caches, outcome)
 
     def _chain_keys(self, key) -> tuple:
         """Keys of ``key`` and its ancestors (from the in-memory index only; nothing is loaded)."""
@@ -1003,3 +1092,67 @@ class PrefixCache:
             self._tokens.clear()
             self._lengths.clear()
             self._ram_bytes = 0
+
+    def inspect(self) -> dict:
+        """Safe inspection of cache contents without exposing raw prompt texts or internal reasoning."""
+        with self._lock:
+            disk_bytes = sum(m["bytes"] for m in self._disk.values())
+            try:
+                free_bytes = shutil.disk_usage(self.directory).free if self.directory else None
+            except OSError:
+                free_bytes = None
+            return {
+                "fingerprint": self.fp,
+                "ram_entries": len(self._ram),
+                "ram_bytes": self._ram_bytes,
+                "ram_budget_bytes": self.ram_budget,
+                "ssd_entries": len(self._disk),
+                "ssd_bytes": disk_bytes,
+                "ssd_budget_bytes": self.disk_budget,
+                "ssd_directory": str(self.directory) if self.directory else None,
+                "disk_free_bytes": free_bytes,
+                "min_disk_free_bytes": self.min_disk_free_bytes,
+                "leased_entries": len(self._leases),
+                "lengths": sorted(self._lengths),
+                "stats": {
+                    "lookups": self.stats.lookups,
+                    "hits": self.stats.hits,
+                    "ram_hits": self.stats.ram_hits,
+                    "ssd_hits": self.stats.ssd_hits,
+                    "prefix_mismatches": self.stats.prefix_mismatches,
+                    "state_invalids": self.stats.state_invalids,
+                    "evicted_hits": self.stats.evicted_hits,
+                    "restore_failures": self.stats.restore_failures,
+                    "cold_lookups": self.stats.cold_lookups,
+                    "reused_tokens": self.stats.reused_tokens,
+                    "ssd_writes": self.stats.ssd_writes,
+                    "ssd_bytes_written": self.stats.ssd_bytes_written,
+                    "ssd_bytes_read": self.stats.ssd_bytes_read,
+                    "writes_skipped": self.stats.writes_skipped,
+                    "evicted_ram": self.stats.evicted_ram,
+                    "evicted_ssd": self.stats.evicted_ssd,
+                },
+            }
+
+    def cleanup(self, max_age_seconds: float | None = None, target_disk_bytes: int | None = None) -> dict:
+        """Safe LRU / age-based reclamation of unleased leaf snapshots."""
+        with self._lock:
+            freed_bytes = 0
+            removed_entries = 0
+            now = time.time()
+            if max_age_seconds is not None:
+                parents = {m["parent"] for m in self._disk.values()}
+                for key in list(self._disk):
+                    if key not in parents and key not in self._leases:
+                        if now - self._disk[key]["atime"] > max_age_seconds:
+                            freed_bytes += self._drop_disk_entry(key, reason="ttl")
+                            removed_entries += 1
+            if target_disk_bytes is not None:
+                while sum(m["bytes"] for m in self._disk.values()) > max(0, target_disk_bytes) and len(self._disk) > 1:
+                    victim = self._disk_victim()
+                    if victim is None:
+                        break
+                    freed_bytes += self._drop_disk_entry(victim, reason="cleanup_target")
+                    removed_entries += 1
+            self._lengths = {m["n"] for m in self._disk.values()} | {e.n_tokens for e in self._ram.values()}
+            return {"removed_entries": removed_entries, "freed_bytes": freed_bytes}
