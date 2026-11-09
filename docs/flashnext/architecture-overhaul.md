@@ -701,6 +701,15 @@ chunk-major arms, memory pressure level 2 in every arm, minimum available 1.4-2.
 owner's swap ceiling; part of that is ambient drift (swap started each arm at 1.2-1.6 GiB). Do not repeat or lengthen 16K runs without first
 clearing swap headroom; layer-major stays opt-in.
 
+**Restore from an inner snapshot on the real checkpoint (complete, exact; `results/flashnext/20261110-033341-restore-check-manual/`, `bench_restore_check.py`).**
+Three fresh supervised servers (AC, pool 2 GB, swap-only rules): A layer-major + prefetch cold on prompt A (system prompt + excerpt 1, 2,739 tokens)
+with a private persistent prefix directory, so the system-prompt snapshot at token 2,107 is an inner snapshot assembled from per-layer frozen caches;
+B a **new process** on the same directory, layer-major, prompt B (same system prompt, a different excerpt); C chunk-major cold reference on prompt B.
+B restored 2,107 tokens from the **SSD tier** (outcome `SSD_HIT`), prefilled the remaining 632, and equalled C on prompt identity, first token, all 32
+generated token IDs, final-row logits and **every attention and recurrent cache array**. Swap stayed at 1.52-1.55 GiB, pressure level 1, minimum
+available 4.7 GB. Prefill seconds A / B / C: 33.0 / 29.1 / 68.5 (one run, not a speed result). Scope: one system prompt, one restart, text-only prompts; it does not cover a
+tool-call turn, a RAM hit across turns inside one process, or a restore after a deviated (re-planned) prefill.
+
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the
 machine already barely accommodates, so it is not worth building before the exactness gate has passed and a measured candidate
 footprint exists. Decode cache-policy work needs a current-checkpoint route trace, which needs the same headroom.

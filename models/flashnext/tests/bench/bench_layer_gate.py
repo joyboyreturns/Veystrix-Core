@@ -325,7 +325,7 @@ def summarize_decode(arms):
     return out
 
 
-def make_prompt(checkpoint, source_tokens=600):
+def make_prompt(checkpoint, source_tokens=600, skip_tokens=0):
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(str(checkpoint), local_files_only=True, trust_remote_code=True)
@@ -340,9 +340,9 @@ def make_prompt(checkpoint, source_tokens=600):
              "models/flashnext/layer_major.py", "models/flashnext/store.py", "macqwen/server.py")
     source = "\n\n".join(f"# {name}\n" + (ROOT / name).read_text() for name in files)
     ids = tokenizer.encode(source, add_special_tokens=False)
-    if len(ids) < source_tokens:
+    if len(ids) < skip_tokens + source_tokens:
         raise ValueError("the repository excerpt is shorter than the requested prompt")
-    excerpt = tokenizer.decode(ids[:source_tokens])
+    excerpt = tokenizer.decode(ids[skip_tokens:skip_tokens + source_tokens])   # skip_tokens > 0: a different user turn, same system prompt
     messages = [{"role": "system", "content": system}, {"role": "user", "content":
         "Review this repository excerpt for concrete correctness risks. Explain the relevant execution path and evidence in detail.\n\n" + excerpt}]
     return {"model": "flashnext", "messages": messages, "max_tokens": 32, "stream": False}
@@ -430,7 +430,7 @@ def runtime_fingerprint():
     return digest.hexdigest()
 
 
-def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None):
+def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample, candidate="layer-major-4k", uncached=True, memory_rules="strict", prefetch=False, decode_ab=False, pool_gb="0", pool_ab=False, base_pool_gb="0", reads="all", power_rules="ac", extra_env=None, candidate_enable=None, prefix_dir=None):
     from models.flashnext.progress import process_identity
 
     probe = result_dir / f"{index}-{name}-probe.jsonl"
@@ -450,7 +450,7 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
         preferences = Path(temporary) / "preferences.json"
         preferences.write_text(json.dumps({"temperature": 0.0, "thinking_enabled": False}))
         command = [str(ROOT / "serve.sh"), "--port", str(port), "--pool-gb", pool_gb if (name == "layer" and pool_ab) else base_pool_gb, "--checkpoint", str(checkpoint),
-                   "--prefix-dir", str(Path(temporary) / "prefix"),
+                   "--prefix-dir", str(prefix_dir if prefix_dir is not None else Path(temporary) / "prefix"),
                    "--preferences-file", str(preferences), "--no-auto-purge"]
         # Both arms read experts with F_NOCACHE (same bytes, same order, so exactness is unaffected): three owner/agent runs
         # stopped on compressor growth while the file cache filled with streamed experts. Symmetric, recorded, opt-in.

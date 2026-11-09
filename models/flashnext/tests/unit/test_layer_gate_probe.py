@@ -326,3 +326,26 @@ class GateValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RestoreCheckValidationTests(unittest.TestCase):
+    """``bench_restore_check.validate_restore`` fails closed on anything but an exact restored arm."""
+
+    @staticmethod
+    def row(hit, prefilled, tokens=(1, 2, 3) + (0,) * 29, logits="a" * 64, layers=("x",), cold_tokens=2739):
+        return {"logits": {"value": {"shape": [1], "dtype": "float32", "sha256": logits}},
+                "prefilled": {"prompt_sha256": "p", "first_token": 1, "state": {"token_count": cold_tokens, "layers": list(layers)},
+                              "prefix": {"hit_tokens": hit, "prefilled_tokens": prefilled}},
+                "finished": {"token_ids": list(tokens)}}
+
+    def test_exact_restore_passes_and_each_difference_is_named(self):
+        from models.flashnext.tests.bench import bench_restore_check as R
+
+        ref = self.row(0, 2739)
+        self.assertIsNone(R.validate_restore(ref, self.row(2107, 632)))
+        self.assertIn("did not restore", R.validate_restore(ref, self.row(0, 2739)))
+        self.assertIn("wrong number", R.validate_restore(ref, self.row(2107, 700)))
+        self.assertIn("logits differ", R.validate_restore(ref, self.row(2107, 632, logits="b" * 64)))
+        self.assertIn("token IDs differ", R.validate_restore(ref, self.row(2107, 632, tokens=(1, 9) + (0,) * 30)))
+        self.assertIn("cache arrays differ", R.validate_restore(ref, self.row(2107, 632, layers=("y",))))
+        self.assertIn("not cold", R.validate_restore(self.row(5, 2734), self.row(2107, 632)))
