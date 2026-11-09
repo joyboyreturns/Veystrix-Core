@@ -1,0 +1,62 @@
+# DeepSeek Harness patch for Veystrix AGENTIC mode, 262K window, all reasoning efforts (2026-11-09).
+# Installed copy: ~/.dsh/profiles/{headless,desktop}/cordis.patch.yml (the desktop file also carries UI entries).
+# Verified: `dsh --profile headless --dump-config` composes it; the real `dsh headless` CLI sends
+#   reasoning_effort: none|low|medium|high|xhigh|max   (off maps to "none" so thinking is explicitly OFF, not "server default")
+# against a stub server (see docs/flashnext/deepseek-swap-incident-2026-11-09.md, section "DeepSeek Harness").
+#
+# What each part does:
+# * reasoningEfforts: levels DSH offers in its model picker and the wire spelling it sends. The server accepts
+#   none|low|medium|high|xhigh|max. max is clamped to xhigh by the server and reported (the checkpoint's template has no fifth level).
+# * streamIdleTimeoutMs / timeoutMs 7,200,000 (2 h): DSH aborts a stream after 300 s without a real chunk ("pi-ai stream idle timeout
+#   after 300000ms"); SSE comments (": generating") do not count. A cold 16K prefill takes about 440 s, so the default always fired.
+# * retryPolicy: only TRANSPORT (connection refused/reset while ./serve.sh --overnight restarts the server) is retried, 20 times,
+#   15-60 s apart (about 15-20 min). SERVER (HTTP 503 memory_critical_stop, also marked x-should-retry: false) and TIMEOUT are never
+#   retried: a safety-stopped request must never be retried automatically.
+# * session-title-llm disabled: the title call is a second, unrelated request to the single-slot server. It replaces the live
+#   conversation state and, on a cold start, competes with the first real request (seen in the 2026-11-09 incident).
+# * contextWindow 262144 / maxTokens 16128: DSH computes max_completion_tokens = min(maxTokens, window - prompt - 4096).
+#
+# The remote DeepSeek provider routes of the shipped profile are untouched (this file only adds the veystrix route).
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      veystrix:
+        displayName: "Veystrix (Flash-Next)"
+        api: openai-completions
+        baseURL: "http://127.0.0.1:8080/v1"
+        streamIdleTimeoutMs: 7200000
+        timeoutMs: 7200000
+        apiKeyEnv: VEYSTRIX_API_KEY
+        # Overnight: ride through a supervisor restart (connection refused/reset = TRANSPORT) for ~15-20 min.
+        # SERVER (503 memory_critical_stop) and TIMEOUT are NOT retryable: a safety stop is never retried automatically.
+        retryPolicy:
+          mode: normal
+          maxRetries: 20
+          retryableCodes: [TRANSPORT]
+          backoff:
+            initialDelayMs: 15000
+            maxDelayMs: 60000
+            jitterRatio: 0.1
+        models:
+          - id: "macqwen-flashnext"
+            name: "MACQWEN Flash-Next 262K"
+            contextWindow: 262144
+            maxTokens: 16128
+            input:
+              - text
+            reasoningEfforts:
+              off: none
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
+- id: session-title-llm
+  disabled: true
+# Desktop only (managed by the Electron app): select the local model by default.
+# - id: agent-default-model
+#   name: "@deepseek-ai/dsh-agent-default-model"
+#   config:
+#     provider: veystrix
+#     model: macqwen-flashnext

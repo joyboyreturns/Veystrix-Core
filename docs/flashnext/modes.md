@@ -17,7 +17,34 @@ There is no live reconfiguration: the flags are read at import or first request,
 # AGENTIC: the local model server (OpenAI /v1/chat/completions, /v1/responses; Anthropic /v1/messages) on 127.0.0.1:8080
 ./chat.sh --mode agentic
 ./chat.sh --mode agentic --port 8081 --context-limit 2048 --prefix-dir ~/.flashnext/prefix-cache
+./chat.sh --mode agentic --pool-gb 0 --context-limit 262144 --max-cold-prefill 32768 --max-incremental-prefill 32768   # defaults since 2026-11-09
 ```
+
+### Launching it yourself, and overnight (2026-11-09)
+
+```sh
+./serve.sh                  # one supervised run in this terminal
+./serve.sh --overnight      # keeps it available for hours: restarts after a crash or memory guard stop, bounded, logged
+./serve.sh --status         # what the supervisor did (events, restarts, state)
+VEYSTRIX_CACHE_GB=80 ./serve.sh --overnight --pool-gb 0
+```
+
+`serve.sh` runs `models/flashnext/overnight.py`, which starts the one supported `./chat.sh --mode agentic ...` line under `caffeinate`.
+Restart policy: owner stop and exit 70 never restart; a guard stop (75) or admission refusal (69) waits 180 s and for swap to stop
+moving, with at most 4 per 6 h; any other exit restarts with 20 s doubling to 600 s, at most 8 per 30 min. When a budget is exhausted the
+supervisor stops and records why. It never retries a request, never deletes swapfiles or caches. Logs: `~/.flashnext/logs/supervisor.jsonl`,
+`supervisor-status.json`, `server-launch-*.log` (12 kept).
+
+Reasoning effort and the cache (2026-11-09): `docs/flashnext/cache-across-efforts-2026-11-09.md`. Every effort, and thinking off,
+shares one cached system prompt (`VEYSTRIX_EFFORT_PLACEMENT=late`, default; `template` restores the checkpoint's layout). AGENTIC now
+snapshots every message end and chunk edge (`FLASHNEXT_PREFIX_CACHE_BOUNDARIES=all`), so a cancelled or crashed cold prefill resumes.
+`./serve.sh --warm` pre-caches each remembered client; `--overnight` does it while idle on AC power.
+
+AGENTIC defaults (2026-11-09): context 262,144 (a stated requirement, so memory tiers do not shrink it), cold prefill and uncached
+increment 32,768 each (admission ceilings; prefill still runs in 2,048-token chunks; only 16K has real-checkpoint evidence).
+`macqwen/session.py --server` must **not** be launched directly: it now refuses (exit 70) unless the launcher's environment is present,
+because the swap supervisor, chunked prefill and prefix cache are enabled by this launcher, not by `session.py`.
+See `docs/flashnext/deepseek-swap-incident-2026-11-09.md`.
 
 Options (both modes): `--pool-gb 0|1|2` (never above 2), `--enable NAME` (repeatable, see below), `--context-limit N`.
 Max answer length, temperature and thinking are the existing chat commands: `/max-tokens N`, `/sampling ...`, `/thinking on|off`, `/status`.
@@ -29,7 +56,7 @@ Max answer length, temperature and thinking are the existing chat commands: `/ma
 | Profile | plain (no tools) | agent (repository prompt, tools) |
 | Prefill | one call per prompt: reference numerics | balanced 2,048-token chunks, 512-expert scratch ring, release of the decode pool before a fresh long prefill |
 | Conversation state | live KV and recurrent state kept between turns | live state plus the exact prefix cache |
-| Prefix cache | off | exact, RAM 0.75 GB, SSD 20 GB, 50 GB free-disk reserve (the cache turns itself off rather than use an unlimited budget), snapshot at the system boundary, chunk-plan provenance, model and tokenizer fingerprints |
+| Prefix cache | off | exact, RAM 0.75 GB, SSD 50 GB (oldest unleased entries evicted first; `VEYSTRIX_CACHE_GB` overrides), 50 GB free-disk reserve (the cache turns itself off rather than use an unlimited budget), snapshot at the system boundary, chunk-plan provenance, model and tokenizer fingerprints |
 | Decode pool | 2 GB, LRU | 2 GB, LRU |
 | Context limit | none | 4,096 tokens; a longer prompt gets an explicit 400 error naming both numbers, nothing is truncated, live state is kept |
 | Always on | `ChatGuard`, eager linear-state evaluation (reproduced the 1K digest, retained memory 0.99 to 0.24 GB), native MTP off (recorded rejection), no automatic `purge` | same |

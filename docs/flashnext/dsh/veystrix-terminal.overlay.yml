@@ -1,0 +1,47 @@
+# Terminal use of DeepSeek Harness with the local Veystrix model (2026-11-09).
+#   dsh --profile headless --patch ~/Documents/Veystrix/docs/flashnext/dsh/veystrix-terminal.overlay.yml "your task"
+# The shipped `headless` profile answers with remote DeepSeek unless this overlay selects the local model.
+# Needs the server: ./serve.sh --overnight (or ./serve.sh) running on 127.0.0.1:8080. Run one client at a time.
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: veystrix
+    model: macqwen-flashnext
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      veystrix:
+        displayName: "Veystrix (Flash-Next)"
+        api: openai-completions
+        baseURL: "http://127.0.0.1:8080/v1"
+        streamIdleTimeoutMs: 7200000
+        timeoutMs: 7200000
+        apiKeyEnv: VEYSTRIX_API_KEY
+        # Overnight: ride through a supervisor restart (connection refused/reset = TRANSPORT) for ~15-20 min.
+        # SERVER (503 memory_critical_stop) and TIMEOUT are NOT retryable: a safety stop is never retried automatically.
+        reasoning: off          # default thinking for terminal runs: off | low | medium | high | xhigh | max
+        retryPolicy:
+          mode: normal
+          maxRetries: 20
+          retryableCodes: [TRANSPORT]
+          backoff:
+            initialDelayMs: 15000
+            maxDelayMs: 60000
+            jitterRatio: 0.1
+        models:
+          - id: "macqwen-flashnext"
+            name: "MACQWEN Flash-Next 262K"
+            contextWindow: 262144
+            maxTokens: 16128
+            input:
+              - text
+            reasoningEfforts:
+              off: none
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
+- id: session-title-llm
+  disabled: true
