@@ -136,7 +136,8 @@ class PrefixCacheRebuildAdoptionTests(unittest.TestCase):
         session.backend = backend
         # Context limit: 16384, max_cold_prefill: 4096
         # A request of 10,000 tokens has 8,000 cached tokens -> only 2,000 cold tokens
-        service = ModelService(session, context_limit=16384, max_cold_prefill=4096)
+        service = ModelService(session, context_limit=16384, max_cold_prefill=4096,
+                               max_incremental_prefill=4096)
 
         # Mock prompt of 10,000 tokens
         prompt_ids = list(range(10000))
@@ -160,10 +161,11 @@ class PrefixCacheRebuildAdoptionTests(unittest.TestCase):
         backend._prefix_session = lambda: mock_prefix
 
         session.backend = backend
-        service = ModelService(session, context_limit=16384, max_cold_prefill=4096)
+        service = ModelService(session, context_limit=16384, max_cold_prefill=4096,
+                               max_incremental_prefill=4096)
 
         prompt_ids = list(range(10000))
-        # 10000 - 2000 = 8000 > 4096 -> should raise ContextLimitError
+        # 10000 - 2000 = 8000 > the 4096 incremental limit -> refuse.
         with self.assertRaises(ContextLimitError) as cm:
             service._adopt("dummy", ids=prompt_ids)
         self.assertEqual(service.refused_cold_prefill, 1)
