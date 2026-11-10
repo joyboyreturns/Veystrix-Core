@@ -8,27 +8,27 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | verified | 9cac8f5 |
 | R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_session.py` | L213-L220 | normal | verified | fe4682a |
 | R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | verified | 9cac8f5 |
-| R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
-| R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
+| R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 7f0da26 |
+| R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 7f0da26 |
 | R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | verified | 9f7985c |
 | R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | verified | 9f7985c |
 | R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | verified | 9f7985c |
 | R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | verified | 9f7985c |
 | R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | verified | 9cac8f5 |
-| R2-02 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L223-L223 | normal | verified | 5a63d00 |
-| R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
+| R2-02 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L223-L223 | normal | verified | 7f0da26 |
+| R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 7f0da26 |
 | R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | verified | 9cac8f5 |
-| R2-05 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L355-L357 | normal | verified | 5a63d00 |
+| R2-05 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L355-L357 | normal | verified | 7f0da26 |
 | R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | verified | fe4682a |
 | R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | verified | fe4682a |
-| R2-08 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1459-L1469 | normal | verified | 5a63d00 |
-| R2-09 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1245-L1270 | normal | verified | 5a63d00 |
-| R2-10 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefix_session.py` | L251-L268 | normal | verified | 5a63d00 |
+| R2-08 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1459-L1469 | normal | verified | 7f0da26 |
+| R2-09 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1245-L1270 | normal | verified | 7f0da26 |
+| R2-10 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefix_session.py` | L251-L268 | normal | verified | 7f0da26 |
 | R3-01 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L37-L65 | normal | verified | 9cac8f5 |
 | R3-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/chat_guard.py` | L121-L124 | normal | verified | 9cac8f5 |
 | R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | verified | 9cac8f5 |
 | R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | verified | 9cac8f5 |
-| R3-05 | Phase 2: Correctness & Tool-Calling | `macqwen/sessions.py` | L154-L189 | normal | verified | 5a63d00 |
+| R3-05 | Phase 2: Correctness & Tool-Calling | `macqwen/sessions.py` | L154-L189 | normal | verified | 7f0da26 |
 | R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | verified | fe4682a |
 | R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | verified | 9cac8f5 |
 | R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | verified | fe4682a |
@@ -123,12 +123,12 @@ Condition: the prefill ring is leased in the decode pool (non-scratch, up to hal
 **How it happens**
 - `pool_ring.lease_range` (pool_ring.py:100-109) takes slots out of use. It deletes `_slot_of` entries at or above `first` and filters `_free` to `slot < first`. It does not reduce `pool.slots`.
 - The new guard in `_pool_pass` is `if len(wanted) > pool.slots:` (expert_cache.py:1836).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `models/flashnext/expert_cache.py:1836-1844` where `len(wanted) > pool.slots` didn't account for slots leased to prefill ring.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r1_05_pool_capacity_respects_leased_slots`.
+- **Planned fix**: Compute `usable = len(pool._free) + len(pool._slot_of)` and guard against `len(wanted) > usable`, safely streaming without slot aliasing or dropped experts.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r1_05_pool_capacity_respects_leased_slots`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R1-06 — `models/flashnext/prefill.py` (L392-L394)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -143,12 +143,12 @@ Trigger: prefix sessions (`prefix_session.py:308` passes `offset`) with the defa
 How it happens:
 - `_run_chunks` takes the single-span shortcut at prefill.py:415-417 and calls `_prefill_target(language, ids, cache, want_logits, want_hidden, sampler)` without `total_tokens`.
 - The multi-span tail at prefill.py:463-464 passes `total_tokens=total + offset`. The layer-major path does the same with `total_tokens=absolute_end` (line 529).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `models/flashnext/prefill.py:417` where single-span restored prefill omitted `total_tokens`.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r1_06_single_span_restored_prefill_passes_total_tokens`.
+- **Planned fix**: When `offset > 0`, pass `total_tokens=total + offset` so fused-head vs full-logits path selection matches cold prefill.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r1_06_single_span_restored_prefill_passes_total_tokens`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R1-07 — `models/flashnext/expert_pool.py` (L313-L332)
 - **Phase**: Phase 5: Lower-Risk Engine Findings
@@ -253,12 +253,12 @@ New allow-lists reject OpenAI-spec fields that the old code passed through. `_te
 Condition: a client keeps the `index` key when it rebuilds tool calls from streamed deltas (the server sends `"index": i` in every tool_calls chunk), or sends `name` on a user or assistant message as the OpenAI spec allows. Every later turn of that conversation gets HTTP 400 "unsupported tool call fields ['index']" or "unsupported message field 'name'". The agent loop stops after its first tool call, whereas the base forwarded `message["tool_calls"]` verbatim and ignored unknown keys.
 
 **Verification:** normal. Trigger: an OpenAI-compatible client sends the next turn with a field the spec allows but the new allow-lists do not accept. One case is `index` left on rebuilt tool calls. The server itself emits it at server.py:2010 (`"index": index, "id": call["id"], "type": "function"`), and stream accumulators such as openai-node's keep it in the final message. The other case is `name` on a user, assistant or system message.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:223` where `name` was rejected in non-tool messages and `index` in tool calls.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r2_02_message_allows_name_field_and_tool_call_index`.
+- **Planned fix**: Allow `name` in `MESSAGE_FIELDS` and allow `index` in tool call mappings.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r2_02_message_allows_name_field_and_tool_call_index`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R2-03 — `macqwen/server.py` (L419-L419)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -273,12 +273,12 @@ Trigger: a client declares a tool whose parameter has `"type": ["string","null"]
 How it happens, citing macqwen/server.py:
 - Line 431: `_parse_tool_calls` stores the client's raw `parameters` in `declared[...]`. `_openai_tools` (lines 169-187) copies the schema as-is and never normalises `type`.
 - Line 488 calls `_validate_call` for every call. Inside it, line 413 sets `kind = spec.get("type")`, which here is a list.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:419` where union types in schemas raised unhashable TypeError during dict lookup.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r2_03_validate_call_handles_union_schema_types`.
+- **Planned fix**: Handle list/tuple types in schema `type` definitions and support nullable properties before dict lookup.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r2_03_validate_call_handles_union_schema_types`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R2-04 — `macqwen/server.py` (L1473-L1476)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -309,12 +309,12 @@ How it happens:
 In the base, every XML tool parameter went through `coerce_scalar`, which unescapes and then json-parses array/object values (test_server.py:192 pins this rule for strings). After the change, an array/object parameter whose JSON holds an escaped delimiter is still valid JSON, so nothing raises. The escape sequences reach the client unchanged. Example: `<parameter=edits>[{"old":"a &lt; b"}]</parameter>` arrives as `"a &lt; b"`, while a string parameter in the same call decodes to `a < b`. An edit/patch tool then searches for or writes the literal `&lt;`, `&gt;` or `&amp;`, so code gets corrupted silently or the edit fails to match. The agent CLI path (`macqwen.tools.parse_tool_calls`) still decodes these sequences, so the same model output now means different things on the two paths. The `VEYSTRIX_INVALID_TOOL_CALLS=pass` fallback (`arguments[key] = raw.strip()`) also skips the unescape.
 
 **Verification:** normal. Trigger: the model writes a transport-escaped delimiter (`&lt;`, `&gt;`, `&amp;`) inside the JSON of an XML tool parameter declared as `array` or `object`. The new branch in macqwen/server.py:354-364 (`if kind in ("array", "object"): parsed = json.loads(value) ... return parsed`) returns before it reaches `coerce_scalar`. In macqwen/tools/__init__.py, which this change does not touch, `coerce_scalar` starts with `text = _unescape_argument(raw)` (line 106) and only then runs `json.loads(text)` for object/array (lines 140-155).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:355-357` where array/object tool call parameters bypassed XML entity unescaping.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r2_05_unescape_xml_in_tool_call_arguments`.
+- **Planned fix**: Unescape XML entities (`&lt;`, `&gt;`, `&amp;`) before parsing JSON array/object arguments and in invalid tool calls.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r2_05_unescape_xml_in_tool_call_arguments`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R2-06 — `models/flashnext/prefix_cache.py` (L832-L841)
 - **Phase**: Phase 3: Persistent Cache & Recovery
@@ -357,12 +357,12 @@ The signature-compat fallback around `backend.generate` catches every TypeError,
 Trigger: any TypeError raised from inside prefill or decode (MLX, a sampler, a callback such as the anthropic or responses `on_text`, a layer-gate probe). By then `_generate` has already moved `pending` into `tape` and may have streamed tokens. The retry runs a second generation on that state, so the client gets duplicated or garbage output instead of an error, and the conversation tape becomes inconsistent. The base called `generate` once and surfaced the error. Fix: pick the call signature up front (for example with `inspect.signature`) instead of catching TypeError around the whole call. The same applies to the `on_text` TypeError fallbacks at lines 1415-1491, which re-send a chunk if `on_text` raises TypeError after it has partly written.
 
 **Verification:** normal. Trigger: any TypeError raised from inside a real generation (MLX/sampler/prefill code, the `streamed` callback's fallback `on_text(None if hold else complete)` at server.py:1423, a probe). server.py:1459-1469 wraps `backend.generate(**gen_kwargs, should_cancel=..., on_prefill_progress=...)` in a bare `except TypeError:` and re-calls `generate`, then calls it a third time. All real backends accept both kwargs, so for them the fallback only catches errors raised inside the call.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:1459-1469` where broad `except TypeError:` retry loops retried failed calls on corrupted generator states.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r2_08_signature_inspection_prevents_re_execution_on_type_error`.
+- **Planned fix**: Inspect `inspect.signature` upfront and invoke backend with supported kwargs without catch-all retry loops.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r2_08_signature_inspection_prevents_re_execution_on_type_error`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R2-09 — `macqwen/server.py` (L1245-L1270)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -373,12 +373,12 @@ _adopt sizes the prefill and enforces the 32K cold-prefill limit using prefix-ca
 `backend._prefix_session` is always callable on FlashNextBackend, and `reusable_tokens` only checks FLASHNEXT_PREFIX_CACHE_RESTORE (default on), not `prefix_session.enabled()`. So with the cache off it still opens ~/.flashnext/prefix-cache, claims and scans it, and peeks for snapshots left by an earlier enabled run. If one matches, `needed_prefill = len(ids) - cached_tokens` falls under the limit and `_check_prefill` passes. But `_generate` only restores when `prefix_session.enabled() and decoder is None`, so it prefills the whole prompt cold, e.g. 60K tokens on a 16 GB Mac, past the limit the check exists to enforce (risking swap or a safety stop). `last_cached_tokens` also makes all three usage formats report cached tokens that were never reused. Fix: in _adopt, consult the prefix cache only under the same condition the backend uses to restore (enabled, restore on, no draft decoder).
 
 **Verification:** Severity: normal. This happens when compatible snapshots sit in the SSD prefix store and the backend will not restore from them on that turn. Two cases trigger it. In the first, FLASHNEXT_PREFIX_CACHE is off (the default) and snapshots remain from an earlier run that had it on. In the second, the cache is on but a decoder is attached: the fused-quality routing profile, or native MTP with greedy sampling.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:1245-1270` where `_adopt` looked up prefix cache even when disabled or draft decoder was active.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r2_09_prefix_session_enabled_guard_before_cache_peek`.
+- **Planned fix**: Guard prefix cache token estimation with `prefix_session.enabled()` and `prefix_session.restore_enabled()` and ensure no active decoder.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r2_09_prefix_session_enabled_guard_before_cache_peek`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R2-10 — `models/flashnext/prefix_session.py` (L251-L268)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -392,12 +392,12 @@ Condition: the prefix cache is on and a stored snapshot covers most of a long pr
 
 How it happens:
 - `server.py:1251` sets `cached_tokens = int(prefix_session().reusable_tokens(ids))`. At 1256, `needed_prefill = max(0, len(ids) - cached_tokens)`, and `_check_prefill` (1261-1270) judges only that predicted value.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `models/flashnext/prefix_session.py:251-268` where failed restore resulted in full cold prefill bypassing memory tier bounds.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r2_10_post_lookup_prefill_limit_enforcement`.
+- **Planned fix**: Re-evaluate required cold prefill after `store.lookup()`, raising `RecoveryRequiredError` if cold work exceeds limits.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r2_10_post_lookup_prefill_limit_enforcement`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R3-01 — `macqwen/cli.py` (L37-L65)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -491,12 +491,12 @@ Say a conversation has a turn sent with thinking off (`reasoning_effort: none`, 
 
 How it breaks:
 - **Turns without reasoning are never recorded.** In macqwen/server.py:1498-1499 the server calls `record_turn` only under `if key is not None and extracted_reasoning:`.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
-- **Associated commit**: pending
+- **Current-code applicability**: Confirmed present in `macqwen/sessions.py:154-189` and `macqwen/server.py` where turns without extracted reasoning were skipped, causing turn misalignment.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase2_remediations.py:test_r3_05_reasoning_ledger_records_empty_thinking_turns`.
+- **Planned fix**: Record every assistant turn in `ReasoningLedger` to maintain turn alignment throughout multi-turn conversations.
+- **Regression test**: `macqwen/tests/test_phase2_remediations.py:test_r3_05_reasoning_ledger_records_empty_thinking_turns`
+- **Status**: verified
+- **Associated commit**: 7f0da26
 
 ### R3-06 — `macqwen/cache_tools.py` (L114-L140)
 - **Phase**: Phase 3: Persistent Cache & Recovery
