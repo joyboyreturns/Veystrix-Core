@@ -697,7 +697,9 @@ class PrefixCache:
                 manifest = read_manifest(self.directory, key)
                 data = self.directory / f"{key}.safetensors"
                 if manifest.get("fingerprint") != self.fp or manifest.get("format") != FORMAT_VERSION:
-                    size = data.stat().st_size if data.exists() else manifest.get("file_bytes", 0)
+                    # Count actual bytes on disk, including the manifest, as
+                    # write_entry does for newly persisted snapshots.
+                    size = (data.stat().st_size if data.exists() else 0) + manifest_path.stat().st_size
                     self._foreign[key] = {
                         "bytes": size,
                         "atime": manifest_path.stat().st_mtime,
@@ -707,7 +709,8 @@ class PrefixCache:
                 if data.stat().st_size != manifest["file_bytes"]:
                     raise CorruptEntry("size")
                 self._disk[key] = {"n": manifest["n_tokens"], "parent": manifest["parent"],
-                                   "bytes": manifest["file_bytes"], "atime": manifest_path.stat().st_mtime}
+                                   "bytes": manifest["file_bytes"] + manifest_path.stat().st_size,
+                                   "atime": manifest_path.stat().st_mtime}
                 edges = manifest.get("plan_edges")
                 self._plans[key] = None if edges is None else tuple(int(e) for e in edges)
             except (CorruptEntry, OSError, KeyError):

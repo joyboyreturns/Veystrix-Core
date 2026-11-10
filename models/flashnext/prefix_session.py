@@ -131,10 +131,14 @@ class PrefixSession:
                 # The plan is a function of this budget and the candidate sizes; a different budget is a different plan.
                 plan["chunk_budget_mb"] = prefill_module.chunk_budget_bytes() / 1e6
                 plan["chunk_candidates"] = list(prefill_module.CANDIDATE_CHUNKS)
-            from . import layer_major, quantized_kv
+            from . import expert_pool, layer_major, prefill_ring, quantized_kv
             # Layer-major execution is a different (versioned) execution plan until its states are proven equal on the real
             # checkpoint: its snapshots never mix with chunk-major ones. Chunk-major keeps the existing key.
             plan = {**plan, **({"prefill_order": layer_major.identity()} if layer_major.enabled() else {})}
+            if prefill_ring.enabled() and prefill_ring.scratch_enabled() and not expert_pool.enabled():
+                # Older versions silently bypassed this ring when the decode
+                # pool was off. Do not mix their states with the new path.
+                plan["scratch_ring_with_pool_off"] = 1
             kv_part = quantized_kv.fingerprint_parts()      # bf16: empty (unchanged); else dtype, bits, group size
             fp = P.fingerprint(
                 **self._compatibility(), prefix_cache=P.FORMAT_VERSION,

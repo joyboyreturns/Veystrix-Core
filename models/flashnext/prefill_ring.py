@@ -551,8 +551,10 @@ def acquire(language, tokens: int):
 
     from . import expert_cache, expert_pool
 
-    if not expert_pool.enabled():
-        LAST_REASON[0] = "expert pool is off"
+    # A temporary scratch ring has its own allocation and lifetime; it does
+    # not require the persistent decode pool to be enabled.
+    if not expert_pool.enabled() and not scratch_enabled():
+        LAST_REASON[0] = "expert pool and scratch ring are off"
         return None
     layers = []
     body = getattr(language, "model", language)
@@ -698,6 +700,10 @@ def release(state, failed: bool = False) -> None:
 def session(language, tokens: int):
     """Hold the ring for one prefill. Yields the ring or None."""
     state = acquire(language, tokens) if enabled() else None
+    from models.flashnext import flight_recorder
+    flight_recorder.record("prefill_ring_acquire", enabled=state is not None,
+                           reason=LAST_REASON[0] if state is None else None,
+                           scratch=bool(state is not None and state.owns_pool))
     failed = False
     try:
         yield state

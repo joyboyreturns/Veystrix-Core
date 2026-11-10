@@ -73,6 +73,9 @@ AGENTIC_PREFILL = {
     "FLASHNEXT_PREFILL_RING_SCRATCH": "1",
     "FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048",
     "FLASHNEXT_PREFILL_CHUNK_POLICY": "balanced",
+    # Bound reusable allocator buffers during prefill. Active tensors and the
+    # full expert routing remain unchanged; the prior limit is restored after.
+    "FLASHNEXT_PREFILL_CACHE_LIMIT_MB": "512",
     "FLASHNEXT_PREFILL_RELEASE_DECODE_POOL": "1",
     "FLASHNEXT_PREFIX_CACHE": "1",
     "FLASHNEXT_PREFIX_CACHE_BOUNDARIES": "all",   # message ends + every chunk edge: a cancelled or crashed prefill resumes

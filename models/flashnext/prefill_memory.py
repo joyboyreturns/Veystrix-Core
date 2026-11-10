@@ -41,6 +41,15 @@ def enabled() -> bool:
     return cache_limit_mb() > 0
 
 
+def _record_cap(event, mx, mb):
+    try:
+        from models.flashnext import flight_recorder
+        flight_recorder.record(event, limit_mib=mb, cache_bytes=int(mx.get_cache_memory()),
+                               active_bytes=int(mx.get_active_memory()))
+    except Exception:
+        pass  # telemetry must not alter inference or prevent restoring the limit
+
+
 @contextlib.contextmanager
 def cache_cap(megabytes=None):
     """Cap MLX's allocator cache inside the block. Yields the previous limit,
@@ -54,8 +63,14 @@ def cache_cap(megabytes=None):
     limit = mb * MIB
     previous = mx.set_cache_limit(limit)
     try:
-        if mx.get_cache_memory() > limit:
+        # Do not relax a tighter process-wide allocator cap set by an owner.
+        effective = min(previous, limit)
+        if effective != limit:
+            mx.set_cache_limit(effective)
+        if mx.get_cache_memory() > effective:
             mx.clear_cache()            # the limit alone trims only at the next allocation
+        _record_cap("prefill_allocator_cap_begin", mx, effective / MIB)
         yield previous
     finally:
+        _record_cap("prefill_allocator_cap_end", mx, min(previous, limit) / MIB)
         mx.set_cache_limit(previous)
