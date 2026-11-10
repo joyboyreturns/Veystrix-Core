@@ -186,6 +186,38 @@ class PrefillTests(unittest.TestCase):
         self.assertEqual(tuple(logits.shape), (1, 10, 32))
         self.assertEqual(tuple(hidden.shape), (1, 10, 1))
 
+    def test_restored_single_span_passes_total_tokens_matching_cold_logits_path(self):
+        """R1-06 regression: a single-span restored suffix (<= 2048 tokens) of a longer prompt (> 2048 tokens)
+        must select the exact same fused-head / skip_logits behavior as the cold execution."""
+        from models.flashnext import prefill
+
+        # Threshold set to 2048.
+        # Total prompt: 3000 tokens.
+        # Cold run: offset=0, total=3000 -> total > 2048 -> skip_logits=True
+        # Restored run: offset=1000, suffix=2000 -> single span (len=2000 <= 2048) -> must still have total_tokens=3000 -> skip_logits=True
+        ids_suffix = mx.zeros((1, 2000), dtype=mx.int32)
+        language = _Language()
+        cache = [_Cache()]
+
+        with patch.object(prefill, "_prefill_target", wraps=prefill._prefill_target) as target_spy:
+            prefill._run_chunks(
+                language=language,
+                ids=ids_suffix,
+                cache=cache,
+                want_logits=False,
+                want_hidden=False,
+                sampler=None,
+                boundaries=(),
+                on_boundary=None,
+                offset=1000,
+            )
+
+        target_spy.assert_called_once()
+        _, kwargs = target_spy.call_args
+        self.assertEqual(kwargs.get("total_tokens"), 3000)
+        # Verify language call took skip_logits=True (fused head) matching the 3000-token cold path
+        self.assertEqual(language.calls[0][1], True, "skip_logits must be True for 3000-token total prompt")
+
 
 if __name__ == "__main__":
     unittest.main()

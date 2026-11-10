@@ -82,7 +82,7 @@ class WorkflowTests(Base):
     def test_layer_order_report_records_the_executed_windows(self):
         from models.flashnext import layer_major
 
-        with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_ORDER": "layer"}), \
+        with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_ORDER": "layer", layer_major.FLAG_MIN_TOKENS: "0"}), \
                 mock.patch.object(layer_major, "window_tokens", return_value=128):
             model, session = self.engine()
             _, _, report = self.go(model, session, self.system + self.suffix_a)

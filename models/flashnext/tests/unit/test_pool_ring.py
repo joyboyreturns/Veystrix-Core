@@ -32,6 +32,10 @@ class FakePool:
         self._slot_of = OrderedDict()
         self._free = list(range(slots - 1, -1, -1))
 
+    @property
+    def usable_slots(self):
+        return len(self._free) + len(self._slot_of)
+
     def assign(self, layer, expert):
         key = (layer, expert)
         if key in self._slot_of:

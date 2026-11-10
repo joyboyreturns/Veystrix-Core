@@ -107,20 +107,27 @@ class ExpertPool:
         self.hits = 0
         self.misses = 0
 
+    @property
+    def usable_slots(self) -> int:
+        return len(self._free) + len(self._slot_of)
+
     def assign(self, layer: int, experts):
         """Assign a distinct expert set that fits in the pool, or fail before mutation."""
-        if len(experts) > self.slots:
+        if isinstance(experts, int):
+            experts = [experts]
+        distinct = list(dict.fromkeys(experts))
+        if len(distinct) > self.usable_slots:
             raise ValueError("requested experts exceed expert pool capacity")
         slot_of = self._slot_of
         slots, misses = {}, []
-        for expert in experts:
+        for expert in distinct:
             key = (layer, expert)
             slot = slot_of.get(key)
             if slot is not None:
                 slot_of.move_to_end(key)
                 slots[expert] = slot
         self.hits += len(slots)
-        for expert in experts:
+        for expert in distinct:
             if expert in slots:
                 continue
             if self._free:

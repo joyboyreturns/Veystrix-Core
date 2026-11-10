@@ -22,7 +22,7 @@ from macqwen.text import (
     build_user_encoder,
     extract_reasoning_and_content,
 )
-from macqwen.tools import ToolCallValidationError, coerce_scalar
+from macqwen.tools import ToolCallValidationError, coerce_scalar, _unescape_argument
 from macqwen.conversation import (
     content_sentinel,
     reasoning_system_text,
@@ -80,11 +80,14 @@ class OversizedPrefillError(ContextLimitError):
         super().__init__(message, status, code)
 
 
-class RecoveryRequiredError(ContextLimitError):
+from models.flashnext.prefix_session import RecoveryRequiredError as _BaseRecoveryRequiredError
+
+
+class RecoveryRequiredError(_BaseRecoveryRequiredError, ContextLimitError):
     """A long conversation lost its state cache and cannot be safely recomputed cold."""
 
     def __init__(self, message: str, status: int = 400, code: str | None = "recovery_required"):
-        super().__init__(message, status, code)
+        super().__init__(message, status=status, code=code)
 
 
 class ModelToolCallError(RequestError):
@@ -189,8 +192,8 @@ def _openai_tools(tools) -> list[dict]:
 
 # Message fields the server understands. Anything else with a value is an
 # error: a field that changes what the model sees must not be dropped quietly.
-MESSAGE_FIELDS = {"role", "content", "tool_calls", "tool_call_id", "reasoning_content"}
-TOOL_ONLY_FIELDS = {"name"}  # the tool's name; tool_call_id already carries the link
+MESSAGE_FIELDS = {"role", "content", "tool_calls", "tool_call_id", "reasoning_content", "name"}
+TOOL_ONLY_FIELDS = set()  # "name" is supported across all roles per OpenAI spec
 IGNORABLE_EMPTY = {"refusal", "audio", "annotations", "function_call"}
 
 
@@ -220,7 +223,7 @@ def _template_tool_call(call, where: str) -> dict:
         raise RequestError(
             f"{where}: arguments of tool call {name!r} must be a JSON object"
         )
-    extra = sorted(set(call) - {"id", "type", "function"})
+    extra = sorted(set(call) - {"id", "type", "function", "index"})
     if extra:
         raise RequestError(f"{where}: unsupported tool call fields {extra}")
     item = {"type": "function", "function": {"name": name, "arguments": arguments}}
@@ -345,23 +348,26 @@ def _responses_messages(payload: dict) -> list[dict]:
     return _normalize_messages(messages)
 
 
-def _coerce_argument(value: str, kind: str | None, *, tool="", key="parameter"):
+def _coerce_argument(value: str, kind: str | list | None, *, tool="", key="parameter"):
     # One shared rule: the XML parser here and parse_tool_calls in
     # macqwen.tools both run coerce_scalar, which reverses transport
     # escaping exactly once. String payloads keep their bytes; only
     # typed scalar conversion normalizes whitespace. Bad typed values
     # raise ToolCallValidationError for the caller to report.
-    # Arrays and objects arrive as JSON text and must parse to that type.
-    if kind in ("array", "object"):
-        try:
-            parsed = json.loads(value)
-        except ValueError:
-            parsed = None
-        if not isinstance(parsed, list if kind == "array" else dict):
-            raise ToolCallValidationError(
-                f"tool {tool!r} parameter {key!r} expects a JSON {kind}, got {value!r}"
-            )
-        return parsed
+    if isinstance(kind, list):
+        if "null" in kind and value.strip() == "null":
+            return None
+        last_exc = None
+        for cand in [k for k in kind if k != "null"]:
+            try:
+                return coerce_scalar(value, cand, tool=tool, key=key)
+            except ToolCallValidationError as exc:
+                last_exc = exc
+        if last_exc is not None:
+            raise last_exc
+        return coerce_scalar(value, None, tool=tool, key=key)
+    if kind == "null" and value.strip() == "null":
+        return None
     return coerce_scalar(value, kind, tool=tool, key=key)
 
 
@@ -402,7 +408,24 @@ def _validate_call(name: str, arguments, schema: dict | None) -> None:
     missing = [key for key in schema.get("required", []) if key not in arguments]
     if missing:
         raise ModelToolCallError(f"tool {name!r} is missing required parameter {missing[0]!r}")
-    kinds = {"string": str, "boolean": bool, "array": list, "object": dict}
+
+    def _check_type(val, k):
+        if k == "string":
+            return isinstance(val, str)
+        if k == "boolean":
+            return isinstance(val, bool)
+        if k == "integer":
+            return (not isinstance(val, bool)) and (isinstance(val, int) or (isinstance(val, float) and val.is_integer()))
+        if k == "number":
+            return (not isinstance(val, bool)) and isinstance(val, (int, float))
+        if k == "array":
+            return isinstance(val, list)
+        if k == "object":
+            return isinstance(val, dict)
+        if k == "null":
+            return val is None
+        raise ModelToolCallError(f"tool {name!r} parameter {key!r} has unsupported schema type: {k!r}")
+
     for key, value in arguments.items():
         spec = properties.get(key, {})
         allowed = spec.get("enum")
@@ -411,12 +434,18 @@ def _validate_call(name: str, arguments, schema: dict | None) -> None:
                 f"tool {name!r} parameter {key!r} must be one of {allowed}, got {value!r}"
             )
         kind = spec.get("type")
-        if kind in ("integer", "number"):
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+        nullable = spec.get("nullable", False)
+        if value is None:
+            if nullable or kind == "null" or (isinstance(kind, list) and "null" in kind):
+                continue
+            raise ModelToolCallError(f"tool {name!r} parameter {key!r} cannot be null")
+        if kind is None:
+            continue
+        if isinstance(kind, list):
+            valid = any(_check_type(value, k) for k in kind if k != "null")
+            if not valid:
                 raise ModelToolCallError(f"tool {name!r} parameter {key!r} expects {kind}, got {value!r}")
-            if kind == "integer" and isinstance(value, float) and not value.is_integer():
-                raise ModelToolCallError(f"tool {name!r} parameter {key!r} expects integer, got {value!r}")
-        elif kind in kinds and not isinstance(value, kinds[kind]):
+        elif not _check_type(value, kind):
             raise ModelToolCallError(f"tool {name!r} parameter {key!r} expects {kind}, got {value!r}")
 
 
@@ -463,7 +492,7 @@ def _parse_tool_calls(text: str, tools=None) -> tuple[str, list[dict]]:
                         try:
                             arguments[key] = _coerce_argument(raw, schema.get(key), tool=name, key=key)
                         except ToolCallValidationError:
-                            arguments[key] = raw.strip()
+                            arguments[key] = _unescape_argument(raw).strip()
                     calls.append({"id": f"call_{uuid.uuid4().hex}", "name": name, "arguments": json.dumps(arguments)})
                     continue
                 # The model sent a typed value its schema rejects. Fail
@@ -1247,14 +1276,25 @@ class ModelService:
         if not extends:
             prefix_session = getattr(backend, "_prefix_session", None)
             if callable(prefix_session):
+                can_restore = True
                 try:
-                    cached_tokens = int(prefix_session().reusable_tokens(ids))
-                    cache_outcome = "SNAPSHOT_HIT" if cached_tokens > 0 else "MISS"
-                except Exception:
-                    cached_tokens = 0
-                    cache_outcome = "ERROR"
+                    from macqwen.backends.flashnext import FlashNextBackend
+                    if isinstance(backend, FlashNextBackend):
+                        from models.flashnext import prefix_session as ps_mod
+                        if getattr(backend, "decoder", None) is not None or not (ps_mod.enabled() and ps_mod.restore_enabled()):
+                            can_restore = False
+                except ImportError:
+                    pass
+                if can_restore:
+                    try:
+                        cached_tokens = int(prefix_session().reusable_tokens(ids))
+                        cache_outcome = "SNAPSHOT_HIT" if cached_tokens > 0 else "MISS"
+                    except Exception:
+                        cached_tokens = 0
+                        cache_outcome = "ERROR"
         needed_prefill = len(ids) - shared if extends else max(0, len(ids) - cached_tokens)
         matched_prefix = shared if extends else cached_tokens
+        self._last_extends = bool(extends)
         self.last_cached_tokens = int(matched_prefix)
         had_state = self.warm_tokens() > 0 or bool(getattr(self, "session_hint", None))
         is_cold = (not extends) and (matched_prefix == 0) and (not had_state)
@@ -1395,6 +1435,27 @@ class ModelService:
 
             checked = [time.perf_counter()]
 
+            import inspect
+
+            on_text_takes_kind = False
+            if on_text is not None:
+                try:
+                    ot_sig = inspect.signature(on_text)
+                    on_text_takes_kind = (
+                        "kind" in ot_sig.parameters
+                        or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in ot_sig.parameters.values())
+                    )
+                except Exception:
+                    pass
+
+            def send_text(chunk, kind="content"):
+                if on_text is None:
+                    return
+                if on_text_takes_kind:
+                    on_text(chunk, kind=kind)
+                elif kind == "content":
+                    on_text(chunk)
+
             def streamed(piece: str) -> None:
                 if not first:
                     first.append(time.perf_counter())
@@ -1409,18 +1470,10 @@ class ModelService:
                             raise ClientGone("client disconnected during generation")
                 for kind, item in stream_filter.feed(piece):
                     if kind == "thinking":
-                        if on_text is not None:
-                            try:
-                                on_text(item, kind="thinking")
-                            except TypeError:
-                                pass
+                        send_text(item, kind="thinking")
                     else:
                         for complete in words.feed(item):
-                            if on_text is not None:
-                                try:
-                                    on_text(None if hold else complete, kind="content")
-                                except TypeError:
-                                    on_text(None if hold else complete)
+                            send_text(None if hold else complete, kind="content")
 
             def cancel_check() -> bool:
                 try:
@@ -1456,17 +1509,22 @@ class ModelService:
 
             flight_recorder.record("generate_begin", prompt_tokens=self.last_prompt_tokens, max_tokens=max_tokens,
                                    thinking=reasoning.thinking, effort=reasoning.effort if reasoning.thinking else None)
-            try:
-                text, stats = backend.generate(
-                    **gen_kwargs,
-                    should_cancel=cancel_check,
-                    on_prefill_progress=prefill_progress,
-                )
-            except TypeError:
-                try:
-                    text, stats = backend.generate(**gen_kwargs, should_cancel=cancel_check)
-                except TypeError:
-                    text, stats = backend.generate(**gen_kwargs)
+
+            gen_params = inspect.signature(backend.generate).parameters
+            call_kwargs = dict(gen_kwargs)
+            if "should_cancel" in gen_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in gen_params.values()):
+                call_kwargs["should_cancel"] = cancel_check
+            if "on_prefill_progress" in gen_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in gen_params.values()):
+                call_kwargs["on_prefill_progress"] = prefill_progress
+
+            text, stats = backend.generate(**call_kwargs)
+
+            last_prefix = getattr(backend, "last_prefix", None)
+            if last_prefix is not None:
+                self.last_cached_tokens = int(getattr(last_prefix, "hit_tokens", 0) or 0)
+            elif not getattr(self, "_last_extends", False):
+                self.last_cached_tokens = 0
+
             flight_recorder.record("generate_end", finish=getattr(stats, "finish", None),
                                    prompt_tokens=getattr(stats, "prompt_tokens", None),
                                    completion_tokens=getattr(stats, "tokens", None),
@@ -1475,27 +1533,18 @@ class ModelService:
             if on_text is not None:
                 for kind, item in stream_filter.finish():
                     if kind == "thinking":
-                        try:
-                            on_text(item, kind="thinking")
-                        except TypeError:
-                            pass
+                        send_text(item, kind="thinking")
                     else:
                         for complete in words.feed(item):
-                            try:
-                                on_text(None if hold else complete, kind="content")
-                            except TypeError:
-                                on_text(None if hold else complete)
+                            send_text(None if hold else complete, kind="content")
                 for complete in words.finish():
-                    try:
-                        on_text(None if hold else complete, kind="content")
-                    except TypeError:
-                        on_text(None if hold else complete)
+                    send_text(None if hold else complete, kind="content")
 
             extracted_reasoning, raw_visible = extract_reasoning_and_content(
                 text, reasoning.thinking
             )
             visible, calls = _parse_tool_calls(raw_visible, tools)
-            if key is not None and extracted_reasoning:
+            if key is not None:
                 self.reasoning_ledger.record_turn(key, visible, calls, extracted_reasoning)
             # Post-turn snapshot: OPT-IN (FLASHNEXT_TURN_SNAPSHOTS=1, with the prefix cache enabled). Off by default since
             # 2026-11-09: a state produced by decode steps has no chunk-plan provenance, so the exact-prefix lookup never

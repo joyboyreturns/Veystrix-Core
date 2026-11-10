@@ -153,13 +153,13 @@ class ReasoningLedger:
 
     def record_turn(self, key: str, content: str, tool_calls: list, reasoning_content: str, clock=time.time) -> None:
         """Record the generation outcome of an assistant turn."""
-        if not key or not reasoning_content:
+        if not key:
             return
         turns = self.sessions.pop(key, [])
         turns.append({
             "content": content or "",
             "tool_calls": list(tool_calls or []),
-            "reasoning_content": reasoning_content,
+            "reasoning_content": reasoning_content or "",
             "time": clock(),
         })
         self.sessions[key] = turns
@@ -212,8 +212,9 @@ class ReasoningLedger:
             msg = messages[msg_idx]
             existing = msg.get("reasoning_content")
             if not existing:
-                msg["reasoning_content"] = reasoning_content
-                restored += 1
+                if reasoning_content:
+                    msg["reasoning_content"] = reasoning_content
+                    restored += 1
             elif isinstance(existing, str) and existing != reasoning_content:
                 # Client passed reasoning (e.g. DSH tool-call turn or client round-trip).
                 # Standardize to exact recorded reasoning so template renders bit-identically.

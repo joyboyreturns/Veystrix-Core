@@ -71,6 +71,16 @@ def anchor_mode() -> str:
     return "messages" if mode == "all" else mode
 
 
+class RecoveryRequiredError(RuntimeError):
+    """A long conversation lost its state cache and cannot be safely recomputed cold."""
+
+    def __init__(self, message: str, status: int = 400, code: str | None = "recovery_required"):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+        self.code = code
+
+
 @dataclass
 class Report:
     prompt_tokens: int
@@ -229,7 +239,7 @@ class PrefixSession:
     def reusable_tokens(self, prompt) -> int:
         """Leading tokens the next ``prefill`` would restore (0 with restore off or no compatible entry). Side-effect
         free; used to size the memory a prefill will need before it starts."""
-        if not restore_enabled():
+        if not enabled() or not restore_enabled():
             return 0
         prompt = [int(t) for t in prompt]
         edges = self.cold_edges(prompt)
@@ -265,6 +275,21 @@ class PrefixSession:
             report.hit_tokens, report.tier = hit.n_tokens, hit.tier
             report.restore_seconds, report.bytes_loaded = hit.seconds, hit.bytes_loaded
             report.bytes_restored = hit.bytes_loaded
+
+        needed = len(prompt) - offset
+        max_cold = int(os.environ.get("VEYSTRIX_MAX_COLD_PREFILL") or 32768)
+        max_inc = int(os.environ.get("VEYSTRIX_MAX_INCREMENTAL_PREFILL") or max_cold)
+        effective_limit = min(max_inc, max_cold) if offset > 0 else max_cold
+        if needed > effective_limit:
+            outcome_str = getattr(res, "outcome", outcome) if restore else "COLD"
+            raise RecoveryRequiredError(
+                f"session state could not be recovered from memory or SSD cache (total prompt: {len(prompt)} "
+                f"tokens, matched prefix: {offset} tokens, uncached tokens: {needed}, outcome: {outcome_str}). "
+                f"Re-prefilling {needed} tokens cold would exceed the safe prefill limit of {effective_limit} "
+                "tokens and is prohibited on 16 GB hardware. A compatible state snapshot is required for recovery. "
+                "Shorten the prompt or resume from a saved session snapshot.",
+                code="recovery_required",
+            )
         boundaries = self.boundaries(prompt, offset)
 
         last = []

@@ -1833,11 +1833,13 @@ class StreamingSwitchGLU(nn.Module):
         store = self.gate_proj.cache.store
         pool = for_store(store, self.gate_proj.group_size)
         wanted = list(dict.fromkeys(routed))
-        if len(wanted) > pool.slots:
+        usable = getattr(pool, "usable_slots", pool.slots)
+        if len(wanted) > usable:
             # Batched verification can route more distinct experts than a
-            # small pool holds. Reusing a slot within the same dispatch would
-            # silently substitute weights. The ordinary streamed path keeps
-            # all routed experts and their original accumulation order.
+            # small pool holds (or remaining unleased capacity under prefill ring lease).
+            # Reusing a slot within the same dispatch would silently substitute weights.
+            # The ordinary streamed path keeps all routed experts and their original
+            # accumulation order.
             output = self._one_pass(None, indices, routed, True, flat_input, scores,
                                     shared_y, shared, shared_gate)
             return output if self.gate_proj.group_size == 64 else output.astype(mx.bfloat16)

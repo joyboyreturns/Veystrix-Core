@@ -62,6 +62,29 @@ class AssignTests(unittest.TestCase):
             pool.assign(1, list(range(17)))
         self.assertEqual(before, (list(pool._slot_of.items()), list(pool._free), pool.hits, pool.misses))
 
+    def test_leased_ring_capacity_prevents_slot_aliasing(self):
+        from models.flashnext import pool_ring
+
+        pool = self.make(40)
+        self.assertEqual(pool.usable_slots, 40)
+        first = pool_ring.lease_range(pool, 20)
+        self.assertEqual(first, 20)
+        self.assertEqual(pool.usable_slots, 20)
+
+        # 16 distinct experts fits within the 20 unleased slots
+        slots, misses = pool.assign(1, list(range(16)))
+        self.assertEqual(len(slots), 16)
+        self.assertEqual(len(set(slots.values())), 16)
+        self.assertTrue(all(s < 20 for s in slots.values()), "all assigned slots must be unleased (< 20)")
+
+        # 25 distinct experts exceeds the 20 unleased slots (even though total slots is 40)
+        before = (list(pool._slot_of.items()), list(pool._free), pool.hits, pool.misses)
+        with self.assertRaisesRegex(ValueError, "exceed"):
+            pool.assign(1, list(range(25)))
+        # Pool state must be completely unmutated: no aliasing, no partial eviction
+        self.assertEqual(before, (list(pool._slot_of.items()), list(pool._free), pool.hits, pool.misses))
+        self.assertEqual(len(set(pool._slot_of.values())), 16, "no duplicated live slot assignments")
+
 
 class FillTests(unittest.TestCase):
     def test_oversized_batch_uses_streaming_path_without_changing_pool(self):
@@ -78,6 +101,32 @@ class FillTests(unittest.TestCase):
         self.assertEqual(result.tolist(), [1.0])
         fallback.assert_called_once_with(None, "indices", routes, True, "input", "scores", None, None, None)
         self.assertEqual(list(pool._slot_of.items()), prior)
+
+    def test_pool_pass_with_leased_ring_falls_back_to_streamed_path_when_unleased_capacity_exceeded(self):
+        from models.flashnext import pool_ring
+
+        pool = AssignTests().make(40)
+        pool_ring.lease_range(pool, 20)
+        self.assertEqual(pool.usable_slots, 20)
+
+        # Pre-assign 5 experts
+        pool.assign(4, [100, 101, 102, 103, 104])
+        prior = list(pool._slot_of.items())
+
+        gate = SimpleNamespace(cache=SimpleNamespace(store=_Store(), prefix=PREFIX + ".gate_proj"), group_size=32)
+        fallback = mock.Mock(return_value=mx.array([1.0], dtype=mx.float32))
+        layer = SimpleNamespace(layer_id=4, gate_proj=gate, hits=0, misses=0, _one_pass=fallback)
+
+        # 8 tokens with top-k routing 25 distinct experts: exceeds the 20 unleased slots (though 25 < total slots 40)
+        routes = list(range(25))
+        with mock.patch.object(expert_pool, "for_store", return_value=pool):
+            result = expert_cache.StreamingSwitchGLU._pool_pass(layer, "indices", routes, "input", "scores", None, None, None)
+
+        self.assertEqual(result.dtype, mx.bfloat16)
+        fallback.assert_called_once_with(None, "indices", routes, True, "input", "scores", None, None, None)
+        # Verify pool was not corrupted or aliased
+        self.assertEqual(list(pool._slot_of.items()), prior)
+        self.assertEqual(len(set(pool._slot_of.values())), len(pool._slot_of))
 
     def test_parallel_descriptor_initialization_opens_once(self):
         pool = AssignTests().make(16)

@@ -71,7 +71,6 @@ class HistoryTests(unittest.TestCase):
         cases = [
             [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "x"}}]}],
             [{"role": "user", "content": "hi", "weird": 1}],
-            [{"role": "user", "content": "hi", "name": "bob"}],
             [{"role": "user", "content": "hi", "tool_calls": [
                 {"id": "c", "type": "function", "function": {"name": "n", "arguments": "{}"}}]}],
             [{"role": "assistant", "content": "", "tool_calls": [
@@ -84,7 +83,7 @@ class HistoryTests(unittest.TestCase):
 
     def test_harmless_empty_fields_and_tool_name_are_accepted(self):
         history = [
-            {"role": "user", "content": "hi", "refusal": None},
+            {"role": "user", "content": "hi", "name": "bob", "refusal": None},
             {"role": "tool", "content": "x", "tool_call_id": "c", "name": "glob"},
             {"role": "developer", "content": [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]},
         ]
