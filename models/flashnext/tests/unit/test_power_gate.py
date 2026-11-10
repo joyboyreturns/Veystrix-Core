@@ -81,5 +81,28 @@ class SessionGateTests(unittest.TestCase):
         self.run_gate(BATT.format(pct=5), benchmarking=True)
 
 
+class BundledLaunchTests(unittest.TestCase):
+    """The packaged app has no chat.sh and no source files: the supervisor must launch the compiled CLI module."""
+
+    def test_source_checkout_uses_chat_sh(self):
+        args = overnight.build_parser().parse_args([])
+        command = overnight.server_command(args)
+        self.assertTrue(command[0].endswith("chat.sh"), command[:2])
+
+    def test_bundle_launches_the_cli_module_with_the_bundled_interpreter(self):
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        args = overnight.build_parser().parse_args([])
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(overnight, "REPO", Path(root) / "lib"), \
+             mock.patch.object(sys, "executable", str(Path(root) / "python/bin/python3")):
+            self.assertTrue(overnight.bundled())
+            command = overnight.server_command(args)
+            self.assertEqual(command[:3], [sys.executable, "-m", "veystrix.cli"])
+        self.assertEqual(command[3:5], ["--mode", "agentic"])
+        self.assertIn("127.0.0.1", command)
+
+
 if __name__ == "__main__":
     unittest.main()

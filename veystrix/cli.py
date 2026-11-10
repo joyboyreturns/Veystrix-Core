@@ -68,6 +68,8 @@ from mlx_lm.utils import load_tokenizer
 
 def branch_sync_warning(root: Path = ROOT) -> str:
     """Warn when a checkout lacks commits from its known origin/main."""
+    if not (root / ".git").exists():
+        return ""              # the packaged app is not a checkout (and must not poke at git)
     try:
         current = subprocess.run(
             ["git", "-C", str(root), "merge-base", "--is-ancestor",
@@ -297,8 +299,12 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
             raise SystemExit(f"veystrix: {exc}") from exc
     interpreter = _interpreter(model)
 
+    # A source checkout runs the session script; the packaged app ships compiled modules only, so it runs the module.
+    session_script = ROOT / "veystrix" / "session.py"
+    run_session = [str(interpreter), "-u", str(session_script)] if session_script.is_file() \
+        else [str(interpreter), "-u", "-m", "veystrix.session"]
     chat_args = [
-        str(interpreter), "-u", str(ROOT / "veystrix" / "session.py"),
+        *run_session,
         "--model", model,
         "--preferences-file", known.preferences_file,
     ]
@@ -349,6 +355,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         environment.setdefault("MLX_QMM_BM", "64")
         environment.setdefault("MLX_QMM_BK", "32")
         environment.setdefault("MLX_QMM_BN", "64")
+    if not session_script.is_file():
+        environment["PYTHONPATH"] = os.pathsep.join(p for p in (str(ROOT), environment.get("PYTHONPATH", "")) if p)
     return ["/usr/bin/caffeinate", "-i", *chat_args], environment
 
 

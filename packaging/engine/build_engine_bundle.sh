@@ -49,6 +49,12 @@ for pkg in veystrix models/__init__.py models/flashnext models/qwen27b; do
   mkdir -p "$OUT/lib/$(dirname "$pkg")" 2>/dev/null || true
   ditto "$ROOT/$pkg" "$OUT/lib/$pkg"
 done
+# The shared CLI and checkpoint registry import these lightweight settings even when
+# the optional model backends are excluded. Do not include their model code.
+for pkg in bonsai2 k2_horizon; do
+  mkdir -p "$OUT/lib/models/$pkg"
+  cp "$ROOT/models/$pkg/__init__.py" "$ROOT/models/$pkg/settings.py" "$OUT/lib/models/$pkg/"
+done
 find "$OUT/lib" \( -name tests -o -name bench -o -name __pycache__ -o -name '*.md' \) -prune -exec rm -rf {} +
 # Compile next to the source (-b = legacy .pyc location, importable without the .py), then drop the .py files.
 # The settings registry discovers setting_*.py by globbing, so those stay as source.

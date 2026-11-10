@@ -51,11 +51,16 @@ echo "$SHORT_VERSION" > "$APP/Contents/Resources/VERSION"
 # Engine runtime (optional)
 if [[ -n "$ENGINE_DIR" ]]; then
   [[ -x "$ENGINE_DIR/python/bin/python3" ]] || die "$ENGINE_DIR is not an engine bundle"
+  log "Validating engine runtime from $ENGINE_DIR"
+  "$ENGINE_DIR/python/bin/python3" "$ROOT/packaging/engine/smoke_import.py" "$ENGINE_DIR" || die "engine bundle validation failed"
   log "Embedding engine runtime from $ENGINE_DIR"
   ditto "$ENGINE_DIR" "$APP/Contents/Resources/engine"
 else
   log "NOTE: no --engine: this app finds the engine only through Settings > Developer (source checkout)"
 fi
 
+if [[ -n "$ENGINE_DIR" ]]; then
+  "$APP/Contents/Resources/engine/python/bin/python3" "$ROOT/packaging/engine/smoke_import.py" "$APP/Contents/Resources/engine" || die "embedded engine validation failed"
+fi
 "$SCRIPT_DIR/sign_app.sh" "$APP"
 log "Built $APP"

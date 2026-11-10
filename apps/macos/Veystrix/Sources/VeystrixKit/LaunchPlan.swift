@@ -39,7 +39,8 @@ public struct LaunchPlan: Equatable, Sendable {
                             source: Source,
                             apiKey: String?,
                             parentEnvironment: [String: String] = ProcessInfo.processInfo.environment,
-                            fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) throws -> LaunchPlan {
+                            fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+                            isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }) throws -> LaunchPlan {
         let problems = settings.validationProblems()
         guard problems.isEmpty else { throw PlanError.invalidSettings(problems) }
         guard !settings.checkpointPath.isEmpty, let checkpoint else { throw PlanError.noCheckpoint }
@@ -59,6 +60,14 @@ public struct LaunchPlan: Equatable, Sendable {
             note = "developer checkout"
         }
         guard fileExists(python.path) else { throw PlanError.runtimeMissing(python.path) }
+        guard isExecutable(python.path) else { throw PlanError.runtimeMissing("Python is not executable: \(python.path)") }
+        guard fileExists(cwd.path) else { throw PlanError.runtimeMissing("working directory: \(cwd.path)") }
+        if case .bundled = source {
+            for file in ["models/flashnext/overnight.pyc", "veystrix/cli.pyc", "veystrix/session.pyc"] {
+                let path = cwd.appendingPathComponent(file).path
+                guard fileExists(path) else { throw PlanError.runtimeMissing(path) }
+            }
+        }
 
         var args = ["-m", "models.flashnext.overnight",
                     "--host", "127.0.0.1",                       // loopback only, always

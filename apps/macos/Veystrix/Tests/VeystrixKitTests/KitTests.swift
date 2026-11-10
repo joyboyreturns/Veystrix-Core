@@ -116,7 +116,7 @@ private func tempDir() -> URL {
         let (s, c) = try good(tempDir())
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: "local",
                                        parentEnvironment: ["HOME": "/Users/x", "PATH": "/usr/bin", "OPENAI_API_KEY": "sk-secret", "ANTHROPIC_API_KEY": "sk-ant-secret", "HF_TOKEN": "hf_x"],
-                                       fileExists: exists)
+                                       fileExists: exists, isExecutable: exists)
         #expect(plan.arguments.contains("models.flashnext.overnight"))
         let i = try #require(plan.arguments.firstIndex(of: "--host")); #expect(plan.arguments[i + 1] == "127.0.0.1")
         #expect(plan.arguments.contains("--overnight")); #expect(plan.arguments.contains("--checkpoint"))
@@ -127,30 +127,30 @@ private func tempDir() -> URL {
     }
     @Test func keepAwakeWrapsWithCaffeinateLikeServeSh() throws {
         var (s, c) = try good(tempDir()); s.keepMacAwake = true
-        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists)
+        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(plan.executable.path == "/usr/bin/caffeinate"); #expect(plan.arguments.first == "-ims")
         s.keepMacAwake = false
-        let plain = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists)
+        let plain = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(plain.executable.path == "/repo/.venv/bin/python")
     }
     @Test func requireKeyPassesServerKeyOnlyWhenEnabled() throws {
         var (s, c) = try good(tempDir())
-        let off = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: "vx-abc", fileExists: exists)
+        let off = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: "vx-abc", fileExists: exists, isExecutable: exists)
         #expect(off.environment["VEYSTRIX_SERVER_API_KEY"] == nil)
         s.requireAPIKey = true
-        let on = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: "vx-abc", fileExists: exists)
+        let on = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: "vx-abc", fileExists: exists, isExecutable: exists)
         #expect(on.environment["VEYSTRIX_SERVER_API_KEY"] == "vx-abc")
         #expect(!on.arguments.joined(separator: " ").contains("vx-abc"))      // never on the command line
     }
     @Test func refusesWithoutAUsableCheckpoint() throws {
         let s = AppSettings()
         #expect(throws: LaunchPlan.PlanError.noCheckpoint) {
-            try LaunchPlan.make(settings: s, checkpoint: nil, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists)
+            try LaunchPlan.make(settings: s, checkpoint: nil, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists, isExecutable: exists)
         }
         var s2 = AppSettings(); s2.checkpointPath = "/x"
         let bad = CheckpointReport(verdict: .incomplete, path: "/x", notes: ["missing shards"])
         #expect(throws: LaunchPlan.PlanError.checkpointNotUsable("missing shards")) {
-            try LaunchPlan.make(settings: s2, checkpoint: bad, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists)
+            try LaunchPlan.make(settings: s2, checkpoint: bad, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists, isExecutable: exists)
         }
     }
     @Test func refusesWhenRuntimeIsMissing() throws {
@@ -159,9 +159,22 @@ private func tempDir() -> URL {
             try LaunchPlan.make(settings: s, checkpoint: c, source: .bundled(engineRoot: URL(fileURLWithPath: "/nope")), apiKey: nil, fileExists: { _ in false })
         }
     }
+    @Test func bundledPlanRejectsNonExecutableAndMissingResources() throws {
+        let (s, c) = try good(tempDir())
+        let source = LaunchPlan.Source.bundled(engineRoot: URL(fileURLWithPath: "/Applications/App With Spaces.app/Contents/Resources/engine"))
+        #expect(throws: LaunchPlan.PlanError.self) {
+            try LaunchPlan.make(settings: s, checkpoint: c, source: source, apiKey: nil, fileExists: exists, isExecutable: { _ in false })
+        }
+        #expect(throws: LaunchPlan.PlanError.self) {
+            try LaunchPlan.make(settings: s, checkpoint: c, source: source, apiKey: nil,
+                                fileExists: { !$0.hasSuffix("overnight.pyc") }, isExecutable: exists)
+        }
+        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: source, apiKey: nil, fileExists: exists, isExecutable: exists)
+        #expect(plan.environment["PYTHONPATH"] == "/Applications/App With Spaces.app/Contents/Resources/engine/lib")
+    }
     @Test func customCacheDirectoryIsPassedAsPrefixDir() throws {
         var (s, c) = try good(tempDir()); s.cacheDirectory = "/Volumes/Fast/cache"
-        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists)
+        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists, isExecutable: exists)
         let i = try #require(plan.arguments.firstIndex(of: "--prefix-dir")); #expect(plan.arguments[i + 1] == "/Volumes/Fast/cache")
     }
     @Test func locatorPrefersBundledRuntime() {
@@ -247,7 +260,7 @@ struct ScriptedHealth: HealthChecking {
         let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth { .healthy(HealthReport()) } })
         // plan creation needs a runtime; point the developer source at a fake tree
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
+        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data(), attributes: [.posixPermissions: 0o755])
         await #expect(throws: EngineController.StartError.portInUse(8080)) {
             try await ctl.start(settings: s, checkpoint: c, apiKey: nil, userInitiated: true, source: .developer(repoRoot: repo))
         }
@@ -262,7 +275,7 @@ struct ScriptedHealth: HealthChecking {
         } })
         ctl.pollInterval = 0.02
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
+        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data(), attributes: [.posixPermissions: 0o755])
         try await ctl.start(settings: s, checkpoint: c, apiKey: nil, userInitiated: true, source: .developer(repoRoot: repo))
         #expect(launcher.launched == 1)
         for _ in 0..<100 where ctl.state != .running { try await Task.sleep(nanoseconds: 20_000_000) }
@@ -275,7 +288,7 @@ struct ScriptedHealth: HealthChecking {
         let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth { .unreachable } })
         ctl.pollInterval = 0.05
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
+        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data(), attributes: [.posixPermissions: 0o755])
         try await ctl.start(settings: s, checkpoint: c, apiKey: nil, userInitiated: true, source: .developer(repoRoot: repo))
         launcher.last?.exit(2)
         for _ in 0..<100 { if case .error = ctl.state { break }; try await Task.sleep(nanoseconds: 20_000_000) }
@@ -287,7 +300,7 @@ struct ScriptedHealth: HealthChecking {
         let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth { .unreachable } })
         ctl.gracefulStopSeconds = 0.2; ctl.pollInterval = 0.5
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
+        FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data(), attributes: [.posixPermissions: 0o755])
         try await ctl.start(settings: s, checkpoint: c, apiKey: nil, userInitiated: true, source: .developer(repoRoot: repo))
         await ctl.stop()
         #expect(launcher.last?.signals == ["INT", "TERM"])

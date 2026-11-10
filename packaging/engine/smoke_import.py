@@ -18,10 +18,20 @@ import importlib, os, sys
 lib = os.environ["PYTHONPATH"]
 for std in ("sqlite3", "ssl", "zlib", "json", "plistlib", "ctypes", "hashlib", "http.server"):
     importlib.import_module(std)      # stdlib pieces the engine needs must survive the size trimming
-for name in ("veystrix", "veystrix.api_keys", "models.flashnext.settings.registry", "models.flashnext.memory_policy"):
+for name in ("veystrix", "veystrix.api_keys", "models.flashnext.settings.registry", "models.flashnext.memory_policy", "models.flashnext.overnight", "veystrix.cli", "veystrix.session"):
     m = importlib.import_module(name)
     f = getattr(m, "__file__", None) or ""
     assert f.startswith(lib), f"{name} came from {f!r}, not the bundle"
+from models.flashnext.overnight import server_command, bundled
+from types import SimpleNamespace
+assert bundled(), "bundle unexpectedly expects chat.sh"
+cmd = server_command(SimpleNamespace(pool_gb="0", host="127.0.0.1", port=8080, checkpoint="/tmp/model with spaces"))
+assert cmd[:3] == [sys.executable, "-m", "veystrix.cli"] and cmd[-1] == "/tmp/model with spaces", cmd
+from veystrix.cli import command
+os.environ["VEYSTRIX_PYTHON"] = sys.executable
+planned, _ = command(cmd[3:])
+assert planned[2:5] == [sys.executable, "-u", "-m"] and "veystrix.session" in planned, planned
+assert "/tmp/model with spaces" in planned, planned
 from models.flashnext.settings.registry import get_registry
 assert len(get_registry().settings) > 0 if hasattr(get_registry(), "settings") else True
 try:
@@ -32,6 +42,11 @@ except ImportError:
 import mlx_vlm  # noqa: F401  (imports the package only; no model, no Metal session)
 print("imports ok")
 """
+for required in (python, lib / "models/flashnext/overnight.pyc", lib / "veystrix/cli.pyc", lib / "veystrix/session.pyc", lib / "models/bonsai2/settings.pyc", lib / "models/k2_horizon/settings.pyc"):
+    if not required.is_file():
+        sys.exit(f"mandatory bundle resource missing: {required}")
+if not os.access(python, os.X_OK):
+    sys.exit(f"bundled Python is not executable: {python}")
 for args in (["-c", CODE], ["-m", "models.flashnext.overnight", "--help"]):
     r = subprocess.run([str(python), *args], env=env, cwd=str(bundle), capture_output=True, text=True, timeout=180)
     print(" ".join(args[:2]) if args[0] == "-m" else "import check", "->", r.returncode)
