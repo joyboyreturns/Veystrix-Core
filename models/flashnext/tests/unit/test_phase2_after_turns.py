@@ -9,19 +9,13 @@ class BoundaryTests(unittest.TestCase):
     def reading(self, free_gib=15, swap_mib=100, pressure=1):
         return P.Reading(page=2**20, free=free_gib * 1024, swap_used=swap_mib * 2**20, pressure=pressure)
 
-    def test_headroom_fails_closed_on_swap_pressure_and_shortfall(self):
+    def test_only_swap_at_the_ceiling_postpones(self):
         self.assertTrue(B.boundary_headroom(self.reading(), 9000)["admitted"])
-        for reading in (self.reading(swap_mib=2304), self.reading(pressure=2), self.reading(free_gib=3)):
-            self.assertFalse(B.boundary_headroom(reading, 9000)["admitted"])
-
-    def test_larger_prompt_has_larger_reserve(self):
-        small = B.boundary_headroom(self.reading(), 8000)
-        large = B.boundary_headroom(self.reading(), 10000)
-        self.assertGreater(large["required_bytes"], small["required_bytes"])
-        self.assertGreaterEqual(large["snapshot_budget"], small["snapshot_budget"])
+        self.assertTrue(B.boundary_headroom(self.reading(free_gib=1, pressure=2, swap_mib=2900), 9000)["admitted"])
+        self.assertFalse(B.boundary_headroom(self.reading(swap_mib=3072), 9000)["admitted"])
 
     def test_refused_boundary_never_sends_8k_request(self):
-        health = {"memory_policy": {"swap_ceiling_mib": 3072.0, "swap_ceiling_margin_mib": 768.0}}
+        health = {"memory_policy": {"swap_ceiling_mib": 3072.0, "swap_ceiling_margin_mib": 0.0}}
         response = {"choices": [{"message": {"content": "ready"}, "finish_reason": "stop"}], "usage": {}}
         safe = {"power_source": "ac", "battery_percent": 80, "battery_state": "charging", "low_power": False,
                 "thermal_readable": True, "thermal_warning": False, "thermal_speed_limit": None,
@@ -29,7 +23,7 @@ class BoundaryTests(unittest.TestCase):
         report = {}
         with mock.patch.object(B.G, "http_json", side_effect=[health, response, response]) as send, \
              mock.patch.object(B.G, "machine_sample", return_value=safe), \
-             mock.patch.object(B.request_admission, "strict_read", return_value=self.reading(free_gib=2)):
+             mock.patch.object(B.request_admission, "strict_read", return_value=self.reading(swap_mib=3072)):
             with self.assertRaisesRegex(RuntimeError, "postponed"):
                 B.make_driver({"max_tokens": 8}, 8100, 9124, report)("http://localhost")
         self.assertEqual(send.call_count, 3)  # health and two short turns only
@@ -58,14 +52,14 @@ class PowerModeTests(unittest.TestCase):
 
     def test_battery_mode_keeps_other_safety_checks(self):
         for extra in ({"low_power": True}, {"thermal_warning": True}, {"thermal_speed_limit": 80},
-                      {"pressure_level": 2}, {"swap_used_mb": 2304}, {"available_mb": 2000}):
+                      {"swap_used_mb": 3072}):
             self.assertIsNotNone(B.stop_reason(self.sample(**extra), None, "battery-ok", 40), extra)
 
     def test_ac_mode_is_unchanged_for_charging_sample(self):
         self.assertIsNone(B.stop_reason(self.sample("ac", 80, "charging"), None, "ac"))
 
     def test_driver_stops_before_8k_when_battery_drops_below_floor(self):
-        health = {"memory_policy": {"swap_ceiling_mib": 3072.0, "swap_ceiling_margin_mib": 768.0}}
+        health = {"memory_policy": {"swap_ceiling_mib": 3072.0, "swap_ceiling_margin_mib": 0.0}}
         response = {"choices": [{"message": {"content": "ready"}, "finish_reason": "stop"}], "usage": {}}
         readings = [self.sample(percent=45), self.sample(percent=44), self.sample(percent=43), self.sample(percent=39)]
         report = {}

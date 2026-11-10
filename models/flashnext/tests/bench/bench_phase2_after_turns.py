@@ -13,13 +13,12 @@ working set; do not interpret a pass as proof for other workloads.
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from pathlib import Path
 
 from macqwen.measurement import MeasurementRun
 from macqwen.results import output_path
-from models.flashnext import prefill_budget, purge_recovery, request_admission
+from models.flashnext import request_admission
 from models.flashnext.tests.bench import bench_layer_gate as G
 
 
@@ -29,7 +28,7 @@ DEFAULT_MIN_BATTERY = 40
 
 def stop_reason(sample, baseline=None, power_rules="ac", min_battery=DEFAULT_MIN_BATTERY):
     """First reason to stop: the shared strict gate plus this harness's charge floor on battery."""
-    reason = G.safety_reason(sample, baseline, memory_rules="strict", power_rules=power_rules)
+    reason = G.safety_reason(sample, baseline, memory_rules="swap-only", power_rules=power_rules)
     if reason or power_rules != "battery-ok":
         return reason
     if sample.get("power_source") == "battery" and (sample.get("battery_percent") or 0) < min_battery:
@@ -61,26 +60,12 @@ def bounded_prompt(checkpoint):
 
 
 def boundary_headroom(reading, tokens_upper, max_output=8):
-    """A stricter independent version of the current candidate estimate."""
-    if reading.pressure != 1:
-        return {"admitted": False, "reason": "memory pressure is not normal"}
-    if reading.swap_used >= G.STRICT_SWAP_STOP_MB * 2**20:
-        return {"admitted": False, "reason": "swap is at the proactive safety margin"}
-    # Two messages with balanced 2048-token chunks and one system anchor;
-    # additional two boundaries cover the anchor and final bookkeeping.
-    snapshots = math.ceil(tokens_upper / 2048) + 2
-    available = reading.available - min(reading.inactive, reading.anonymous) * reading.page
-    required = (purge_recovery.Config().idle_headroom_bytes
-                + prefill_budget.chunk_increment_bytes(1024, 0)
-                + purge_recovery.LAYER_MAJOR_EXTRA_BYTES
-                + int(max(0, tokens_upper - 8192) * 2.18e9 / 8192)
-                + 2 * request_admission.GIB  # candidate margin plus a further GiB
-                + max_output * request_admission.TOKEN_RESERVE_BYTES
-                + tokens_upper * request_admission.TOKEN_RESERVE_BYTES
-                + snapshots * request_admission.SNAPSHOT_RESERVE_BYTES)
-    return {"admitted": available >= required, "reason": None if available >= required else "insufficient estimated headroom",
-            "available_bytes": available, "required_bytes": required, "token_budget": tokens_upper,
-            "snapshot_budget": snapshots, "swap_bytes": reading.swap_used, "pressure": reading.pressure}
+    """Owner rule 2026-11-10: swap at the 3 GiB ceiling is the only memory condition; sizes are recorded, not gated."""
+    ceiling = G.SWAP_CEILING_MB * 2**20
+    admitted = reading.swap_used < ceiling
+    return {"admitted": admitted, "reason": None if admitted else "swap is at the 3 GiB ceiling",
+            "available_bytes": reading.available, "token_budget": tokens_upper, "swap_bytes": reading.swap_used,
+            "pressure": reading.pressure}
 
 
 def valid_chat(response):
@@ -99,9 +84,9 @@ def make_driver(payload, count, upper, report, power_rules="ac", min_battery=DEF
     def driver(url):
         health = G.http_json(url + "/health", timeout=10)
         policy = health.get("memory_policy") or {}
-        if (policy.get("swap_ceiling_mib"), policy.get("swap_ceiling_margin_mib")) != (3072.0, 768.0):
-            raise RuntimeError("candidate absolute guard is absent or differs from 3072/768 MiB")
-        report["guard"] = {"swap_ceiling_mib": 3072, "margin_mib": 768}
+        if (policy.get("swap_ceiling_mib"), policy.get("swap_ceiling_margin_mib")) != (3072.0, 0.0):
+            raise RuntimeError("candidate absolute guard is absent or differs from 3072/0 MiB")
+        report["guard"] = {"swap_ceiling_mib": 3072, "margin_mib": 0}
         initial = G.machine_sample()
         report["initial_server_sample"] = initial
         reason = stop_reason(initial, None, power_rules, min_battery)
@@ -170,20 +155,20 @@ def main():
     run.start()
     report = {}
     try:
-        initial, reason, purge = G.prepare_headroom(candidate=True, memory_rules="strict", power_rules=args.power_rules)
+        initial, reason, purge = G.prepare_headroom(candidate=True, memory_rules="swap-only", power_rules=args.power_rules)
         report.update(initial_machine=initial, initial_purge=purge, power_rules=args.power_rules)
         reason = reason or stop_reason(initial, None, args.power_rules, args.min_battery)
         if reason:
             raise RuntimeError("preflight postponed: " + reason)
         payload, count, upper = bounded_prompt(checkpoint)
         command, evidence, machine = G.run_arm("layer", "after-turns", checkpoint, None, path.parent,
-                                               candidate="layer-major", uncached=True, memory_rules="strict",
+                                               candidate="layer-major", uncached=True, memory_rules="swap-only",
                                                prefetch=True, base_pool_gb=args.pool_gb, reads="prefill",
                                                power_rules=args.power_rules,
                                                driver=make_driver(payload, count, upper, report, args.power_rules, args.min_battery),
                                                auto_purge=True,
                                                extra_env={"FLASHNEXT_SWAP_CEILING_MIB": "3072",
-                                                          "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "768"})
+                                                          "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "0"})
         run.arm(arm_id="after-turns", condition="layer", round_index=1, command=command, metrics=evidence, **machine)
         run.finish("completed", report=report)
         print("Bounded 8K-after-turns request completed; inspect recorded safety evidence.")

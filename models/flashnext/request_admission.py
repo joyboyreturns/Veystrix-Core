@@ -75,23 +75,6 @@ def check(tokens: int, *, max_output_tokens: int = 0, snapshot_count: int = 0, r
         raise RequestMemoryRefused("memory guard sample is stale; retry when monitoring resumes")
     if reading.swap_used >= (policy.swap_ceiling_mib - policy.swap_ceiling_margin_mib) * 2**20:
         raise RequestMemoryRefused("swap is already at the safety margin; retry after system memory pressure falls")
-    if reading.pressure >= 2:
-        raise RequestMemoryRefused("system memory pressure is elevated; retry when it returns to normal")
-    # Inactive pages can include anonymous pages that require compression or swap.
-    # The lower bound deliberately makes no promise about file-cache reclamation.
-    available = reading.available - min(reading.inactive, reading.anonymous) * reading.page
-    required = purge_recovery.request_required_bytes(purge_recovery.Config(), tokens)
-    # 16K peak exceeded 8K by ~2.18 GB in the measured layer-major arms. The
-    # model is deliberately conservative and extrapolates; it is not a 32K validation.
-    required += int(max(0, tokens - 8192) * 2.18e9 / 8192) + GIB
-    # Reserve for all possible output tokens and a further copy of the prompt
-    # KV during snapshot materialization/restoration. Snapshot leases may exceed
-    # the cache's RAM budget, so count every planned boundary independently.
-    required += max(0, int(max_output_tokens)) * TOKEN_RESERVE_BYTES
-    if snapshot_count:
-        required += max(0, int(snapshot_count)) * SNAPSHOT_RESERVE_BYTES
-        required += max(0, int(tokens)) * TOKEN_RESERVE_BYTES
-    if available < required:
-        raise RequestMemoryRefused(
-            f"insufficient conservative prefill headroom ({available / GIB:.2f} GiB available, "
-            f"{required / GIB:.2f} GiB required); retry after freeing memory")
+    # Owner decision 2026-11-10: the only limit is swap in use at the absolute ceiling. Available memory, pressure and
+    # per-request headroom estimates are no longer admission conditions (they refused runs the swap rule would allow);
+    # they remain telemetry. ``tokens``, ``max_output_tokens`` and ``snapshot_count`` are accepted for compatibility.

@@ -111,7 +111,7 @@ class Policy:
             swap_only=effective_swap_only,
             swap_growth_stop_gib=_number(FLAG_SWAP_GROWTH, d.swap_growth_stop_gib, 0.25, 64, environ),
             swap_ceiling_mib=_number(FLAG_SWAP_CEILING, 3072.0 if layer_major else d.swap_ceiling_mib, 0, 1048576, environ),
-            swap_ceiling_margin_mib=_number(FLAG_SWAP_CEILING_MARGIN, 768.0 if layer_major else d.swap_ceiling_margin_mib, 0, 65536, environ),
+            swap_ceiling_margin_mib=_number(FLAG_SWAP_CEILING_MARGIN, 0.0 if layer_major else d.swap_ceiling_margin_mib, 0, 65536, environ),
             persist_s=_number(FLAG_PERSIST, d.persist_s, 5, 3600, environ),
             critical_confirm_s=_number(FLAG_CRITICAL_CONFIRM, d.critical_confirm_s, 1, 60, environ),
             recover_s=_number(FLAG_RECOVER, d.recover_s, 1, 300, environ),

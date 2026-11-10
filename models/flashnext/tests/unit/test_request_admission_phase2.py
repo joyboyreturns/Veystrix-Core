@@ -24,20 +24,19 @@ class RequestAdmissionTests(unittest.TestCase):
         return P.Reading(page=page, free=free * 1024, inactive=inactive * 1024,
                          anonymous=anonymous * 1024, swap_used=swap * 1024 * page, pressure=pressure)
 
-    def test_safe_and_short_requests(self):
+    def test_only_swap_at_the_ceiling_refuses(self):
+        # Owner decision 2026-11-10: swap in use is the only memory limit.
         A.check(8192, read=lambda: self.reading())
-        with self.assertRaisesRegex(A.RequestMemoryRefused, "headroom"):
-            A.check(20, read=lambda: self.reading(free=1))
-
-    def test_inactive_anonymous_is_not_free_headroom(self):
-        with self.assertRaisesRegex(A.RequestMemoryRefused, "headroom"):
-            A.check(8192, read=lambda: self.reading(free=3, inactive=8, anonymous=8))
-
-    def test_swap_and_pressure_even_on_short_request(self):
+        A.check(20, read=lambda: self.reading(swap=2.9))
         with self.assertRaisesRegex(A.RequestMemoryRefused, "swap"):
-            A.check(20, read=lambda: self.reading(swap=2.4))
-        with self.assertRaisesRegex(A.RequestMemoryRefused, "pressure"):
-            A.check(20, read=lambda: self.reading(pressure=2))
+            A.check(20, read=lambda: self.reading(swap=3.0))
+        with self.assertRaisesRegex(A.RequestMemoryRefused, "swap"):
+            A.check(20, read=lambda: self.reading(swap=3.5))
+
+    def test_low_memory_pressure_and_request_size_do_not_refuse(self):
+        low = lambda: self.reading(free=1, inactive=8, anonymous=8, pressure=2, swap=1)
+        A.check(20, read=low)
+        A.check(16384, max_output_tokens=50000, snapshot_count=13, read=low)
 
     def test_missing_probe_and_stale_guard_fail_closed(self):
         with self.assertRaisesRegex(A.RequestMemoryRefused, "unavailable"):
@@ -51,23 +50,9 @@ class RequestAdmissionTests(unittest.TestCase):
             with self.assertRaisesRegex(A.RequestMemoryRefused, "watchdog"):
                 A.check(1, read=lambda: self.reading())
 
-    def test_16k_requires_more_headroom(self):
-        with mock.patch.object(P, "request_required_bytes", return_value=5 * A.GIB):
-            A.check(8192, read=lambda: self.reading(free=8))
-            with self.assertRaisesRegex(A.RequestMemoryRefused, "headroom"):
-                A.check(16384, read=lambda: self.reading(free=8))
-
-    def test_output_and_snapshot_staging_have_distinct_reserves(self):
-        with mock.patch.object(P, "request_required_bytes", return_value=5 * A.GIB):
-            A.check(8192, max_output_tokens=1, read=lambda: self.reading(free=8))
-            with self.assertRaisesRegex(A.RequestMemoryRefused, "headroom"):
-                A.check(8192, max_output_tokens=50000, read=lambda: self.reading(free=8))
-            with self.assertRaisesRegex(A.RequestMemoryRefused, "headroom"):
-                A.check(8192, snapshot_count=13, read=lambda: self.reading(free=8))
-
     def test_candidate_defaults_and_explicit_rollback(self):
         p = MC.Policy.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer"})
-        self.assertEqual((p.swap_ceiling_mib, p.swap_ceiling_margin_mib), (3072, 768))
+        self.assertEqual((p.swap_ceiling_mib, p.swap_ceiling_margin_mib), (3072, 0))
         self.assertEqual(MC.Policy.from_environment({}).swap_ceiling_mib, 0)
         self.assertEqual(MC.Policy.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer", MC.FLAG_SWAP_CEILING: "0"}).swap_ceiling_mib, 0)
         A.check(8192, environ={"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_REQUEST_ADMISSION": "0"}, read=lambda: None)

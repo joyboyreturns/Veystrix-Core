@@ -49,6 +49,20 @@ Decision: buffered fill stays opt-in. The evidence is strong for this setting bu
 
 **8K-after-turns gate, second attempt, 2026-11-10 (owner had closed other apps): refused by the server's request admission.** Preflight passed (about 11.9 GiB available) and the layer-major candidate started under the watchdog, but its first short request was refused with `memory_admission_refused` (4.94 GiB available, 6.26 GiB required) once the model was resident (`results/flashnext/20261110-123719-phase2-after-turns-manual/`). Swap stayed at 845.5 MiB and no 8K request was sent. Loading the engine takes roughly 7 GiB of the 11.9 GiB, so the candidate's conservative requirement (idle headroom of about 5.5 GB plus a layer-major extra of about 1.6 GB) cannot be met on this 16 GB machine even for a tiny request. The reference chunk-major server admitted the same requests. The requirement was calibrated on pruned routing and has not been re-measured at full routing; it was not lowered.
 
+## Full-routing layer-major 8K prefill, paired (measured, 2026-11-10)
+
+Owner decision, 2026-11-10: the only inference-engine memory limit is swap in use at 3,072 MiB. The layer-major request-admission check (available-memory requirement, pressure refusal, per-request headroom estimate) was removed; it now refuses only at the swap ceiling, and the early-stop margin is 0 (stop exactly at 3 GiB). Earlier failed runs (`results/flashnext/20261110-123719-`, `-124338-`, and the first `-1243` retry) were refusals by the removed check at 4.9–5.3 GiB available against 6.3–9.3 GiB required; `FLASHNEXT_REQUEST_ADMISSION=0` set in the launching shell does not reach the server, so it did not help. The pre-request purge remains (it never refuses). Battery and thermal checks remain. The strict gate's 3 GiB available-memory floor stopped a single-arm 8K reference run at 2,727 MiB available with swap flat; `swap-only` is the rule used from here on.
+
+Command: `.venv/bin/python -m models.flashnext.tests.bench.bench_layer_gate --candidate layer-major --prefetch --reads prefill --pool-gb 2 --source-tokens 6000 --rounds 3 --settle 30 --memory-rules swap-only --power-rules battery-ok`; raw arms in `results/flashnext/20261110-125313-layer-gate-manual/`. Full routing (threshold 1.0), about 8K-token prompt, reversed pair order, fresh supervised process per arm, independent watchdog. Started on battery at about 49%; the Mac was charging partway through, so the run is preliminary under `docs/measurement-standard.md`.
+
+| Pair | Chunk-major reference | Layer-major + prefetch | Speed-up |
+|---|---:|---:|---:|
+| 1 | 166.6 s | 95.2 s | 1.75× |
+| 2 | 184.0 s | 100.1 s | 1.84× |
+| 3 | 184.5 s | 108.6 s | 1.70× |
+
+Mean-time ratio 1.76×; the harness's median tok/s ratio was 1.839×. About 300 GB of physical SSD reads per reference arm against about 90 GB per layer-major arm. MLX peak 9.74 GB in layer-major arms. All six arms produced the identical output digest (`67264f3720`) and all three pair validations passed (token-ID level, one prompt, 8 output tokens; not a logits comparison). Peak swap 845–1,565 MiB in reference arms and 1,278–1,621 MiB in layer-major arms, always below 3,072 MiB; minimum available memory in layer-major arms was about 1.4–1.7 GiB. Swap climbed across the session and was not released between arms. This is the first full-routing evidence for layer-major prefill; it replaces the pruned-routing 89.5 tok/s history. It does not cover decode (unchanged), 16K, multi-turn state, or real clients.
+
 ## Performance
 
 These are prior recorded results on this checkpoint, not new Phase II measurements. Conditions and raw arms are in [overnight-architecture-results.md](overnight-architecture-results.md). The new code has no measured throughput claim.

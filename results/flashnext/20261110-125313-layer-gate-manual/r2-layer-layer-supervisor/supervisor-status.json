@@ -1,0 +1,18 @@
+{
+ "state": "stopped",
+ "pid": 36566,
+ "server_pid": 36580,
+ "starts": 1,
+ "since": "2026-11-10T12:59:32+0530",
+ "updated": "2026-11-10T13:01:42+0530",
+ "recent": [
+  {
+   "at": "13:01:42",
+   "exit": 0,
+   "action": "stop",
+   "reason": "stopped by the owner"
+  }
+ ],
+ "reason": "stopped by the owner",
+ "exit": 0
+}
