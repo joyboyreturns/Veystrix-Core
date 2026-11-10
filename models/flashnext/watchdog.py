@@ -17,7 +17,9 @@ On a stall, in order: write a report; ask the worker for Python stacks (SIGUSR1 
 held); take a native ``sample``; tell the client whose request is in flight, over a duplicate of its socket the worker handed
 over at request start; SIGTERM; wait out a grace period; SIGKILL only if it is still alive. Before every signal the process
 identity (pid plus start time) is re-checked, so a recycled pid is never signalled, and only the one worker is ever signalled.
-The existing memory, swap, compressor, pressure, thermal and GPU guards are not part of this and are unchanged.
+The optional independent swap backstop samples macOS outside the worker's GIL. It immediately kills the identity-checked
+worker on an unsafe active-work reading or a failed probe. Sampling and process termination take time, so this cannot
+guarantee a hard swap ceiling; admission and the worker's other guards remain necessary.
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ from dataclasses import dataclass, field
 from models.flashnext import progress as P
 
 EXIT_STALL_HANDLED = 3
+EXIT_MEMORY_HANDLED = 4
 
 DEFAULT_DEADLINES = {"starting": 300, "loading": 900, "request": 60, "prefill": 180, "decode": 60, "sync": 60,
                      "cleanup": 60, "stopping": 60}
@@ -63,17 +66,30 @@ class Config:
     cpu_fraction: float = 0.10
     io_bytes: int = 8 * 2 ** 20
     sample: bool = True            # native stack sample (3 s) before termination
+    memory_watch: bool = False
+    memory_poll: float = 0.25
+    memory_stop_mib: float = 0.0
 
     @classmethod
     def from_environment(cls, environ=None):
         environ = os.environ if environ is None else environ
         number = lambda name, default: float(environ.get(name) or default)       # noqa: E731
+        from models.flashnext.memory_controller import Policy
+        policy = Policy.from_environment(environ)
+        enabled = environ.get("FLASHNEXT_WATCHDOG_MEMORY", "1" if environ.get("FLASHNEXT_PREFILL_ORDER", "").strip().lower() == "layer" else "0") == "1"
+        interval = number("FLASHNEXT_WATCHDOG_MEMORY_POLL", 0.25)
+        if not 0.05 <= interval <= 1.0:
+            raise ValueError("FLASHNEXT_WATCHDOG_MEMORY_POLL must be between 0.05 and 1 second")
+        if enabled and (policy.swap_ceiling_mib <= 0 or policy.swap_ceiling_margin_mib >= policy.swap_ceiling_mib):
+            raise ValueError("independent memory watchdog requires a positive ceiling and a smaller margin")
         return cls(deadlines=_table(environ.get("FLASHNEXT_WATCHDOG_DEADLINES"), DEFAULT_DEADLINES),
                    hard=_table(environ.get("FLASHNEXT_WATCHDOG_HARD"), DEFAULT_HARD),
                    activity_window=number("FLASHNEXT_WATCHDOG_ACTIVITY_WINDOW", 30.0),
                    poll=number("FLASHNEXT_WATCHDOG_POLL", 1.0), grace=number("FLASHNEXT_WATCHDOG_GRACE", 10.0),
                    kill_wait=number("FLASHNEXT_WATCHDOG_KILL_WAIT", 5.0),
-                   sample=environ.get("FLASHNEXT_WATCHDOG_SAMPLE", "1") != "0")
+                   sample=environ.get("FLASHNEXT_WATCHDOG_SAMPLE", "1") != "0",
+                   memory_watch=enabled, memory_poll=interval,
+                   memory_stop_mib=policy.swap_ceiling_mib - policy.swap_ceiling_margin_mib)
 
 
 # -- what the process is doing, from outside ----------------------------------------------------------------------
@@ -89,6 +105,26 @@ class _RusageV2(ctypes.Structure):
 
 class _Timebase(ctypes.Structure):
     _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
+
+
+class _SwapUsage(ctypes.Structure):
+    _fields_ = [("total", ctypes.c_uint64), ("available", ctypes.c_uint64), ("used", ctypes.c_uint64),
+                ("pagesize", ctypes.c_uint32), ("encrypted", ctypes.c_int32)]
+
+
+def swap_used_mib() -> float:
+    """Read the kernel's swap counter directly, without launching a subprocess."""
+    usage = _SwapUsage()
+    size = ctypes.c_size_t(ctypes.sizeof(usage))
+    libc = ctypes.CDLL(None, use_errno=True)
+    call = libc.sysctlbyname
+    call.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p, ctypes.c_size_t]
+    call.restype = ctypes.c_int
+    if call(b"vm.swapusage", ctypes.byref(usage), ctypes.byref(size), None, 0) != 0:
+        raise OSError(ctypes.get_errno(), "sysctlbyname vm.swapusage failed")
+    if size.value != ctypes.sizeof(usage) or usage.used > usage.total or not usage.pagesize:
+        raise ValueError("invalid vm.swapusage reading")
+    return usage.used / 2**20
 
 
 def usage(pid: int):
@@ -153,9 +189,9 @@ class Judge:
 # -- acting on a stall ---------------------------------------------------------------------------------------------
 
 
-def client_error_bytes(path: str, started: bool, message: str) -> bytes:
+def client_error_bytes(path: str, started: bool, message: str, code: str = "worker_stalled") -> bytes:
     """The failure as the client's own protocol expects it, so the agent sees a clean error instead of a dead socket."""
-    error = {"message": message, "type": "server_error", "code": "worker_stalled"}
+    error = {"message": message, "type": "server_error", "code": code}
     if not started:
         body = json.dumps({"error": error}).encode()
         return (b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nRetry-After: 30\r\n"
@@ -222,14 +258,14 @@ class Responder:
             except OSError:
                 pass
 
-    def notify(self, row: dict, message: str) -> bool:
+    def notify(self, row: dict, message: str, code: str = "worker_stalled") -> bool:
         item = self.clients.get(row["request_seq"])
         if item is None:
             return False
         sock, path = item
         try:
             sock.setblocking(False)
-            sock.send(client_error_bytes(path, bool(row["response_started"]), message))
+            sock.send(client_error_bytes(path, bool(row["response_started"]), message, code))
             sock.shutdown(socket.SHUT_WR)
             return True
         except OSError:
@@ -290,15 +326,35 @@ class Responder:
         self.log(f"stall handled: {path}")
         return report
 
+    def handle_memory(self, row: dict, reason: str) -> dict:
+        """Stop immediately; diagnostic sampling and graceful wait would add unsafe latency."""
+        killed = self.signal(signal.SIGKILL)
+        message = f"Veystrix stopped its inference worker for memory safety: {reason}. Retry only after memory pressure falls."
+        notified = self.notify(row, message, "memory_safety_stop") if killed else False
+        report = {"pid": self.pid, "identity": list(self.identity), "reason": reason,
+                  "stage": row["stage"], "sigkill": killed, "client_notified": notified, "guard_trace": self.trace}
+        path = os.path.join(self.directory, f"memory-{self.pid}-{time.time_ns()}.json")
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as handle:
+                json.dump(report, handle, indent=2)
+            self.log(f"memory stop: {path}")
+        except OSError as error:
+            self.log(f"memory stop report failed: {error}; reason: {reason}")
+        return report
+
 
 # -- the loop ------------------------------------------------------------------------------------------------------
 
 
 def run(pid, identity, record_path, channel, directory, config=None, trace=None, log=lambda text: None,
-        sleep=time.sleep, clock=time.time, usage_fn=usage) -> int:
+        sleep=time.sleep, clock=time.time, usage_fn=usage, swap_fn=swap_used_mib) -> int:
     config = config or Config.from_environment()
     record = P.Record(record_path)
     judge, responder = Judge(config), Responder(pid, identity, config, directory, trace, log, sleep, clock)
+    last_judge = None
+    heartbeat_fd = None
+    heartbeat_at = None
     try:
         while True:
             if P.process_identity(pid) != identity:
@@ -308,16 +364,40 @@ def run(pid, identity, record_path, channel, directory, config=None, trace=None,
                 responder.accept_clients(channel)
             row = record.read()
             if row is None or row["pid"] != pid or (row["start_sec"], row["start_usec"]) != identity:
-                sleep(config.poll)               # not written yet, or somebody else's record: never act on it
+                sleep(min(config.poll, config.memory_poll) if config.memory_watch else config.poll)
                 continue
-            verdict = judge.observe(row, usage_fn(pid), clock())
+            if config.memory_watch:
+                try:
+                    used = float(swap_fn())
+                    if not (0 <= used < float("inf")):
+                        raise ValueError("invalid swap counter")
+                    reason = (f"swap {used:.1f} MiB reached safety stop {config.memory_stop_mib:.1f} MiB"
+                              if used >= config.memory_stop_mib and row["stage"] != "idle" else None)
+                    if reason is None and (heartbeat_at is None or clock() - heartbeat_at >= 1.0):
+                        if heartbeat_fd is None:
+                            heartbeat_fd = os.open(record_path + ".memory", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                        os.utime(heartbeat_fd, None)
+                        heartbeat_at = clock()
+                except Exception as error:
+                    reason = f"independent swap probe failed: {type(error).__name__}: {error}"
+                if reason:
+                    responder.handle_memory(row, reason)
+                    return EXIT_MEMORY_HANDLED
+            now = clock()
+            if last_judge is not None and now - last_judge < config.poll:
+                sleep(config.memory_poll)
+                continue
+            last_judge = now
+            verdict = judge.observe(row, usage_fn(pid), now)
             if verdict.state == "stalled":
                 responder.handle_stall(row, verdict, judge.previous and (judge.previous[1], judge.previous[2]))
                 return EXIT_STALL_HANDLED
             if verdict.state == "slow":
                 log(verdict.reason)
-            sleep(config.poll)
+            sleep(min(config.poll, config.memory_poll) if config.memory_watch else config.poll)
     finally:
+        if heartbeat_fd is not None:
+            os.close(heartbeat_fd)
         for seq in list(responder.clients):
             responder.close_client(seq)
         record.close()

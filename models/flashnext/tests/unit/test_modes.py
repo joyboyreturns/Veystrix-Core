@@ -9,7 +9,7 @@ class FlagNameTests(unittest.TestCase):
     def test_every_flag_name_exists_in_the_production_modules(self):
         from models.flashnext import (auto_reclaim, expert_io_stats, linear_state, memory_manager, pool_lifecycle,
                                       prefill, prefill_scheduler, prefix_profiles, prefix_session, prefill_ring, progress,
-                                      quantized_kv, layer_major, store, expert_pool)
+                                      quantized_kv, layer_major, store, expert_pool, ngram)
         known = {prefill_ring.FLAG_EXPERTS, prefill_ring.FLAG_SCRATCH, prefill.FLAG_CHUNK_TOKENS,
                  prefill.FLAG_CHUNK_POLICY, pool_lifecycle.FLAG, prefix_session.FLAG, prefix_session.FLAG_DIR,
                  prefix_session.FLAG_RAM_GB, prefix_session.FLAG_DISK_GB, prefix_session.FLAG_BOUNDARIES,
@@ -20,7 +20,7 @@ class FlagNameTests(unittest.TestCase):
                  quantized_kv.FLAG_KV_DTYPE, quantized_kv.FLAG_KV_GROUP_SIZE, quantized_kv.FLAG_KV_BITS,
                  layer_major.FLAG_ORDER, layer_major.FLAG_WINDOW, layer_major.FLAG_HYBRID,
                  store.FLAG_UNCACHED_EXPERT_READS, layer_major.FLAG_PREFETCH,
-                 expert_pool.BUFFERED_FILL_FLAG}
+                 expert_pool.BUFFERED_FILL_FLAG, ngram.FLAG_DEDUP}
         self.assertLessEqual(M.OWNED, known)
 
     def test_agentic_prefill_matches_the_real_model_f2br_condition(self):

@@ -59,6 +59,17 @@ class ParallelNgramTests(unittest.TestCase):
                 ngram.set_parallel_min_rows(8)
                 parallel = table(ids)
                 self.assertTrue(mx.array_equal(serial, parallel).item())
+                # Exercise real quantized shard reads, repeated IDs, and both
+                # scheduling paths with deduplication enabled.
+                repeated = mx.array([[7, 42, 7, 97, 42, 0, 97, 7]])
+                table.deduplicate = False
+                reference = table(repeated)
+                table.deduplicate = True
+                deduplicated_parallel = table(repeated)
+                ngram.set_parallel_min_rows(0)
+                deduplicated_serial = table(repeated)
+                self.assertTrue(mx.array_equal(reference, deduplicated_parallel).item())
+                self.assertTrue(mx.array_equal(reference, deduplicated_serial).item())
             finally:
                 ngram.set_parallel_min_rows(0)
                 store.close()

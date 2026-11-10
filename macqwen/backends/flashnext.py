@@ -546,6 +546,23 @@ class FlashNextBackend(Conversation):
         except Exception:
             self.turn_memory_before = None
         with purge_recovery.ACTIVITY.request(), pool_lifecycle.exclusive_request():
+            from models.flashnext import request_admission
+            if request_admission.enabled():
+                try:
+                    replay = getattr(self, "_replay_needed", False)
+                    tokens = len(self.pending) + (len(self.tape) if replay else 0)
+                    snapshot_count = 0
+                    if (os.environ.get("FLASHNEXT_PREFIX_CACHE") == "1"
+                            and os.environ.get("FLASHNEXT_PREFIX_CACHE_RESTORE", "1") != "0"
+                            and (replay or not self.tape)):
+                        prompt = (list(self.tape) if replay else []) + list(self.pending)
+                        # Count the cold plan even if a prefix may restore: a miss must
+                        # remain safe. One extra covers the final required boundary.
+                        snapshot_count = len(self._prefix_session().boundaries(prompt, 0)) + 1
+                except Exception as error:
+                    raise request_admission.RequestMemoryRefused(
+                        f"cannot estimate request memory: {error}; retry when memory admission is available") from error
+                request_admission.check(tokens, max_output_tokens=max_tokens, snapshot_count=snapshot_count)
             fault = pool_lifecycle.lifecycle_fault() or getattr(self, "_memory_cleanup_error", None)
             if fault:
                 raise RuntimeError("previous memory cleanup failed; restart the process: " + fault)

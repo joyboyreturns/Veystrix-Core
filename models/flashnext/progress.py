@@ -253,6 +253,10 @@ def start_watchdog(trace_path: str | None = None, environ=None, python: str | No
     directory = status_dir(environ)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     record_path = os.path.join(directory, f"progress-{os.getpid()}.bin")
+    try:
+        os.unlink(record_path + ".memory")  # stale heartbeat from a prior process with the same pid
+    except FileNotFoundError:
+        pass
     record = Record(record_path, create=True)
     parent_end, child_end = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
     PROGRESS.attach(record, parent_end)
@@ -277,3 +281,19 @@ def start_watchdog(trace_path: str | None = None, environ=None, python: str | No
     child_end.close()
     PROGRESS._process = process
     return process
+
+
+def memory_watch_ready(environ=None, max_age_s=3.0):
+    """True only after a live spawned watchdog has recently sampled swap successfully."""
+    env = os.environ if environ is None else environ
+    process = PROGRESS._process
+    if not enabled(env) or env.get("FLASHNEXT_WATCHDOG_MEMORY", "1") != "1" or process is None:
+        return False
+    if process.poll() is not None:
+        return False
+    path = os.path.join(status_dir(env), f"progress-{os.getpid()}.bin.memory")
+    try:
+        age = time.time() - os.stat(path).st_mtime
+    except OSError:
+        return False
+    return 0 <= age <= max_age_s

@@ -15,6 +15,8 @@ import mlx.nn as nn
 
 from .store import SafeTensorStore
 
+FLAG_DEDUP = "FLASHNEXT_NGRAM_DEDUP"
+
 
 def infer_quantization(store: SafeTensorStore, prefix: str, dims: int):
     """Recover (group_size, bits) from the packed shapes."""
@@ -92,6 +94,9 @@ class StreamingShardedEmbedding(nn.Module):
         self.shard_offsets = tuple(offsets)
         self.dims = int(dims)
         self.direct = os.environ.get("FLASHNEXT_NGRAM_DIRECT", "1") == "1"
+        # Experimental: deduplicate only within this bounded lookup. It makes
+        # no persistent allocation and does not change the checkpoint.
+        self.deduplicate = os.environ.get(FLAG_DEDUP, "0") == "1"
 
     def _groups(self, global_rows):
         groups = {}
@@ -165,6 +170,29 @@ class StreamingShardedEmbedding(nn.Module):
         global_rows = [int(value) for value in flat.tolist()]
         groups = self._groups(global_rows)
 
+        # Several tokens can hash to the same row. Fetch/dequantize each row
+        # once per shard, then gather it back to every original position.
+        # Preserve insertion order and use the *clamped local* row so invalid
+        # indices retain exactly the same behaviour as the normal direct path.
+        dedup_inverse = None
+        if self.deduplicate:
+            dedup_inverse = [0] * len(global_rows)
+            base = 0
+            unique_groups = {}
+            for shard_index, (positions, rows) in groups.items():
+                indices = {}
+                unique_rows = []
+                for position, row in zip(positions, rows):
+                    index = indices.get(row)
+                    if index is None:
+                        index = len(unique_rows)
+                        indices[row] = index
+                        unique_rows.append(row)
+                    dedup_inverse[position] = base + index
+                unique_groups[shard_index] = (positions, unique_rows)
+                base += len(unique_rows)
+            groups = unique_groups
+
         blocks = []
         packed_positions = []
         if _PARALLEL_MIN_ROWS[0] > 0 and len(global_rows) >= _PARALLEL_MIN_ROWS[0]:
@@ -175,6 +203,8 @@ class StreamingShardedEmbedding(nn.Module):
         for positions, _ in groups.values():
             packed_positions.extend(positions)
         packed = blocks[0] if len(blocks) == 1 else mx.concatenate(blocks, axis=0)
+        if dedup_inverse is not None:
+            return packed[mx.array(dedup_inverse, dtype=mx.uint32)]
         inverse = [0] * len(global_rows)
         for packed_index, position in enumerate(packed_positions):
             inverse[position] = packed_index

@@ -12,6 +12,7 @@ import tempfile
 import textwrap
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from models.flashnext import progress as P
@@ -228,6 +229,104 @@ class JudgeTests(unittest.TestCase):
                                             "FLASHNEXT_WATCHDOG_SAMPLE": "0"})
         self.assertEqual((config.deadlines["decode"], config.deadlines["prefill"], config.deadlines["sync"]), (7, 9, 60))
         self.assertEqual((config.hard["decode"], config.poll, config.sample), (70, 0.5, False))
+
+
+class MemoryWatchTests(unittest.TestCase):
+    def test_layer_major_defaults_and_explicit_rollback(self):
+        config = W.Config.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer"})
+        self.assertTrue(config.memory_watch)
+        self.assertEqual(config.memory_stop_mib, 2304)
+        self.assertEqual(config.memory_poll, 0.25)
+        self.assertFalse(W.Config.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_WATCHDOG_MEMORY": "0"}).memory_watch)
+        self.assertFalse(W.Config.from_environment({}).memory_watch)
+
+    def test_invalid_configuration_fails_closed(self):
+        for values in ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_SWAP_CEILING_MIB": "0"},
+                       {"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_WATCHDOG_MEMORY_POLL": "0"}):
+            with self.assertRaises(ValueError):
+                W.Config.from_environment(values)
+
+    def test_native_swap_read(self):
+        self.assertGreaterEqual(W.swap_used_mib(), 0)
+
+    def test_readiness_requires_live_child_and_fresh_heartbeat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = {"FLASHNEXT_WATCHDOG": "1", "FLASHNEXT_WATCHDOG_DIR": directory}
+            child = mock.Mock()
+            child.poll.return_value = None
+            path = Path(directory) / f"progress-{os.getpid()}.bin.memory"
+            with mock.patch.object(P.PROGRESS, "_process", child):
+                self.assertFalse(P.memory_watch_ready(env))
+                path.touch()
+                self.assertTrue(P.memory_watch_ready(env))
+                os.utime(path, (time.time() - 10, time.time() - 10))
+                self.assertFalse(P.memory_watch_ready(env))
+                path.touch()
+                child.poll.return_value = 4
+                self.assertFalse(P.memory_watch_ready(env))
+
+    def _run(self, readings, stage="prefill"):
+        with tempfile.TemporaryDirectory() as directory:
+            record = P.Record(os.path.join(directory, "r.bin"), create=True)
+            identity = P.process_identity(os.getpid())
+            record.write(pid=os.getpid(), start_sec=identity[0], start_usec=identity[1], stage=stage)
+            config = W.Config(memory_watch=True, memory_stop_mib=2304, memory_poll=0.25)
+            responder = mock.Mock()
+            responder.clients = {}
+            sleeper = mock.Mock(side_effect=KeyboardInterrupt)
+            try:
+                with mock.patch.object(W, "Responder", return_value=responder):
+                    result = W.run(os.getpid(), identity, record.path, None, directory, config,
+                                   sleep=sleeper, swap_fn=mock.Mock(side_effect=readings))
+                return result, responder
+            finally:
+                record.close()
+
+    def test_active_high_swap_stops(self):
+        result, responder = self._run([2304])
+        self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
+        self.assertIn("swap 2304.0", responder.handle_memory.call_args.args[1])
+
+    def test_probe_failure_stops(self):
+        result, responder = self._run([OSError("probe")])
+        self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
+        self.assertIn("probe failed", responder.handle_memory.call_args.args[1])
+
+    def test_idle_high_swap_does_not_kill_worker(self):
+        with self.assertRaises(KeyboardInterrupt):
+            self._run([2304], stage="idle")
+
+    def test_memory_stop_checks_identity_before_kill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            responder = W.Responder(os.getpid(), (1, 1), W.Config(), directory)
+            with mock.patch.object(W.os, "kill") as kill:
+                report = responder.handle_memory(row(), "test")
+            self.assertFalse(report["sigkill"])
+            kill.assert_not_called()
+
+    def test_external_watchdog_stops_only_its_controlled_worker(self):
+        worker = subprocess.Popen(["/bin/sleep", "30"])
+        try:
+            identity = P.process_identity(worker.pid)
+            with tempfile.TemporaryDirectory() as directory:
+                record = P.Record(os.path.join(directory, "r.bin"), create=True)
+                try:
+                    record.write(pid=worker.pid, start_sec=identity[0], start_usec=identity[1], stage="prefill")
+                    code = ("import sys; from models.flashnext import watchdog as w; "
+                            "cfg=w.Config(memory_watch=True, memory_stop_mib=0, memory_poll=.25); "
+                            "sys.exit(w.run(int(sys.argv[1]), (int(sys.argv[2]), int(sys.argv[3])), "
+                            "sys.argv[4], None, sys.argv[5], cfg))")
+                    result = subprocess.run([sys.executable, "-c", code, str(worker.pid), str(identity[0]),
+                                             str(identity[1]), record.path, directory], timeout=10)
+                    self.assertEqual(result.returncode, W.EXIT_MEMORY_HANDLED)
+                    self.assertEqual(worker.wait(timeout=5), -signal.SIGKILL)
+                    self.assertEqual(len(list(Path(directory).glob("memory-*.json"))), 1)
+                finally:
+                    record.close()
+        finally:
+            if worker.poll() is None:
+                worker.kill()
+                worker.wait()
 
 
 class ClientNoticeTests(unittest.TestCase):

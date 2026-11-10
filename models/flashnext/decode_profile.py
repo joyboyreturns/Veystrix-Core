@@ -95,6 +95,7 @@ def summarize(events, t0: float, end: float) -> dict:
             "token": index,
             "ms": (nxt - token["start"]) * 1000.0,
             "layers": len(token["layers"]),
+            "layer_ids": token["layers"],
             "layer_gap_ms": [round(g * 1000.0, 3) for g in gaps],
             "routes": token["routes"],
         })

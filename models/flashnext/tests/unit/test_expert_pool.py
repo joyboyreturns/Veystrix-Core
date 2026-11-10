@@ -4,14 +4,16 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from unittest import mock
 
 import mlx.core as mx
 import numpy as np
 
-from models.flashnext import expert_pool
+from models.flashnext import expert_cache, expert_pool
 from models.flashnext.slab_pack import get_slab_layout
 from models.flashnext.store import SafeTensorStore
 
@@ -54,6 +56,59 @@ class AssignTests(unittest.TestCase):
 
 
 class FillTests(unittest.TestCase):
+    def test_parallel_descriptor_initialization_opens_once(self):
+        pool = AssignTests().make(16)
+        def open_slowly(*args):
+            time.sleep(0.02)
+            return 123
+        with mock.patch.object(expert_pool.os, "open", side_effect=open_slowly) as opened, \
+             mock.patch.object(expert_pool.fcntl, "fcntl"), \
+             mock.patch.dict(os.environ, {expert_pool.BUFFERED_FILL_FLAG: "1"}), \
+             ThreadPoolExecutor(8) as workers:
+            self.assertEqual(list(workers.map(pool._fill_fd, ["shard"] * 8)), [123] * 8)
+        self.assertEqual(opened.call_count, 1)
+
+    def test_partial_submission_is_drained(self):
+        pool = AssignTests().make(16)
+        _, misses = pool.assign(4, [3])
+        first = mock.Mock()
+        submit = mock.Mock(side_effect=[first, RuntimeError("submission failed")])
+        with self.assertRaisesRegex(RuntimeError, "submission failed"):
+            pool.fill(PREFIX, misses, submit)
+        first.result.assert_called_once_with()
+
+    def test_failed_pool_pass_drains_workers_and_invalidates_misses(self):
+        pool = AssignTests().make(16)
+        pool.assign(4, [1])  # existing resident expert survives
+        failed = mock.Mock()
+        failed.result.side_effect = OSError("read failed")
+        later = mock.Mock()
+        gate = SimpleNamespace(cache=SimpleNamespace(store=_Store(), prefix=PREFIX + ".gate_proj"), group_size=32)
+        layer = SimpleNamespace(layer_id=4, gate_proj=gate, hits=0, misses=0)
+        with mock.patch.object(expert_pool, "for_store", return_value=pool), \
+             mock.patch.object(pool, "fill", return_value=[failed, later]):
+            with self.assertRaisesRegex(OSError, "read failed"):
+                expert_cache.StreamingSwitchGLU._pool_pass(layer, None, [1, 2], None, None, None, None, None)
+        later.result.assert_called_once_with()
+        self.assertIn((4, 1), pool._slot_of)
+        self.assertNotIn((4, 2), pool._slot_of)
+        _, retry = pool.assign(4, [2])
+        self.assertEqual([e for e, _ in retry], [2])
+
+    def test_failed_submission_invalidates_assigned_slot(self):
+        pool = AssignTests().make(16)
+        first = mock.Mock()
+        submit = mock.Mock(side_effect=[first, RuntimeError("submit failed")])
+        gate = SimpleNamespace(cache=SimpleNamespace(store=_Store(), prefix=PREFIX + ".gate_proj"), group_size=32)
+        layer = SimpleNamespace(layer_id=4, gate_proj=gate, hits=0, misses=0)
+        with mock.patch.object(expert_pool, "for_store", return_value=pool), \
+             mock.patch.object(expert_cache, "_submit_read", submit):
+            with self.assertRaisesRegex(RuntimeError, "submit failed"):
+                expert_cache.StreamingSwitchGLU._pool_pass(layer, None, [2], None, None, None, None, None)
+        first.result.assert_called_once_with()
+        self.assertNotIn((4, 2), pool._slot_of)
+        self.assertEqual([e for e, _ in pool.assign(4, [2])[1]], [2])
+
     def test_fill_places_checkpoint_rows_at_record_offsets(self):
         mx.random.seed(8)
         experts = 5

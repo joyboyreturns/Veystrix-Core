@@ -1839,12 +1839,24 @@ class StreamingSwitchGLU(nn.Module):
             prefix = self.gate_proj.cache.prefix.rsplit(".", 1)[0]
             chunk = int(os.environ.get("FLASHNEXT_STREAM_PACK_CHUNK", "2")) or 2
             began = time.perf_counter()
-            futures = pool.fill(prefix, misses, _submit_read, chunk)
-            if _KEEPWARM[0]:
-                _keep_gpu_warm_until(futures)
-            timings = [] if _PROFILE else None
-            for future in futures:
-                _resolve_future(future, timings)
+            futures = []
+            try:
+                futures = pool.fill(prefix, misses, _submit_read, chunk)
+                if _KEEPWARM[0]:
+                    _keep_gpu_warm_until(futures)
+                timings = [] if _PROFILE else None
+                for future in futures:
+                    _resolve_future(future, timings)
+            except BaseException:
+                # No failed or incomplete record may become a later cache hit.
+                # In-flight workers must finish before these slots are reused.
+                for future in futures:
+                    try:
+                        future.result()
+                    except BaseException:
+                        pass
+                pool.invalidate(self.layer_id, misses)
+                raise
             if _PROFILE:
                 ended = time.perf_counter()
                 _TIMERS["io_wait"] += ended - began

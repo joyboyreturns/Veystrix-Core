@@ -1556,6 +1556,9 @@ class ModelService:
             session.reset()
             self.sessions.dropped()
             flight_recorder.record("request_error", error=type(error).__name__, detail=str(error)[:300])
+            from models.flashnext.request_admission import RequestMemoryRefused
+            if isinstance(error, RequestMemoryRefused):
+                raise RequestError(str(error), status=503, code="memory_admission_refused") from error
             raise
 
 

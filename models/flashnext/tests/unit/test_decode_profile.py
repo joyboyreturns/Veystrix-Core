@@ -36,6 +36,19 @@ class GroupingTests(unittest.TestCase):
     def test_empty_events(self):
         self.assertEqual(decode_profile.summarize([], 0.0, 1.0)["tokens"], [])
 
+    def test_split_uses_recorded_layer_ids_for_sparse_traces(self):
+        from models.flashnext.tests.bench.bench_decode_profile import split
+
+        events = [(100.0, 2, [1]), (100.01, 5, [2]),
+                  (101.0, 2, [1]), (101.02, 5, [2])]
+        body = decode_profile.summarize(events, 99.0, 102.0)
+        self.assertEqual(body["tokens"][1]["layer_ids"], [2, 5])
+        self.assertEqual(split(body)["layer_gap_ms_mean"], {"2": 20.0})
+        # Profiles recorded before layer_ids existed still retain route order.
+        for token in body["tokens"]:
+            del token["layer_ids"]
+        self.assertEqual(split(body)["layer_gap_ms_p95"], {"2": 20.0})
+
 
 class LifecycleTests(unittest.TestCase):
     def setUp(self):

@@ -120,6 +120,7 @@ SETTINGS = (
     research("compile-norm", "FLASHNEXT_COMPILE_NORM", "1", parser=choice(("0", "1"), "compile-norm"), unset="0"),
     research("stream-embed", "FLASHNEXT_STREAM_EMBED", "1", "startup", choice(("0", "1"), "stream-embed"), unset="0"),
     research("ngram-parallel-min", "FLASHNEXT_NGRAM_PARALLEL_MIN", "16", "startup", integer, unset="0"),
+    research("ngram-dedup", "FLASHNEXT_NGRAM_DEDUP", "0", "startup", choice(("0", "1"), "ngram-dedup"), unset="0"),
     research("io-qos", "FLASHNEXT_IO_QOS", "user-interactive", "startup", choice(("default", "user-interactive", "user-initiated", "utility"), "io-qos"), unset="default"),
     research("norm-weight-cache", "FLASHNEXT_NORM_WEIGHT_CACHE", "1", parser=choice(("0", "1"), "norm-weight-cache"), unset="0"),
     research("slab-counts", "FLASHNEXT_SLAB_COUNTS", "turn", "startup", choice(("turn", "cumulative"), "slab-counts")),

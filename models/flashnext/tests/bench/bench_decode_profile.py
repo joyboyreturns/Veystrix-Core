@@ -64,9 +64,15 @@ def split(profile: dict) -> dict:
     # the previous layer's compute and the next router eval). Averaged by layer across the profiled tokens.
     by_layer: dict[int, list[float]] = {}
     for token in tokens[1:]:
-        for layer, gap in enumerate(token["layer_gap_ms"], start=1):
+        # Old profiles preserve route insertion order but do not include layer_ids.
+        # Use the actual source layer rather than assuming all layers were observed.
+        layers = token.get("layer_ids", [int(layer) for layer in token.get("routes", {})])
+        for layer, gap in zip(layers, token["layer_gap_ms"]):
             by_layer.setdefault(layer, []).append(gap)
     out["layer_gap_ms_mean"] = {str(k): st.fmean(v) for k, v in sorted(by_layer.items())}
+    out["layer_gap_ms_p95"] = {
+        str(k): sorted(v)[min(len(v) - 1, int(0.95 * len(v)))] for k, v in sorted(by_layer.items())
+    }
     return out
 
 

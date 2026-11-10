@@ -57,6 +57,8 @@ class ModeLaunchTests(unittest.TestCase):
         _, env = self.launch("--mode", "agentic", "--enable", "memory-manager")
         self.assertEqual(env["FLASHNEXT_MEMORY_MANAGER"], "1")
         self.assertEqual(self.launch("--mode", "agentic")[1]["FLASHNEXT_MEMORY_MANAGER"], "0")
+        self.assertEqual(self.launch("--mode", "agentic")[1]["FLASHNEXT_NGRAM_DEDUP"], "0")
+        self.assertEqual(self.launch("--mode", "agentic", "--enable", "ngram-dedup")[1]["FLASHNEXT_NGRAM_DEDUP"], "1")
 
     def test_a_benchmark_launch_is_not_reconfigured_by_a_mode(self):
         command, env = self.launch("--model", "flashnext", "--benchmark-json", "--benchmark-prompt", "hi")

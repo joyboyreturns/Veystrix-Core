@@ -24,6 +24,23 @@ class FakeShard:
 
 
 class StreamingShardedEmbeddingTest(unittest.TestCase):
+    def test_deduplicate_restores_order_and_clamped_rows(self):
+        shards = [FakeShard(0), FakeShard(100), FakeShard(200)]
+        table = StreamingShardedEmbedding(shards, (3, 2, 4), 2)
+        indices = mx.array([[8, 0, 8, 3, 0, -1, 99, 4, 3]], dtype=mx.int64)
+        table.deduplicate = False
+        expected = table(indices)
+        mx.eval(expected)
+        for shard in shards:
+            shard.calls.clear()
+        table.deduplicate = True
+        actual = table(indices)
+        mx.eval(actual)
+        self.assertEqual(expected.tolist(), actual.tolist())
+        self.assertEqual(shards[0].calls, [(0, 2)])
+        self.assertEqual(shards[1].calls, [(0, 1)])
+        self.assertEqual(shards[2].calls, [(3,)])
+
     def test_direct_matches_legacy_and_skips_unused_shards(self):
         shards = [FakeShard(0), FakeShard(100), FakeShard(200)]
         table = StreamingShardedEmbedding(shards, (3, 2, 4), 2)

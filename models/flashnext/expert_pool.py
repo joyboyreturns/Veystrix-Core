@@ -26,6 +26,7 @@ from __future__ import annotations
 import fcntl
 import mmap
 import os
+import threading
 from collections import OrderedDict
 
 import numpy as np
@@ -102,6 +103,7 @@ class ExpertPool:
         self._free = list(range(self.slots - 1, -1, -1))
         self._fds: dict = {}
         self._fill_fds: dict = {}
+        self._fd_lock = threading.Lock()
         self.hits = 0
         self.misses = 0
 
@@ -132,13 +134,20 @@ class ExpertPool:
     def _fd(self, shard: str) -> int:
         fd = self._fds.get(shard)
         if fd is None:
-            fd = os.open(os.path.join(self.store.dir, shard), os.O_RDONLY)
-            fcntl.fcntl(fd, fcntl.F_NOCACHE, 1)
-            try:
-                fcntl.fcntl(fd, getattr(fcntl, "F_RDAHEAD", 45), 0)
-            except OSError:
-                pass
-            self._fds[shard] = fd
+            with self._fd_lock:
+                fd = self._fds.get(shard)
+                if fd is None:
+                    fd = os.open(os.path.join(self.store.dir, shard), os.O_RDONLY)
+                    try:
+                        fcntl.fcntl(fd, fcntl.F_NOCACHE, 1)
+                        try:
+                            fcntl.fcntl(fd, getattr(fcntl, "F_RDAHEAD", 45), 0)
+                        except OSError:
+                            pass
+                    except BaseException:
+                        os.close(fd)
+                        raise
+                    self._fds[shard] = fd
         return fd
 
     def _fill_fd(self, shard: str) -> int:
@@ -147,12 +156,19 @@ class ExpertPool:
             return self._fd(shard)
         fd = self._fill_fds.get(shard)
         if fd is None:
-            fd = os.open(os.path.join(self.store.dir, shard), os.O_RDONLY)
-            try:
-                fcntl.fcntl(fd, getattr(fcntl, "F_RDAHEAD", 45), 0)     # read-ahead stays off, as for the uncached ones
-            except OSError:
-                pass
-            self._fill_fds[shard] = fd
+            with self._fd_lock:
+                fd = self._fill_fds.get(shard)
+                if fd is None:
+                    fd = os.open(os.path.join(self.store.dir, shard), os.O_RDONLY)
+                    try:
+                        try:
+                            fcntl.fcntl(fd, getattr(fcntl, "F_RDAHEAD", 45), 0)  # read-ahead stays off
+                        except OSError:
+                            pass
+                    except BaseException:
+                        os.close(fd)
+                        raise
+                    self._fill_fds[shard] = fd
         return fd
 
     def _fill_part(self, name, targets) -> None:
@@ -164,18 +180,40 @@ class ExpertPool:
             if os.preadv(fd, [view[base:base + size]], ref.start + expert * size) != size:
                 raise OSError(f"short expert pool read for {name} row {expert}")
 
+    def invalidate(self, layer: int, misses) -> None:
+        """Discard failed fills after all their outstanding writes have drained.
+
+        An evicted entry cannot be restored: its slot may already be partly
+        overwritten. Return these slots to the free list, never as cache hits.
+        """
+        for expert, slot in misses:
+            key = (layer, expert)
+            if self._slot_of.get(key) == slot:
+                del self._slot_of[key]
+                self._free.append(slot)
+
     def fill(self, prefix: str, misses, submit, chunk: int = 2):
         """Queue the nine row reads of every miss; returns the futures."""
         futures = []
-        for projection, part in _PARTS:
-            name = f"{prefix}.{projection}.{part}"
-            offset = HEADER + self.offsets[(projection, part)]
-            for start in range(0, len(misses), chunk):
-                targets = [
-                    (expert, offset + slot * self.stride)
-                    for expert, slot in misses[start:start + chunk]
-                ]
-                futures.append(submit(self._fill_part, name, targets))
+        try:
+            for projection, part in _PARTS:
+                name = f"{prefix}.{projection}.{part}"
+                offset = HEADER + self.offsets[(projection, part)]
+                for start in range(0, len(misses), chunk):
+                    targets = [
+                        (expert, offset + slot * self.stride)
+                        for expert, slot in misses[start:start + chunk]
+                    ]
+                    futures.append(submit(self._fill_part, name, targets))
+        except BaseException:
+            # The caller cannot see a partial submission's futures. Wait for
+            # every worker before allowing it to invalidate and reuse slots.
+            for future in futures:
+                try:
+                    future.result()
+                except BaseException:
+                    pass
+            raise
         return futures
 
     def close(self) -> None:
