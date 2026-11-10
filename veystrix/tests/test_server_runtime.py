@@ -90,6 +90,47 @@ class StatusRouteTests(unittest.TestCase):
         self.assertIn("queue", body)
         self.assertEqual(request(run.port, "GET", "/ready")[0], 200)
 
+    def test_activity_reports_live_prefill_decode_and_clears_when_done(self):
+        class ProgressBackend(FakeBackend):
+            def __init__(self):
+                super().__init__(["ok"])
+                self.prefill = threading.Event()
+                self.proceed = threading.Event()
+                self.decode = threading.Event()
+                self.finish = threading.Event()
+
+            def generate(self, max_tokens, out=None, on_prefill_progress=None, on_decode_token=None, **kwargs):
+                on_prefill_progress(3, 10)
+                self.prefill.set()
+                self.proceed.wait(5)
+                on_prefill_progress(10, 10)
+                on_decode_token(1, "a")
+                time.sleep(0.01)
+                on_decode_token(2, "b")
+                self.decode.set()
+                self.finish.wait(5)
+                return super().generate(max_tokens, out)
+
+        backend = ProgressBackend()
+        run = Running(self, backend=backend)
+        self.addCleanup(backend.proceed.set)
+        self.addCleanup(backend.finish.set)
+        thread = threading.Thread(target=lambda: request(run.port, "POST", "/v1/chat/completions", CHAT), daemon=True)
+        thread.start()
+        self.assertTrue(backend.prefill.wait(5))
+        activity = request(run.port, "GET", "/health")[1]["activity"]
+        self.assertTrue(activity["active"])
+        self.assertEqual((activity["stage"], activity["prefill_done"], activity["prefill_total"]), ("prefill", 3, 10))
+        self.assertIsNotNone(activity["prompt_tokens"])
+        backend.proceed.set()
+        self.assertTrue(backend.decode.wait(5))
+        activity = request(run.port, "GET", "/health")[1]["activity"]
+        self.assertEqual((activity["stage"], activity["decode_tokens"]), ("decode", 2))
+        self.assertGreater(activity["decode_tokens_per_second"], 0)
+        backend.finish.set()
+        thread.join(5)
+        self.assertFalse(request(run.port, "GET", "/health")[1]["activity"]["active"])
+
     def test_ready_is_503_after_a_gpu_lifecycle_fault(self):
         from models.flashnext import pool_lifecycle
 

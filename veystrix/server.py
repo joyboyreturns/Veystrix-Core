@@ -192,7 +192,7 @@ def _openai_tools(tools) -> list[dict]:
 
 # Message fields the server understands. Anything else with a value is an
 # error: a field that changes what the model sees must not be dropped quietly.
-MESSAGE_FIELDS = {"role", "content", "tool_calls", "tool_call_id", "reasoning_content", "name"}
+MESSAGE_FIELDS = {"role", "content", "tool_calls", "tool_call_id", "reasoning_content", "reasoning", "name"}
 TOOL_ONLY_FIELDS = set()  # "name" is supported across all roles per OpenAI spec
 IGNORABLE_EMPTY = {"refusal", "audio", "annotations", "function_call"}
 
@@ -262,8 +262,23 @@ def _normalize_messages(messages) -> list[dict]:
             ]
         if message.get("tool_call_id"):
             item["tool_call_id"] = message["tool_call_id"]
-        if isinstance(message.get("reasoning_content"), str):
-            item["reasoning_content"] = message["reasoning_content"]
+        # Hermes and other OpenAI-compatible clients replay assistant thinking
+        # as `reasoning`; the Qwen template consumes `reasoning_content`.
+        reasoning = message.get("reasoning")
+        canonical = message.get("reasoning_content")
+        if reasoning is not None:
+            if role != "assistant" or not isinstance(reasoning, str):
+                raise RequestError(f"{where}.reasoning: expected a string on an assistant message")
+            if canonical not in (None, "") and canonical != reasoning:
+                raise RequestError(f"{where}: conflicting reasoning and reasoning_content")
+        if canonical is not None and not isinstance(canonical, str):
+            raise RequestError(f"{where}.reasoning_content: expected a string")
+        if isinstance(canonical, str) and canonical:
+            item["reasoning_content"] = canonical
+        elif isinstance(reasoning, str):
+            item["reasoning_content"] = reasoning
+        elif isinstance(canonical, str):
+            item["reasoning_content"] = canonical
         normalized.append(item)
     return normalized
 
@@ -848,6 +863,9 @@ def health(service, scheduler) -> dict:
               "context_limit": getattr(service, "context_limit", None) or 262144,
               "max_cold_prefill": getattr(service, "max_cold_prefill", None) or MAX_COLD_PREFILL_DEFAULT,
               "max_incremental_prefill": getattr(service, "max_incremental_prefill", None) or MAX_INCREMENTAL_PREFILL_DEFAULT}
+    activity = getattr(service, "activity_snapshot", None)
+    if callable(activity):
+        report["activity"] = activity()
     if fault:
         report["fault"] = str(fault)
     state = getattr(service, "cache_state", None)
@@ -997,6 +1015,16 @@ class ModelService:
         self.sessions = SessionRegistry()
         self.reasoning_ledger = ReasoningLedger()
         self.session_hint = None            # set by the HTTP layer for the request being served
+        self._activity_lock = threading.Lock()
+        self._activity = {"active": False}
+
+    def _activity_update(self, **fields):
+        with self._activity_lock:
+            self._activity.update(fields)
+
+    def activity_snapshot(self):
+        with self._activity_lock:
+            return dict(self._activity)
 
     def warm_tokens(self) -> int:
         backend = getattr(self.session, "backend", None)
@@ -1372,6 +1400,10 @@ class ModelService:
         hint, self.session_hint = self.session_hint, None
         had_state = self.warm_tokens() > 0
         key = None
+        with self._activity_lock:
+            self._activity = {"active": True, "stage": "preparing", "prompt_tokens": None,
+                              "prefill_done": None, "prefill_total": None, "decode_tokens": 0,
+                              "decode_tokens_per_second": None}
         try:
             normalized = _normalize_messages(messages)
             system_index = next(
@@ -1426,6 +1458,7 @@ class ModelService:
             else:
                 before = self.reused
                 self._adopt(rendered, effort_text=effort_text)
+            self._activity_update(prompt_tokens=self.last_prompt_tokens, stage="prefill")
             self.sessions.activate(key, prompt_tokens=self.last_prompt_tokens or 0, reused=self.reused > before,
                                    had_state=had_state)
             stream_filter = ReasoningStreamFilter(
@@ -1504,6 +1537,7 @@ class ModelService:
             progress_mark = [time.monotonic(), -1]
 
             def prefill_progress(done: int, total: int) -> None:
+                self._activity_update(stage="prefill", prefill_done=int(done), prefill_total=int(total))
                 # Throttled lifecycle record: the last line before a stall says how far prefill got.
                 now = time.monotonic()
                 if done != progress_mark[1] and (now - progress_mark[0] >= 10.0 or done >= total or done == 0):
@@ -1520,6 +1554,18 @@ class ModelService:
                 call_kwargs["should_cancel"] = cancel_check
             if "on_prefill_progress" in gen_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in gen_params.values()):
                 call_kwargs["on_prefill_progress"] = prefill_progress
+
+            decode = [0, None]
+            def decode_token(_token, _piece):
+                now = time.monotonic()
+                decode[0] += 1
+                if decode[1] is None:
+                    decode[1] = now
+                elapsed = now - decode[1]
+                rate = (decode[0] - 1) / elapsed if decode[0] > 1 and elapsed > 0 else None
+                self._activity_update(stage="decode", decode_tokens=decode[0], decode_tokens_per_second=rate)
+            if "on_decode_token" in gen_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in gen_params.values()):
+                call_kwargs["on_decode_token"] = decode_token
 
             text, stats = backend.generate(**call_kwargs)
 
@@ -1613,6 +1659,8 @@ class ModelService:
             if isinstance(error, RequestMemoryRefused):
                 raise RequestError(str(error), status=503, code="memory_admission_refused") from error
             raise
+        finally:
+            self._activity_update(active=False)
 
 
 # Chat Completions request fields. Honoured ones are consumed by the server;

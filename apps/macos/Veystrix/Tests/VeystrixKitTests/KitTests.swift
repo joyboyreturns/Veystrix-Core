@@ -74,6 +74,7 @@ private func tempDir() -> URL {
     @Test func roundTripAndOwnerOnlyPermissions() throws {
         let paths = Paths(home: tempDir()); let store = SettingsStore(paths: paths)
         var s = AppSettings(); s.port = 9001; s.decodePool = .twoGB; s.checkpointPath = "/models/x"
+        s.allowBattery = false; s.minimumBatteryPercent = 35; s.allowLowPowerMode = true
         try store.save(s)
         #expect(store.load() == s)
         let attrs = try FileManager.default.attributesOfItem(atPath: paths.settingsFile.path)
@@ -84,6 +85,7 @@ private func tempDir() -> URL {
         try Data(#"{"port": 9100, "futureField": true}"#.utf8).write(to: paths.settingsFile)
         let s = SettingsStore(paths: paths).load()
         #expect(s.port == 9100); #expect(s.decodePool == .none); #expect(s.cacheQuotaGB == 50)
+        #expect(s.allowBattery); #expect(s.minimumBatteryPercent == 25); #expect(!s.allowLowPowerMode)
     }
     @Test func damagedSettingsAreKeptAndDefaultsUsed() throws {
         let paths = Paths(home: tempDir()); try paths.ensureDirectories()
@@ -124,6 +126,14 @@ private func tempDir() -> URL {
         #expect(plan.environment["HF_TOKEN"] == nil); #expect(plan.environment["HOME"] == "/Users/x")
         #expect(plan.environment["VEYSTRIX_PORT"] == "8080")
         #expect(plan.environment["FLASHNEXT_AUTO_PURGE"] == "1")   // memory short -> the engine purges the file cache by itself
+    }
+    @Test func powerSettingsReachTheEngine() throws {
+        var (s, c) = try good(tempDir())
+        s.allowBattery = false; s.minimumBatteryPercent = 40; s.allowLowPowerMode = true
+        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
+        #expect(plan.environment["VEYSTRIX_REQUIRE_AC"] == "1")
+        #expect(plan.environment["VEYSTRIX_MIN_BATTERY_PERCENT"] == "40")
+        #expect(plan.environment["VEYSTRIX_ALLOW_LOW_POWER"] == "1")
     }
     @Test func keepAwakeWrapsWithCaffeinateLikeServeSh() throws {
         var (s, c) = try good(tempDir()); s.keepMacAwake = true
@@ -374,12 +384,15 @@ final class Counter: @unchecked Sendable { private var n = 0; private let l = NS
     @Test func decodesTheEnginesHealthShapeAndToleratesUnknownFields() throws {
         let json = #"""
         {"status":"ok","ready":true,"worker":{"stalled":false},"model":"qwen","busy":false,"queue":{"depth":0,"running":1},
-         "context_limit":16384,"max_cold_prefill":4096,"cache":{"entries":12,"ram_gb":0.5,"name":"x"},
+         "context_limit":16384,"max_cold_prefill":4096,"cache":{"entries":12,"ram_gb":0.5,"name":"x","ssd_cache_bytes":1200,"ssd_cache_budget_bytes":10000},
+         "activity":{"active":true,"stage":"prefill","prompt_tokens":200,"prefill_done":50,"prefill_total":100,"decode_tokens":3,"decode_tokens_per_second":2.5},
          "memory_policy":{"can_admit":true,"stop_reason":null,"current_swap_growth_mb":12.5,"swap_ceiling_mib":3072}}
         """#
         let r = try JSONDecoder().decode(HealthReport.self, from: Data(json.utf8))
         #expect(r.isHealthy); #expect(r.contextLimit == 16384); #expect(r.cache?.values["entries"] == 12)
         #expect(r.memoryPolicy?.swapCeilingMib == 3072); #expect(r.queue?.values["depth"] == 0)
+        #expect(r.activity?.prefillDone == 50); #expect(r.activity?.promptTokens == 200)
+        #expect(r.activity?.decodeTokensPerSecond == 2.5); #expect(r.cache?.values["ssd_cache_bytes"] == 1200)
     }
     @Test func aFaultMakesItUnhealthy() throws {
         let r = try JSONDecoder().decode(HealthReport.self, from: Data(#"{"status":"unavailable","ready":false,"fault":"gpu"}"#.utf8))

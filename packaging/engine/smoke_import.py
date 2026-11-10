@@ -18,7 +18,7 @@ import importlib, os, sys
 lib = os.environ["PYTHONPATH"]
 for std in ("sqlite3", "ssl", "zlib", "json", "plistlib", "ctypes", "hashlib", "http.server"):
     importlib.import_module(std)      # stdlib pieces the engine needs must survive the size trimming
-for name in ("veystrix", "veystrix.api_keys", "models.flashnext.settings.registry", "models.flashnext.memory_policy", "models.flashnext.overnight", "veystrix.cli", "veystrix.session"):
+for name in ("veystrix", "veystrix.api_keys", "models.flashnext.settings.registry", "models.flashnext.memory_policy", "models.flashnext.chat_guard", "models.flashnext.tests.bench.layer_gate_probe", "models.flashnext.overnight", "veystrix.cli", "veystrix.session"):
     m = importlib.import_module(name)
     f = getattr(m, "__file__", None) or ""
     assert f.startswith(lib), f"{name} came from {f!r}, not the bundle"
@@ -42,7 +42,7 @@ except ImportError:
 import mlx_vlm  # noqa: F401  (imports the package only; no model, no Metal session)
 print("imports ok")
 """
-for required in (python, lib / "models/flashnext/overnight.pyc", lib / "veystrix/cli.pyc", lib / "veystrix/session.pyc", lib / "models/bonsai2/settings.pyc", lib / "models/k2_horizon/settings.pyc"):
+for required in (python, lib / "models/flashnext/overnight.pyc", lib / "veystrix/cli.pyc", lib / "veystrix/session.pyc", lib / "models/flashnext/tests/bench/prefill_memory_harness.pyc", lib / "models/flashnext/tests/bench/bench_prefill_memory.pyc", lib / "models/flashnext/tests/bench/layer_gate_probe.pyc", lib / "models/bonsai2/settings.pyc", lib / "models/k2_horizon/settings.pyc"):
     if not required.is_file():
         sys.exit(f"mandatory bundle resource missing: {required}")
 if not os.access(python, os.X_OK):
@@ -53,6 +53,7 @@ for args in (["-c", CODE], ["-m", "models.flashnext.overnight", "--help"]):
     if r.returncode:
         print(r.stdout[-1500:], r.stderr[-1500:], sep="\n")
         sys.exit(1)
-if (bundle / "lib").exists() and list((bundle / "lib").rglob("tests")):
-    sys.exit("tests directory leaked into the bundle")
+allowed = {lib / "models/flashnext/tests"}
+if any(path not in allowed for path in lib.rglob("tests")):
+    sys.exit("unexpected tests directory leaked into the bundle")
 sys.exit(0)

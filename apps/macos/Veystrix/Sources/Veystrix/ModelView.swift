@@ -8,6 +8,10 @@ struct ModelView: View {
 
     var body: some View {
         Form {
+            Section("Supported model") {
+                LabeledContent("Model", value: "Qwen 3.8 Flash-Next")
+                Text("This app currently supports Qwen 3.8 Flash-Next checkpoints only.").font(.callout).foregroundStyle(.secondary)
+            }
             Section("Model folder") {
                 LabeledContent("Folder") {
                     Text(model.settings.checkpointPath.isEmpty ? "None chosen" : model.paths.abbreviate(model.settings.checkpointPath))

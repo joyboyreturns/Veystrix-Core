@@ -28,6 +28,26 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     public var memoryPolicy: MemoryPolicy?
     public var cache: CacheState?
     public var queue: Queue?
+    public var activity: Activity?
+    public var worker: Worker?
+
+    public struct Activity: Decodable, Equatable, Sendable {
+        public var active: Bool?
+        public var stage: String?
+        public var promptTokens: Int?
+        public var prefillDone: Int?
+        public var prefillTotal: Int?
+        public var decodeTokens: Int?
+        public var decodeTokensPerSecond: Double?
+        enum CodingKeys: String, CodingKey {
+            case active, stage
+            case promptTokens = "prompt_tokens", prefillDone = "prefill_done", prefillTotal = "prefill_total"
+            case decodeTokens = "decode_tokens", decodeTokensPerSecond = "decode_tokens_per_second"
+        }
+    }
+    public struct Worker: Decodable, Equatable, Sendable {
+        public var stage: String?
+    }
 
     public struct MemoryPolicy: Decodable, Equatable, Sendable {
         public var canAdmit: Bool?
@@ -60,7 +80,7 @@ public struct HealthReport: Decodable, Equatable, Sendable {
         }
     }
     enum CodingKeys: String, CodingKey {
-        case status, ready, model, busy, fault, cache, queue
+        case status, ready, model, busy, fault, cache, queue, activity, worker
         case contextLimit = "context_limit", maxColdPrefill = "max_cold_prefill", memoryPolicy = "memory_policy"
     }
 

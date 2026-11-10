@@ -2,7 +2,7 @@ import SwiftUI
 import VeystrixKit
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case dashboard = "Dashboard", model = "Model", harness = "Agents", logs = "Logs"
+    case dashboard = "Dashboard", model = "Model", harness = "Agents", logs = "Logs", settings = "Settings"
     var id: String { rawValue }
     var symbol: String {
         switch self {
@@ -10,6 +10,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .model: return "externaldrive"
         case .harness: return "point.3.connected.trianglepath.dotted"
         case .logs: return "text.alignleft"
+        case .settings: return "gearshape"
         }
     }
 }
@@ -34,6 +35,7 @@ struct ContentView: View {
             case .model: ModelView()
             case .harness: HarnessView()
             case .logs: LogsView()
+            case .settings: SettingsView().environmentObject(model.updates)
             }
         }
         .navigationTitle("Veystrix")

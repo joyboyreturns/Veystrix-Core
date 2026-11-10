@@ -56,6 +56,11 @@ for pkg in bonsai2 k2_horizon; do
   cp "$ROOT/models/$pkg/__init__.py" "$ROOT/models/$pkg/settings.py" "$OUT/lib/models/$pkg/"
 done
 find "$OUT/lib" \( -name tests -o -name bench -o -name __pycache__ -o -name '*.md' \) -prune -exec rm -rf {} +
+# The production safety guard and optional layer diagnostics currently share these
+# benchmark utilities. Ship only their exact import closure, not the test suite.
+mkdir -p "$OUT/lib/models/flashnext/tests/bench"
+cp "$ROOT/models/flashnext/tests/__init__.py" "$OUT/lib/models/flashnext/tests/"
+cp "$ROOT/models/flashnext/tests/bench/"{__init__.py,prefill_memory_harness.py,bench_prefill_memory.py,layer_gate_probe.py} "$OUT/lib/models/flashnext/tests/bench/"
 # Compile next to the source (-b = legacy .pyc location, importable without the .py), then drop the .py files.
 # The settings registry discovers setting_*.py by globbing, so those stay as source.
 "$PY" -m compileall -q -b -j 0 "$OUT/lib"

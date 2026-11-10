@@ -316,7 +316,6 @@ class Supervisor:
 
     def launch(self):
         self.starts += 1
-        self.prune_launch_logs()
         self.log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         logfile = self.log_dir / f"server-launch-{time.strftime('%Y%m%d-%H%M%S')}-{self.starts}.log"
         handle = open(logfile, "ab")

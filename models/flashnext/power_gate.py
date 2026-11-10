@@ -76,4 +76,7 @@ def evaluate(source: str, percent: int | None, floor: int = DEFAULT_MIN_BATTERY_
 
 def check(environ=None, runner=None) -> Verdict:
     source, percent = read_power(runner)
-    return evaluate(source, percent, minimum_percent(environ))
+    env = os.environ if environ is None else environ
+    if env.get("VEYSTRIX_REQUIRE_AC") == "1" and source != "ac":
+        return Verdict(False, "AC power is required by Veystrix Settings. Plug in or allow battery operation.", source, percent, minimum_percent(env))
+    return evaluate(source, percent, minimum_percent(env))

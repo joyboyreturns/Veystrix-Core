@@ -39,6 +39,7 @@ struct DashboardView: View {
                         Tile(title: "Request", value: requestText, detail: queueText)
                     }
                 }
+                activityPanel
                 Text("Veystrix version \(Bundle.main.shortVersion) (\(Bundle.main.buildNumber)). Engine telemetry comes from the engine's own /health endpoint when it is running.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -87,10 +88,59 @@ struct DashboardView: View {
     }
     private var cacheText: String {
         if let c = engine.health?.cache?.values {
+            if let bytes = c["ssd_cache_bytes"] { return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) + " on disk" }
             if let used = c["disk_gb"] ?? c["disk_used_gb"] { return String(format: "%.1f GB on disk", used) }
             if let n = c["entries"] ?? c["disk_entries"] { return "\(Int(n)) entries" }
         }
         return engine.state == .running ? "No data yet" : "Not running"
+    }
+    private var activityPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Live inference").font(.headline)
+            let activity = engine.health?.activity
+            if engine.health?.busy == true, activity?.active == true {
+                HStack {
+                    Tile(title: "Stage", value: activity?.stage?.capitalized ?? "Preparing", detail: "Current request")
+                    Tile(title: "Prompt size", value: activity?.promptTokens.map { "\($0.formatted()) tokens" } ?? "Calculating…", detail: "Total prompt, including cached tokens")
+                }
+                if let done = activity?.prefillDone, let total = activity?.prefillTotal {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Prefill: \(done.formatted()) / \(total.formatted()) tokens")
+                            .font(.callout)
+                        if total > 0 { ProgressView(value: min(Double(done) / Double(total), 1.0)) }
+                        else { Text("No prefill required").font(.caption).foregroundStyle(.secondary) }
+                    }
+                } else {
+                    Text("Prefill progress will appear when available.").font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Tile(title: "Decode speed", value: activity?.decodeTokensPerSecond.map { String(format: "%.1f tokens/s", $0) } ?? "—", detail: "Average for this request")
+                    Tile(title: "Generated", value: activity?.decodeTokens.map { "\($0.formatted()) tokens" } ?? "—", detail: "Includes reasoning tokens")
+                }
+            } else if engine.health?.busy == true {
+                Text("Working · \(engine.health?.worker?.stage?.capitalized ?? "Preparing")")
+                Text("Live token progress requires the updated engine.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text(engine.state == .running ? "No active request" : "Start the engine to see activity")
+                    .foregroundStyle(.secondary)
+            }
+            if let cache = engine.health?.cache?.values {
+                let used = cache["ssd_cache_bytes"]
+                let budget = cache["ssd_cache_budget_bytes"]
+                if let used, let budget, budget > 0 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Persistent cache: \(ByteCountFormatter.string(fromByteCount: Int64(used), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(budget), countStyle: .file))")
+                            .font(.callout)
+                        ProgressView(value: min(used / budget, 1.0))
+                        if let entries = cache["ssd_cache_entries"] {
+                            Text("\(Int(entries).formatted()) saved entries").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
     private var requestText: String {
         guard engine.state == .running else { return "Idle" }

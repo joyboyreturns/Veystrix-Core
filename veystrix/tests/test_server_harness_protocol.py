@@ -95,6 +95,23 @@ class HistoryTests(unittest.TestCase):
         history = [{"role": "assistant", "content": "x", "reasoning_content": "thought"}]
         self.assertEqual(_normalize_messages(history)[0]["reasoning_content"], "thought")
 
+    def test_hermes_assistant_reasoning_is_preserved(self):
+        for message in (
+            {"role": "assistant", "content": "answer", "reasoning": "thought"},
+            {"role": "assistant", "content": "answer", "reasoning": "thought", "reasoning_content": "thought"},
+            {"role": "assistant", "content": "answer", "reasoning": "thought", "reasoning_content": ""},
+        ):
+            self.assertEqual(_normalize_messages([message])[0]["reasoning_content"], "thought")
+
+    def test_hermes_reasoning_rejects_invalid_or_conflicting_values(self):
+        for message in (
+            {"role": "user", "content": "x", "reasoning": "thought"},
+            {"role": "assistant", "content": "x", "reasoning": {"text": "thought"}},
+            {"role": "assistant", "content": "x", "reasoning": "a", "reasoning_content": "b"},
+        ):
+            with self.assertRaises(RequestError):
+                _normalize_messages([message])
+
     @unittest.skipUnless(
         Path(os.path.expanduser("~/models/Qwen3.8-Flash-Next-MLX-4bit-MTP/chat_template.jinja")).exists(),
         "checkpoint chat template not present")
@@ -203,6 +220,16 @@ class ChatRouteTests(unittest.TestCase):
         body = handler.wfile.getvalue().decode()
         return [json.loads(line[6:]) for line in body.split("\n\n")
                 if line.startswith("data: {")], body
+
+    def test_hermes_reasoning_history_reaches_completion(self):
+        payload = dict(self.BASE, reasoning_effort="medium", messages=[
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi", "reasoning": "thought"},
+            {"role": "user", "content": "continue"},
+        ])
+        handler, seen, _ = self.run_chat(payload)
+        self.assertEqual(seen["messages"][1]["reasoning_content"], "thought")
+        self.assertIn("data: [DONE]", handler.wfile.getvalue().decode())
 
     def test_usage_chunk_only_when_requested(self):
         handler, _, _ = self.run_chat(dict(self.BASE, stream_options={"include_usage": True}))

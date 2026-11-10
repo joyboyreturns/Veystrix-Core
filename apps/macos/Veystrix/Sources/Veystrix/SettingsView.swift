@@ -23,6 +23,14 @@ struct SettingsView: View {
                 Text("Safety guards are always on. Veystrix offers no setting that lowers or bypasses a memory or swap guard.")
                     .font(.callout).foregroundStyle(.secondary)
             }
+            Section("Power") {
+                Toggle("Allow operation on battery", isOn: $model.settings.allowBattery)
+                Stepper("Minimum battery charge: \(model.settings.minimumBatteryPercent)%", value: $model.settings.minimumBatteryPercent, in: 0...100, step: 5)
+                    .disabled(!model.settings.allowBattery)
+                Toggle("Allow operation in Low Power Mode", isOn: $model.settings.allowLowPowerMode)
+                Text("When battery operation is off, the engine requires AC power. A 0% minimum disables the battery floor. Low Power Mode can reduce speed. Changes apply when the engine starts next; other safety guards remain active.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Section("Loading the model") {
                 Toggle("Ask for confirmation before loading", isOn: $model.settings.confirmBeforeLoading)
                 Text("The model is never loaded when the app opens. It loads only when you press Start.")
@@ -78,6 +86,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .navigationTitle("Settings")
         .onAppear { port.value = String(model.settings.port) }
     }
 

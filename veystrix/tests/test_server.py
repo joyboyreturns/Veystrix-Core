@@ -457,14 +457,24 @@ class PrefillKeepAliveTests(unittest.TestCase):
     """A cold prefill emits no token for minutes; the stream must still carry bytes so a client idle timeout does not fire."""
 
     def test_comment_lines_flow_while_complete_is_silent_and_stop_with_it(self):
-        import time
+        import threading
         from veystrix import server
 
+        enough = threading.Event()
+        class ObservedOutput(io.BytesIO):
+            def write(self, data):
+                result = super().write(data)
+                if self.getvalue().count(b": generating\n\n") >= 3:
+                    enough.set()
+                return result
+
         def complete(messages, tools, max_tokens, on_text=None, gone=None):
-            time.sleep(0.4)
+            if not enough.wait(5):
+                raise AssertionError("keepalive messages did not arrive")
             return "done"
 
         handler = _make_handler(complete)
+        handler.wfile = ObservedOutput()
         handler._client_gone = lambda: False
         original = server.SSE_KEEPALIVE_SECONDS
         server.SSE_KEEPALIVE_SECONDS = 0.05
@@ -472,11 +482,9 @@ class PrefillKeepAliveTests(unittest.TestCase):
             result = handler._complete_with_keepalive(handler.server.service, [], [], 16, None)
         finally:
             server.SSE_KEEPALIVE_SECONDS = original
-        written = handler.wfile.getvalue()
         self.assertEqual(result, "done")
-        self.assertGreaterEqual(written.count(b": generating\n\n"), 3)
-        time.sleep(0.2)
-        self.assertEqual(handler.wfile.getvalue(), written, "the ticker must stop when the request ends")
+        self.assertGreaterEqual(handler.wfile.getvalue().count(b": generating\n\n"), 3)
+        self.assertFalse([t for t in threading.enumerate() if t.name == "sse-keepalive"])
 
     def test_an_exception_from_complete_still_stops_the_ticker(self):
         from veystrix import server

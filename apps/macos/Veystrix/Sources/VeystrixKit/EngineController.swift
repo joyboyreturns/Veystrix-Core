@@ -60,7 +60,10 @@ public final class EngineController: ObservableObject {
         guard userInitiated else { throw StartError.notUserInitiated }
         guard state == .stopped || isErrorState else { throw StartError.alreadyActive }
         // Battery use is allowed; a battery below the floor refuses the start before anything is launched.
-        if let refusal = MemoryProbe.powerRefusal(snapshot()) { throw StartError.batteryTooLow(refusal) }
+        let power = snapshot()
+        if !settings.allowBattery && power.onACPower != true { throw StartError.batteryTooLow("Plug in the Mac or enable battery operation in Settings.") }
+        if let refusal = MemoryProbe.powerRefusal(power, minPercent: settings.minimumBatteryPercent) { throw StartError.batteryTooLow(refusal) }
+        if power.lowPowerMode && !settings.allowLowPowerMode { throw StartError.batteryTooLow("Low Power Mode is on. Turn it off or allow it in Veystrix Settings.") }
         let source = source ?? .developer(repoRoot: URL(fileURLWithPath: "/nonexistent"))
         let plan: LaunchPlan
         do {
@@ -76,7 +79,7 @@ public final class EngineController: ObservableObject {
         health = nil; models = nil; lastSafetyStop = nil; stopRequested = false; lastExitStatus = nil
         isExternallyManaged = false
         memory = snapshot()
-        advisories = MemoryProbe.advisories(memory!, checkpointBytes: checkpoint?.totalBytes)
+        advisories = MemoryProbe.advisories(memory!, checkpointBytes: checkpoint?.totalBytes, minBatteryPercent: settings.minimumBatteryPercent, allowLowPowerMode: settings.allowLowPowerMode)
         logs.append("Starting: \(plan.description)", source: .app)
         do {
             process = try launcher.launch(plan, onOutput: { [weak self] text in

@@ -81,6 +81,9 @@ public struct LaunchPlan: Equatable, Sendable {
         for key in inheritedKeys { if let v = parentEnvironment[key] { env[key] = v } }
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["VEYSTRIX_MIN_BATTERY_PERCENT"] = String(settings.minimumBatteryPercent)
+        env["VEYSTRIX_REQUIRE_AC"] = settings.allowBattery ? "0" : "1"
+        env["VEYSTRIX_ALLOW_LOW_POWER"] = settings.allowLowPowerMode ? "1" : "0"
         env["VEYSTRIX_PORT"] = String(settings.port)
         env["VEYSTRIX_CACHE_GB"] = String(settings.cacheQuotaGB)
         // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;

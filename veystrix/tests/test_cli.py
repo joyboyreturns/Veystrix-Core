@@ -125,20 +125,27 @@ class LauncherTests(unittest.TestCase):
                 _command, child_env = cli.command(["--model", "flashnext"])
         self.assertEqual(child_env["FLASHNEXT_METAL_RUNTIME"], "0")
 
+    def test_packaged_runtime_skips_git_probe(self):
+        with tempfile.TemporaryDirectory() as root, patch("veystrix.cli.subprocess.run") as run:
+            self.assertEqual(cli.branch_sync_warning(Path(root)), "")
+            run.assert_not_called()
+
     def test_warns_when_branch_does_not_include_known_main(self):
         stale = subprocess.CompletedProcess([], 1, stdout="", stderr="")
         branch = subprocess.CompletedProcess(
             [], 0, stdout="codex/research\n", stderr=""
         )
-        with patch("veystrix.cli.subprocess.run", side_effect=(stale, branch)):
-            warning = cli.branch_sync_warning(Path("/repo"))
+        with tempfile.TemporaryDirectory() as root, patch("veystrix.cli.subprocess.run", side_effect=(stale, branch)):
+            (Path(root) / ".git").mkdir()
+            warning = cli.branch_sync_warning(Path(root))
         self.assertIn("codex/research", warning)
         self.assertIn("origin/main", warning)
 
     def test_skips_warning_when_branch_includes_known_main(self):
         current = subprocess.CompletedProcess([], 0, stdout="", stderr="")
-        with patch("veystrix.cli.subprocess.run", return_value=current) as run:
-            warning = cli.branch_sync_warning(Path("/repo"))
+        with tempfile.TemporaryDirectory() as root, patch("veystrix.cli.subprocess.run", return_value=current) as run:
+            (Path(root) / ".git").mkdir()
+            warning = cli.branch_sync_warning(Path(root))
         self.assertEqual(warning, "")
         run.assert_called_once()
 

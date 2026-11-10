@@ -53,6 +53,16 @@ class ChatGuardTests(unittest.TestCase):
         self.start()
         self.assertIn('watchdog_sample', self.guard.path.read_text())
 
+    def test_user_power_settings_reach_running_guard(self):
+        original = self.sampler.sample
+        self.sampler.sample = lambda: dict(original(), power_source="battery", low_power=True, battery_percent=40)
+        with mock.patch.dict("os.environ", {"VEYSTRIX_ALLOW_LOW_POWER": "1", "VEYSTRIX_REQUIRE_AC": "0", "VEYSTRIX_MIN_BATTERY_PERCENT": "30"}):
+            self.start()
+        self.assertEqual(self.guard.watchdog.policy.min_battery_percent, 30)
+        self.assertTrue(self.guard.watchdog.policy.allow_low_power)
+        self.assertFalse(self.guard.watchdog.policy.require_ac)
+        self.assertEqual(self.exits, [])
+
     def test_explicit_two_gb_overrides_chat_default(self):
         from models.flashnext.settings.launch import apply_chat_environment
         environment = {"FLASHNEXT_EXPERT_POOL_GB": "2"}

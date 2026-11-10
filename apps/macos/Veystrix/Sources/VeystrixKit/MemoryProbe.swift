@@ -77,10 +77,10 @@ public enum MemoryProbe {
     }
 
     /// Cheap advice shown before Start. The engine's own admission guard remains the authority and is never bypassed.
-    public static func advisories(_ s: MemorySnapshot, checkpointBytes: Int64?) -> [String] {
+    public static func advisories(_ s: MemorySnapshot, checkpointBytes: Int64?, minBatteryPercent: Int = defaultMinBatteryPercent, allowLowPowerMode: Bool = false) -> [String] {
         var out: [String] = []
-        if s.onACPower == false { out.append("The Mac is on battery (\(s.batteryPercent.map { "\($0)%" } ?? "charge unknown")). The engine runs on battery above \(defaultMinBatteryPercent)% and stops below it; plug in for long sessions. Results measured on battery are preliminary.") }
-        if s.lowPowerMode { out.append("Low Power Mode is on. Turn it off before a long session.") }
+        if s.onACPower == false { out.append("The Mac is on battery (\(s.batteryPercent.map { "\($0)%" } ?? "charge unknown")). The engine runs on battery at or above \(minBatteryPercent)% and stops below it; plug in for long sessions. Results measured on battery are preliminary.") }
+        if s.lowPowerMode { out.append(allowLowPowerMode ? "Low Power Mode is on; generation may be slower." : "Low Power Mode is on. Turn it off or allow it in Settings.") }
         if s.availableBytes < 6 * 1_073_741_824 {
             out.append("Only \(MemorySnapshot.gib(s.availableBytes)) of memory looks available. Close memory-heavy apps; the engine will refuse to start if it is not enough.")
         }

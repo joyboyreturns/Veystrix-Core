@@ -16,7 +16,7 @@ import unittest
 
 from veystrix import reasoning as R
 from veystrix.conversation import reasoning_system_text
-from veystrix.server import ModelService, _check_chat_fields, _openai_tools
+from veystrix.server import ModelService, _check_chat_fields, _normalize_messages, _openai_tools
 from veystrix.sessions import derive_key
 from veystrix.tests.test_reasoning_cache import ScriptedModelBackend, TOKENIZER
 from veystrix.tests.test_server import FakeSession
@@ -143,6 +143,18 @@ class EffortSwitchCacheTests(unittest.TestCase):
         m += [{"role": "assistant", "content": "A2", "reasoning_content": "Thinking"}, {"role": "user", "content": "q3"}]
         self.turn(m, "off")
         self.assertEqual((self.service.reused, self.service.rebuilt), (2, 1), "no cold rebuild for off<->medium")
+
+    def test_hermes_reasoning_alias_survives_off_medium_off(self):
+        self.backend.replies = ["A1", "Thinking\n</think>\n\nA2", "A3"]
+        messages = [{"role": "user", "content": "q1"}]
+        self.turn(_normalize_messages(messages), "off")
+        messages += [{"role": "assistant", "content": "A1"}, {"role": "user", "content": "q2"}]
+        self.turn(_normalize_messages(messages), "medium")
+        messages += [{"role": "assistant", "content": "A2", "reasoning": "Thinking"},
+                     {"role": "user", "content": "q3"}]
+        self.turn(_normalize_messages(messages), "off")
+        self.assertEqual((self.service.reused, self.service.rebuilt), (2, 1))
+        self.assertEqual(self.backend.prompts[-1].count("Thinking"), 1)
 
     def test_low_to_xhigh_inside_one_conversation_rebuilds_because_the_prompt_differs(self):
         self.backend.replies = ["Think\n</think>\n\nB1", "Think2\n</think>\n\nB2"]
