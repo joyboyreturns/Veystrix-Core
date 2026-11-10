@@ -1,21 +1,23 @@
 # Qwen-to-Nemotron feature parity
 
-The Qwen branch was merged locally after the initial branch was pushed. The application, settings and shared server sources are present in this worktree, but their behavior is **not automatically compatible** with Nemotron. Qwen remains the working default. The two-model-only cleanup and a production Nemotron loader remain open.
+Status legend: **Tested (synthetic)** = covered by model-free tests on a tiny synthetic checkpoint in the real tensor layout;
+**unverified** = needs authorized real-checkpoint runs. Nothing below claims real-checkpoint correctness or speed.
 
-| Qwen feature | Nemotron requirement | Status |
+| Qwen feature | Nemotron | Status |
 | --- | --- | --- |
-| Desktop model selection and checkpoint validation | Explicit Flash-Next/Nemotron selection, persistent independent paths, no auto-switch | Not implemented; UI currently accepts Flash-Next only |
-| Power, battery floor, AC-only and Low Power Mode | Same user controls with identical semantics | Shared UI exists; not wired or tested for Nemotron |
-| Guard, swap/thermal pressure, watchdog and restart | Architecture-neutral guard, safe cancellation; never replay tool actions | Not implemented for Nemotron |
-| Engine supervisor and diagnostic logs | Manual selection, bounded restarts, actionable errors | Not wired for Nemotron |
-| `/health` activity, prefill progress, decode rate, persistent cache use | Accurate live counters and dashboard UI | Shared UI exists; Nemotron telemetry not implemented |
-| OpenAI/Anthropic APIs, streaming and usage | Model-specific template, honest limits and accounting | Shared server exists; no production adapter or Nemotron validation |
-| Hermes reasoning alias and multi-turn tools | Correct thinking semantics, tool IDs and arguments, no replay | Shared fixes present; not verified with Nemotron |
-| Prompt and persistent cache, session isolation | Exact tokenizer/model/precision/state fingerprint; Mamba + KV restore | Synthetic snapshot exists; no production integration |
-| SSD experts, bounded pool, prefetch | Exact 6-of-128 + shared; bounded memory and safe async operations | Synthetic and stacked-index slice prototypes only |
-| Admission, 16 GB planning, single-model residency | Conservative measured core/working-set limit and fail-closed selection | Arithmetic estimator only; no production enforcement |
-| Context and incremental prefill | Enforced measured context, bounded chunks | Synthetic only; no real-model evidence |
-| MTP | Verified speculative tokens only, default off | Not implemented |
-| Packaging and signing | Include Nemotron runtime, metadata, assets and dependencies | Not implemented or validated |
+| Model selection / checkpoint validation | `--model nemotron35-lightning`, verified-checkpoint resolver (headers, inventory, extents; optional SHA-256); manual only | CLI/session: tested. Desktop picker: **not implemented** |
+| Power, battery floor, AC-only, Low Power Mode | Shared `power_gate` at start and shared `ChatGuard` during runs | Wired and unit-tested at launch-line level; guard behavior on a real run: unverified |
+| Guard, swap/thermal pressure, watchdog, restart | Shared guard via the same launcher contract; supervisor `--model nemotron35-lightning`; no replay of tool actions | Wired; real stops unverified |
+| Engine supervisor and diagnostic logs | `models.flashnext.overnight --model nemotron35-lightning` (auto-warm off) | Launch line tested |
+| `/health`, activity, prefill progress, decode rate | Shared server reads backend progress callbacks, `last_decode_rate`; backend adds pool and expert-byte stats | Tested (HTTP, synthetic); values on a real run unverified |
+| OpenAI/Anthropic APIs, streaming, usage | Shared server with the model's own chat template; stop tokens 2/11 | Tested (HTTP, synthetic backend; template parity with the real tokenizer) |
+| Hermes reasoning alias, multi-turn tools | Template renders `<tool_call>` XML identical to the shared parser; tool results framed per template | Parser and framing tested; actual Nemotron-generated calls unverified |
+| Prompt and persistent cache, session isolation | Named fingerprinted sessions; live tape extension; cold replay on divergence | Tested (synthetic); automatic persistent prefix cache **not implemented** |
+| SSD experts, bounded pool | Exact 6-of-128 plus shared expert; bounded LRU; synchronous reads | Tested (equals in-memory quantized reference); speed unknown, no prefetch |
+| Admission, 16 GB planning, single-model residency | `admission.py` plan and per-request gate; refuses before loading | Arithmetic tested; estimates unmeasured |
+| Context and incremental prefill | Context bounded by plan; chunked prefill; server limits tightened to the plan | Tested (synthetic) |
+| MTP | Not implemented | n/a |
+| Packaging and signing | Not changed | **Not implemented** |
 
-Do not advertise parity, use model auto-routing, or make Nemotron the default until every applicable row has passed synthetic, integration, safety and real-checkpoint validation. Real downloads do not imply permission to load the model or claim speed.
+Do not advertise parity, auto-route, or make Nemotron the default until real-checkpoint correctness, reliability and performance
+are established with explicit authorization.

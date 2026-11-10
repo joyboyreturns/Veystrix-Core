@@ -13,3 +13,15 @@ The Qwen worktree’s full `veystrix/tests` discovery subsequently passed 779 te
 Per-token versus batched float32 quantized matrix multiplication showed a maximum relative discrepancy about 1.6e-7 in the tiny fixture; the test uses rtol=1e-6, atol=1e-6 for this different reduction order. This is not a real-weight comparison.
 
 After integrating the Qwen branch locally, a 26-test synthetic suite plus launcher and server tests passed. The 4-bit checkpoint metadata is affine/group 64; the shard download and all real-weight inference remain incomplete.
+
+
+## 2026-11-11 update: real-layout path
+
+Evidence gathered **without loading the real model**:
+
+- The downloaded mlx-community checkpoint (4 shards, 17,775,339,392 bytes) passes `python -m models.nemotron35.check <dir> --hashes`: 729 tensors match the exact expected inventory (names, shapes, dtypes), shard extents are exact, the index `total_size` equals the tensor bytes, and all four SHA-256 digests match the digests recorded by huggingface_hub. This proves layout and download integrity only.
+- At full size, the mlx-lm `nemotron_h.Model` built with the streamed `SwitchMLP` replacement has exactly the dense parameter names and shapes of the checkpoint (lazy arrays, nothing allocated).
+- On tiny synthetic checkpoints in the identical stacked layout, the streamed model matches the in-memory quantized reference: prefill within bf16 rounding, cached decode exact, chunked equals single pass, pool within budget even at size 0.
+- Chat framing equals `chat_template.jinja` rendering with the real tokenizer (open, non-thinking prompt, tool results, turn join, hostile content cannot forge structure); the shared server parses the model's `<tool_call>` format.
+
+Not evidenced: real numerical equivalence with NVIDIA's weights, expert-read throughput, memory peaks, swap, thermals, decode or prefill speed, long-context behavior, Hermes sessions with real model output.

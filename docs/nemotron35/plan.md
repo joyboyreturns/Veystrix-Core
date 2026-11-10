@@ -16,7 +16,7 @@ Nemotron is the intended **daily** Hermes model after real-machine verification;
 
 ## Current gates
 
-- No real-checkpoint loader, no usable Nemotron launch, no Hermes real-model flow, no real performance or memory measurements.
+- Real-checkpoint loader and launch exist but have never run on real weights; no Hermes real-model flow, no real performance or memory measurements.
 - No production-ready persistent snapshots or model-switch lifecycle.
 - Existing legacy models are not yet removed.
 - Synthetic MLX and streamed-expert tests pass, but are not evidence of real-checkpoint numerical equivalence.

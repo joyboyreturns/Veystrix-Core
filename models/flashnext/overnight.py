@@ -55,6 +55,16 @@ def bundled() -> bool:
 def server_command(args) -> list:
     """The one supported launch line (see models/flashnext/supervision.py LAUNCH_COMMAND)."""
     launcher = [sys.executable, "-m", "veystrix.cli"] if bundled() else [str(REPO / "chat.sh")]
+    if getattr(args, "model", "flashnext") == "nemotron35-lightning":
+        # Manual selection only. The CLI applies the same guard/chunking contract; --mode, the prefix cache, layer-major
+        # and the Flash-Next memory-readiness gates do not exist for this model. 32K is the admitted ceiling, and the
+        # backend tightens it further from measured free memory at startup.
+        command = [*launcher, "--server", "--host", args.host, "--port", str(args.port),
+                   "--pool-gb", str(args.pool_gb), "--context-limit", "32768",
+                   "--model", "nemotron35-lightning", "--checkpoint", args.checkpoint]
+        if getattr(args, "preferences_file", None):
+            command += ["--preferences-file", args.preferences_file]
+        return command
     command = [*launcher, "--mode", "agentic",
                "--pool-gb", str(args.pool_gb),
                "--host", args.host, "--port", str(args.port),
@@ -459,6 +469,8 @@ def build_parser():
     p.add_argument("--pool-gb", default=os.environ.get("VEYSTRIX_POOL_GB", "0"))
     p.add_argument("--enable", action="append", default=[], metavar="NAME",
                    help="pass an experimental option to chat.sh (see its --help), e.g. --enable layer-major")
+    p.add_argument("--model", choices=("flashnext", "nemotron35-lightning"), default="flashnext",
+                   help="engine to supervise (manual selection; flashnext is the default)")
     p.add_argument("--checkpoint", default=os.environ.get("VEYSTRIX_CHECKPOINT", DEFAULT_CHECKPOINT))
     p.add_argument("--prefix-dir", help="separate prefix-cache directory (default: normal AGENTIC cache)")
     p.add_argument("--preferences-file", help="preferences file for the child server")
@@ -495,7 +507,13 @@ def print_status(log_dir=LOG_DIR) -> int:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.auto_warm is None:
-        args.auto_warm = bool(args.overnight)
+        args.auto_warm = bool(args.overnight) and args.model == "flashnext"   # warming relies on the Flash-Next prefix cache
+    if args.model == "nemotron35-lightning":
+        args.auto_warm = False
+        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") != "1":
+            print("Nemotron real-checkpoint inference needs the owner's explicit approval: set "
+                  "VEYSTRIX_NEMOTRON_AUTHORIZED=1. Nothing was started.", file=sys.stderr)
+            return 2
     if args.status:
         return print_status()
     return Supervisor(args).run()
