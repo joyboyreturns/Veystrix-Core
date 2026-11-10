@@ -396,7 +396,21 @@ class ProfiledPrefixCache(P.PrefixCache):
         return min(leaves, key=lambda k: (self._value(k), self._disk[k]["atime"]))
 
     def _evict_one(self) -> int | None:
-        """Drop a local victim; foreign configuration snapshots are never deleted."""
+        """Drop a victim: snapshots of another fingerprint or format first (oldest leaf first), then local entries by value."""
+        victim = self._foreign_victim()
+        if victim is not None:
+            victim_bytes = self._foreign[victim]["bytes"] if victim in self._foreign else 0
+            self._drop_files(victim)
+            self._foreign.pop(victim, None)
+            self.extra["foreign_evicted"] += 1
+            self.stats.evicted_ssd += 1
+            self.stats.evicted_ssd_bytes += victim_bytes
+            self._dirty = True
+            self.eviction_events.append({
+                "key": victim, "reason": "foreign", "bytes": victim_bytes,
+                "remaining_disk": self._disk_total(), "timestamp": self._clock(),
+            })
+            return victim_bytes
         victim = self._disk_victim()
         if victim is None:
             return None

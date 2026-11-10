@@ -79,6 +79,7 @@ def inspect_cache(directory: str | Path | None = None) -> dict:
         "status": "ok",
         "directory": str(target_dir),
         "total_entries": len(entries),
+        "total_tokens_cached": total_tokens,
         "total_bytes": total_bytes,
         "total_bytes_mb": round(total_bytes / (1024 * 1024), 2),
         "total_bytes_gb": round(total_bytes / (1024 * 1024 * 1024), 3),
@@ -100,62 +101,99 @@ def clean_cache(
     if not target_dir.exists():
         return {"status": "not_found", "directory": str(target_dir), "removed_entries": 0, "freed_bytes": 0}
 
-    # Discover manifests
-    manifests: dict[str, dict] = {}
-    for manifest_path in sorted(target_dir.glob("*.json")):
-        if manifest_path.name.startswith("."):
-            continue
+    owner = None
+    if not dry_run:
         try:
-            m = json.loads(manifest_path.read_text())
-            manifests[manifest_path.stem] = m
-        except Exception:
-            continue
+            owner = P._claim_directory(target_dir)
+        except P.CacheOwnershipError as err:
+            return {
+                "status": "error",
+                "error": "CacheOwnershipError",
+                "message": str(err),
+                "directory": str(target_dir),
+                "removed_entries": 0,
+                "freed_bytes": 0,
+            }
 
-    parents = {m.get("parent") for m in manifests.values() if m.get("parent")}
-    now = time.time()
-    max_age_seconds = max_age_days * 86400 if max_age_days is not None else None
+    try:
+        manifests: dict[str, dict] = {}
+        manifest_paths: dict[str, Path] = {}
+        for manifest_path in sorted(target_dir.glob("*.json")):
+            if manifest_path.name.startswith("."):
+                continue
+            key = manifest_path.stem
+            try:
+                m = json.loads(manifest_path.read_text())
+                manifests[key] = m
+                manifest_paths[key] = manifest_path
+            except Exception:
+                continue
 
-    # Only leaf entries (nothing chains to them) may be safely evicted
-    leaves = [k for k in manifests if k not in parents]
-    leaves.sort(key=lambda k: manifests[k].get("created", 0.0))  # oldest first
+        now = time.time()
+        max_age_seconds = max_age_days * 86400 if max_age_days is not None else None
+        target_bytes = int(target_gb * 1e9) if target_gb is not None else None
 
-    removed = 0
-    freed_bytes = 0
+        # Compute accurate size for each entry (safetensors + json manifest)
+        entry_sizes: dict[str, int] = {}
+        for key, m in manifests.items():
+            data_file = target_dir / f"{key}.safetensors"
+            f_size = data_file.stat().st_size if data_file.exists() else m.get("file_bytes", 0)
+            j_size = manifest_paths[key].stat().st_size if manifest_paths[key].exists() else 0
+            entry_sizes[key] = f_size + j_size
 
-    target_bytes = int(target_gb * 1e9) if target_gb is not None else None
-    current_total = sum(m.get("file_bytes", 0) for m in manifests.values())
+        current_total = sum(entry_sizes.values())
+        removed = 0
+        freed_bytes = 0
 
-    for key in leaves:
-        m = manifests[key]
-        created = m.get("created", now)
-        is_expired = max_age_seconds is not None and (now - created > max_age_seconds)
-        is_over_budget = target_bytes is not None and (current_total - freed_bytes > target_bytes)
+        # Iteratively evict leaves (expired or over budget) so that newly exposed leaves can be pruned
+        while True:
+            parents = {m.get("parent") for m in manifests.values() if m.get("parent")}
+            leaves = [k for k in manifests if k not in parents]
+            if not leaves:
+                break
+            leaves.sort(key=lambda k: manifests[k].get("created", 0.0))  # oldest first
 
-        if is_expired or is_over_budget:
-            f_bytes = m.get("file_bytes", 0)
+            victim = None
+            for key in leaves:
+                m = manifests[key]
+                created = m.get("created", now)
+                is_expired = max_age_seconds is not None and (now - created > max_age_seconds)
+                is_over_budget = target_bytes is not None and (current_total - freed_bytes > target_bytes)
+                if is_expired or is_over_budget:
+                    victim = key
+                    break
+
+            if victim is None:
+                break
+
+            f_bytes = entry_sizes[victim]
             if not dry_run:
-                (target_dir / f"{key}.safetensors").unlink(missing_ok=True)
-                (target_dir / f"{key}.json").unlink(missing_ok=True)
+                (target_dir / f"{victim}.safetensors").unlink(missing_ok=True)
+                (target_dir / f"{victim}.json").unlink(missing_ok=True)
             removed += 1
             freed_bytes += f_bytes
+            manifests.pop(victim)
 
-    return {
-        "status": "ok",
-        "dry_run": dry_run,
-        "directory": str(target_dir),
-        "removed_entries": removed,
-        "freed_bytes": freed_bytes,
-        "freed_mb": round(freed_bytes / (1024 * 1024), 2),
-    }
+        return {
+            "status": "ok",
+            "dry_run": dry_run,
+            "directory": str(target_dir),
+            "removed_entries": removed,
+            "freed_bytes": freed_bytes,
+            "freed_mb": round(freed_bytes / (1024 * 1024), 2),
+        }
+    finally:
+        if owner is not None:
+            P._release_directory(*owner)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Veystrix Persistent SSD Cache Tools")
     parser.add_argument("--directory", "-d", default=None, help="Cache directory (default: ~/.flashnext/prefix-cache)")
     parser.add_argument("--inspect", action="store_true", help="Inspect stored snapshots and exit")
-    parser.add_argument("--clean", action="store_true", help="Perform safe cache cleanup")
+    parser.add_argument("--clean", "--cleanup", action="store_true", dest="clean", help="Perform safe cache cleanup")
     parser.add_argument("--max-age-days", type=float, default=None, help="Maximum snapshot age in days to retain")
-    parser.add_argument("--target-gb", type=float, default=None, help="Target disk budget in GB")
+    parser.add_argument("--target-gb", "--target-disk-gb", type=float, default=None, dest="target_gb", help="Target disk budget in GB")
     parser.add_argument("--dry-run", action="store_true", help="Simulate cleanup without deleting files")
     args = parser.parse_args()
 

@@ -6,7 +6,7 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 |---|---|---|---|---|---|---|
 | R1-01 | Phase 4: Supervision & Failure Recovery | `models/flashnext/auto_reclaim.py` | L187-L209 | normal | open | pending |
 | R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | open | pending |
-| R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefill.py` | L158-L162 | normal | open | pending |
+| R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_session.py` | L213-L220 | normal | verified | pending |
 | R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | open | pending |
 | R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
 | R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
@@ -19,8 +19,8 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
 | R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | open | pending |
 | R2-05 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L355-L357 | normal | verified | 5a63d00 |
-| R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | open | pending |
-| R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | open | pending |
+| R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | verified | pending |
+| R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | verified | pending |
 | R2-08 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1459-L1469 | normal | verified | 5a63d00 |
 | R2-09 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1245-L1270 | normal | verified | 5a63d00 |
 | R2-10 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefix_session.py` | L251-L268 | normal | verified | 5a63d00 |
@@ -29,10 +29,10 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | open | pending |
 | R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | open | pending |
 | R3-05 | Phase 2: Correctness & Tool-Calling | `macqwen/sessions.py` | L154-L189 | normal | verified | 5a63d00 |
-| R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | open | pending |
+| R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | verified | pending |
 | R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | open | pending |
-| R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | open | pending |
-| R3-09 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L156-L158 | nit | open | pending |
+| R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | verified | pending |
+| R3-09 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L156-L158 | nit | verified | pending |
 | R3-10 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L1153-L1157 | pre_existing | open | pending |
 
 ## Detailed Finding Specifications
@@ -75,7 +75,7 @@ Mechanism in models/flashnext/overnight.py, which is new in this diff (476 added
 - **Status**: open
 - **Associated commit**: pending
 
-### R1-03 — `models/flashnext/prefill.py` (L158-L162)
+### R1-03 — `models/flashnext/prefix_session.py` (L213-L220)
 - **Phase**: Phase 3: Persistent Cache & Recovery
 - **Severity**: normal
 - **Reported Problem**:
@@ -87,11 +87,11 @@ AGENTIC with `--enable long-context` sets FLASHNEXT_PREFILL_CHUNK_POLICY=budgete
 
 How it happens:
 - prefix_session.py:201-208 (`boundaries()`) handles only "balanced" specially. Every other policy, budgeted included, gets `chosen.update(range(chunk, len(prompt), chunk))`, which adds the grid points 2048, 4096, 6144 and so on.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `prefix_session.py:207-220` where `boundaries()` previously fell through to grid `range(chunk, len(prompt), chunk)` under `budgeted` chunk policy, causing intermediate snapshot callbacks to never match `plan_chunks` cuts.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase3_remediations.py:test_r1_03_boundaries_budgeted_policy_aligns_with_budgeted_edges`.
+- **Planned fix**: Explicitly check `if prefill_module.chunk_policy() == "budgeted"` in `boundaries()` and evaluate `prefill_module.budgeted_edges(len(prompt), chunk or max(prefill_module.CANDIDATE_CHUNKS), prefill_module.chunk_budget_bytes(), self.anchors(prompt))` to keep snapshot callbacks aligned with actual cuts.
+- **Regression test**: `macqwen/tests/test_phase3_remediations.py:test_r1_03_boundaries_budgeted_policy_aligns_with_budgeted_edges`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-04 — `models/flashnext/flight_recorder.py` (L43-L43)
@@ -325,11 +325,11 @@ shrink_ram and _evict_ram drop a RAM snapshot whenever an SSD tier is configured
 On a Mac with less than 50 GB free, every `_persist` returns early and only bumps writes_skipped. `_evict_ram` (spill=True because a directory is set) and `shrink_ram` still pop the entry, so it is discarded even though the docstring says nothing is lost. This runs from `_release_between_turns` while the controller is ELEVATED, from reclaim_owned_memory, and on every put over the RAM budget. A resident child whose parent was dropped still shows up in `peek` (the server's admission estimate), but `lookup` hits CorruptEntry, invalidates it and the backend prefills the whole prompt cold. That undoes the cache and the admission estimate exactly when memory and disk are tight. Fix: drop a RAM entry only after confirming `key in self._disk` once `_persist` returns, otherwise keep it (and its ancestors).
 
 **Verification:** normal. Trigger: an SSD tier is configured and `_persist` declines to write, either because free disk is below `min_disk_free_bytes` (default `FLASHNEXT_DISK_RESERVE_GB`=50, prefix_cache.py:664) or because `ProfiledPrefixCache._make_room` returns False (prefix_profiles.py:460-462). In both cases a RAM entry that was never persisted is discarded. prefix_cache.py is a new file in this diff, so the base does not have this problem.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/prefix_cache.py:795` and `shrink_ram()` where entries were popped from `_ram` before verifying disk write completion.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase3_remediations.py:test_r2_06_evict_ram_preserves_parent_with_resident_child_if_persist_fails` and `test_r2_06_shrink_ram_does_not_drop_unpersisted_entries`.
+- **Planned fix**: Ensure `_persist(entry)` is attempted before popping from `_ram`. Only pop from `_ram` if the entry is confirmed present on SSD (`key in self._disk`) or if the entry has no resident children in RAM (`not self._has_resident_child(key)`).
+- **Regression test**: `macqwen/tests/test_phase3_remediations.py:test_r2_06_evict_ram_preserves_parent_with_resident_child_if_persist_fails`, `test_r2_06_shrink_ram_does_not_drop_unpersisted_entries`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R2-07 — `models/flashnext/prefix_profiles.py` (L382-L383)
@@ -341,11 +341,11 @@ Snapshots stored under another fingerprint or format are never reclaimed. `Profi
 The fingerprint includes hashes of engine source files (sessions._ENGINE_FILES) plus routing profile, chunk policy, ring, KV dtype and layer-major settings, so any engine edit or settings change makes all existing snapshots in the shared `~/.flashnext/prefix-cache` foreign. With `--enable prefix-profiles` (10 GB budget by default), once 10 GB of old-fingerprint snapshots exist, each new snapshot write loops `_evict_one` until every unpinned, unleased current snapshot is deleted. It then returns False and the write is skipped (`writes_skipped`), and the next startup's `_enforce_budget` wipes whatever is left. The SSD tier is effectively disabled for good and only manual deletion recovers it. Without profiles, every fingerprint change adds up to the full disk budget (24-50 GB) of files that are never deleted, until the 50 GB free-space reserve makes every `_persist` skip.
 
 **Verification:** normal. Trigger: `FLASHNEXT_PREFIX_PROFILES=1` is on, and the shared cache directory (default `~/.flashnext/prefix-cache`) already holds old-fingerprint snapshots close to `disk_budget` (default 10 GB). acknowledged in diff: the `_evict_one` docstring says "foreign configuration snapshots are never deleted", and the test `test_entries_of_another_fingerprint_are_not_loaded_or_evicted` pins `foreign_evicted == 0`. Neither one bounds the effect on the budget.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `ProfiledPrefixCache._evict_one()` where `_foreign_victim()` was dead code, and `PrefixCache._scan()` where foreign entries were ignored.
+- **Reproduction method**: Demonstrated in `test_prefix_profiles.py:test_entries_of_another_fingerprint_are_not_loaded_or_evicted` and `macqwen/tests/test_phase3_remediations.py:test_r2_07_prefix_cache_evicts_foreign_leaves_first`.
+- **Planned fix**: In `ProfiledPrefixCache._evict_one()`, call `self._foreign_victim()` first and evict foreign entries oldest-first before local entries; in base `PrefixCache._scan()`, track foreign entries in `self._foreign` and evict them in `_evict_disk()`.
+- **Regression test**: `models/flashnext/tests/unit/test_prefix_profiles.py:SafetyTests.test_entries_of_another_fingerprint_are_not_loaded_or_evicted`, `macqwen/tests/test_phase3_remediations.py:test_r2_07_prefix_cache_evicts_foreign_leaves_first`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R2-08 — `macqwen/server.py` (L1459-L1469)
@@ -513,11 +513,11 @@ An AGENTIC user's cache in ~/.flashnext/prefix-cache holds 20 conversations of a
 How it fails, in macqwen/cache_tools.py:
 - Line 114 computes `parents` once, and line 119 computes `leaves = [k for k in manifests if k not in parents]` once, both before the loop.
 - The loop at lines 128-140 only walks that fixed `leaves` list.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/cache_tools.py:114-140` where `leaves` was computed once upfront.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_cache_tools.py:test_clean_cache_iterative_leaf_pruning_on_delta_chains`.
+- **Planned fix**: Recompute eligible leaves iteratively inside a loop until `target_bytes` is reached or no unleased leaf remains; count `.json` manifest size in freed bytes.
+- **Regression test**: `macqwen/tests/test_cache_tools.py:test_clean_cache_iterative_leaf_pruning_on_delta_chains`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-07 — `macqwen/session.py` (L649-L661)
@@ -549,11 +549,11 @@ A user runs `python -m macqwen.cache_tools --clean --target-gb N` while the AGEN
 **Verification:** nit. Triggering condition: a user runs `python -m macqwen.cache_tools --clean ...` while a flashnext server owns the same prefix-cache directory.
 
 The mechanism holds. `clean_cache` (macqwen/cache_tools.py:91-149, a new file in this diff; the candidate's line 151 is right at the end of it) calls `(target_dir / f"{key}.safetensors").unlink(missing_ok=True)` and `(target_dir / f"{key}.json").unlink(missing_ok=True)` (lines 137-138) without ever calling `prefix_cache._claim_directory`. The prefix cache treats that lock as a hard rule.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/cache_tools.py:101-151` where deletions lacked directory ownership locking.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_cache_tools.py:test_clean_cache_respects_directory_ownership_lock`.
+- **Planned fix**: Claim directory ownership using `P._claim_directory(target_dir)` before deleting files, releasing it in a `finally` block, and returning error gracefully on `P.CacheOwnershipError`.
+- **Regression test**: `macqwen/tests/test_cache_tools.py:test_clean_cache_respects_directory_ownership_lock`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-09 — `macqwen/cache_tools.py` (L156-L158)
@@ -565,11 +565,11 @@ The documented maintenance command does not match the new tool's parser. docs/fl
 An operator whose SSD prefix cache has grown follows persistent_cache_design.md:96. argparse exits with status 2 ('unrecognized arguments: --cleanup --target-disk-gb 20') and nothing is cleaned, so the documented way to reclaim cache disk space never works. Fix: either accept the documented spellings (add `--cleanup`/`--target-disk-gb` as aliases) or correct the document, so that the documented command and the parser agree.
 
 **Verification:** nit — the condition is an operator running the cleanup command exactly as written in the design doc. The doc already exists at base 4458d8e5 and is not touched by this diff. Line 96 of docs/flashnext/persistent_cache_design.md reads `.venv/bin/python -m macqwen.cache_tools --cleanup --target-disk-gb 20 --max-age-days 7`. macqwen/cache_tools.py is new in this diff (`git show <base>:macqwen/cache_tools.py` returns "exists on disk, but not in" the base commit). Its parser defines only `parser.add_argument("--clean", ...)` (line 156) and `parser.add_argument("--target-gb", ...)` (line 158).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/cache_tools.py:156-158` where argparse lacked `--cleanup` and `--target-disk-gb` flags specified in documentation.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_cache_tools.py:test_cli_argument_aliases`.
+- **Planned fix**: Add `--cleanup` as an alias to `--clean`, and `--target-disk-gb` as an alias to `--target-gb` in `argparse`.
+- **Regression test**: `macqwen/tests/test_cache_tools.py:test_cli_argument_aliases`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-10 — `macqwen/session.py` (L1153-L1157)

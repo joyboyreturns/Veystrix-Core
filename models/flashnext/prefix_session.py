@@ -210,7 +210,14 @@ class PrefixSession:
         chosen = set(self.anchors(prompt))
         if boundary_mode() in ("chunks", "all"):
             chunk = prefill_module.chunk_tokens()
-            if chunk:
+            if prefill_module.chunk_policy() == "budgeted":
+                chosen.update(prefill_module.budgeted_edges(
+                    len(prompt),
+                    chunk or max(prefill_module.CANDIDATE_CHUNKS),
+                    prefill_module.chunk_budget_bytes(),
+                    self.anchors(prompt),
+                ))
+            elif chunk:
                 if prefill_module.chunk_policy() == "balanced":
                     # Every internal edge of the cold plan (they depend on the prompt's end and anchors).
                     chosen.update(prefill_module.balanced_edges(len(prompt), chunk, self.anchors(prompt)))

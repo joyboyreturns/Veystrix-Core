@@ -414,8 +414,11 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
     _uncache_reads_when_elevated(language, trace)
     if len(spans) == 1:
         began, active = time.perf_counter(), _active_memory()
-        result = _prefill_target(language, ids, cache, want_logits, want_hidden, sampler,
-                                 total_tokens=total + offset)
+        if offset > 0:
+            result = _prefill_target(language, ids, cache, want_logits, want_hidden, sampler,
+                                     total_tokens=total + offset)
+        else:
+            result = _prefill_target(language, ids, cache, want_logits, want_hidden, sampler)
         _measured(trace, offset, offset + total, time.perf_counter() - began, active)
         return result
     from models.flashnext import layer_major

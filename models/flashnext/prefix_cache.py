@@ -668,6 +668,7 @@ class PrefixCache:
         self._ram: OrderedDict[str, Entry] = OrderedDict()
         self._ram_bytes = 0
         self._disk: dict[str, dict] = {}              # key -> {"n", "parent", "bytes", "atime"}
+        self._foreign: dict[str, dict] = {}           # key -> {"bytes", "atime", "parent"}
         self._tokens: dict[str, tuple] = {}           # key -> full prefix tokens (for exact checks)
         self._plans: dict[str, tuple | None] = {}     # key -> chunk-plan provenance of the stored state
         self._lengths: set[int] = set()
@@ -692,9 +693,15 @@ class PrefixCache:
                 continue
             try:
                 manifest = read_manifest(self.directory, key)
-                if manifest.get("fingerprint") != self.fp or manifest.get("format") != FORMAT_VERSION:
-                    continue  # foreign or old snapshots are not ours to delete
                 data = self.directory / f"{key}.safetensors"
+                if manifest.get("fingerprint") != self.fp or manifest.get("format") != FORMAT_VERSION:
+                    size = data.stat().st_size if data.exists() else manifest.get("file_bytes", 0)
+                    self._foreign[key] = {
+                        "bytes": size,
+                        "atime": manifest_path.stat().st_mtime,
+                        "parent": manifest.get("parent"),
+                    }
+                    continue
                 if data.stat().st_size != manifest["file_bytes"]:
                     raise CorruptEntry("size")
                 self._disk[key] = {"n": manifest["n_tokens"], "parent": manifest["parent"],
@@ -792,11 +799,23 @@ class PrefixCache:
                           None)
             if victim is None:
                 break
-            entry = self._ram.pop(victim)
-            self._ram_bytes -= entry.nbytes()
-            self.stats.evicted_ram += 1
+            entry = self._ram[victim]
             if self.directory is not None and victim not in self._disk:
                 self._persist(entry)
+            if victim not in self._disk and self._has_resident_child(victim):
+                # Persistence failed/skipped and entry has resident children: cannot drop it without
+                # breaking the chain. Find an alternative non-parent victim.
+                victim = next((k for k in self._ram_order()
+                               if k != newest and k not in self._leases and not self._has_resident_child(k)),
+                              None)
+                if victim is None:
+                    break
+                entry = self._ram[victim]
+                if self.directory is not None and victim not in self._disk:
+                    self._persist(entry)
+            self._ram.pop(victim)
+            self._ram_bytes -= entry.nbytes()
+            self.stats.evicted_ram += 1
 
     # ---- leases ----
     def lease(self, keys):
@@ -834,11 +853,16 @@ class PrefixCache:
                     break
                 if key in self._leases:
                     continue
-                entry = self._ram.pop(key)
-                self._ram_bytes -= entry.nbytes()
-                self.stats.evicted_ram += 1
+                entry = self._ram[key]
                 if key not in self._disk:
                     self._persist(entry)
+                if key not in self._disk:
+                    # Could not persist to SSD (e.g. disk reserve limit or write error).
+                    # Do not discard snapshot or break chain for resident children.
+                    continue
+                self._ram.pop(key)
+                self._ram_bytes -= entry.nbytes()
+                self.stats.evicted_ram += 1
             return before - self._ram_bytes
 
     def _has_resident_child(self, key) -> bool:
@@ -855,12 +879,24 @@ class PrefixCache:
                     return
             except OSError:
                 pass
-        written = write_entry(self.directory, entry, self.fp)
-        self._disk[entry.key] = {"n": entry.n_tokens, "parent": entry.parent, "bytes": written,
-                                 "atime": time.time()}
-        self.stats.ssd_writes += 1
-        self.stats.ssd_bytes_written += written
-        self._evict_disk()
+        try:
+            written = write_entry(self.directory, entry, self.fp)
+            self._disk[entry.key] = {"n": entry.n_tokens, "parent": entry.parent, "bytes": written,
+                                     "atime": time.time()}
+            self.stats.ssd_writes += 1
+            self.stats.ssd_bytes_written += written
+            self._evict_disk()
+        except OSError:
+            self.stats.writes_skipped += 1
+
+    def _disk_total(self) -> int:
+        return sum(m["bytes"] for m in self._disk.values()) + sum(m["bytes"] for m in self._foreign.values())
+
+    def _foreign_victim(self):
+        """The foreign SSD entry to drop next, or None. Only a leaf (nothing chains to it); oldest first."""
+        parents = {m["parent"] for m in self._foreign.values()}
+        leaves = [k for k in self._foreign if k not in parents]
+        return min(leaves, key=lambda k: self._foreign[k]["atime"]) if leaves else None
 
     def _disk_victim(self):
         """The SSD entry to drop next, or None. Only a leaf (nothing chains to it) that is not leased; oldest first here."""
@@ -886,7 +922,14 @@ class PrefixCache:
     def _evict_disk(self) -> None:
         if not self.disk_budget:
             return
-        while sum(m["bytes"] for m in self._disk.values()) > self.disk_budget and len(self._disk) > 1:
+        while self._disk_total() > self.disk_budget and (self._foreign or len(self._disk) > 1):
+            victim = self._foreign_victim()
+            if victim is not None:
+                meta = self._foreign.pop(victim)
+                self._drop_files(victim)
+                self.stats.evicted_ssd += 1
+                self.stats.evicted_ssd_bytes += meta["bytes"]
+                continue
             victim = self._disk_victim()
             if victim is None:
                 break

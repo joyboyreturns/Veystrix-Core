@@ -451,7 +451,7 @@ class SafetyTests(Base):
         other = self.cache(fp=other_fp)
         other_ids, other_entry = self.snap(other, 1)
         size = self.entry_bytes()
-        again = self.cache(disk=int(size * 2.5))
+        again = self.cache(disk=int(size * 3.5))
         self.assertEqual(again.usage()["foreign_entries"], 1)
         self.assertTrue((self.dir / f"{other_entry.key}.safetensors").exists(), "another configuration's state is not deleted at startup")
         self.assertIsNone(self.hit(again, other_ids))
@@ -460,6 +460,11 @@ class SafetyTests(Base):
         self.assertEqual(again.usage()["foreign_entries"], 1)
         self.assertTrue((self.dir / f"{other_entry.key}.safetensors").exists())
         self.assertEqual(again.extra["foreign_evicted"], 0)
+        # When disk budget is exceeded, foreign snapshots are evicted first:
+        self.snap(again, 4)
+        self.assertEqual(again.usage()["foreign_entries"], 0)
+        self.assertFalse((self.dir / f"{other_entry.key}.safetensors").exists())
+        self.assertEqual(again.extra["foreign_evicted"], 1)
 
     def test_files_that_are_not_ours_are_never_touched_and_the_directory_is_refused_if_it_holds_them(self):
         self.dir.mkdir(parents=True)
