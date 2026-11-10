@@ -23,6 +23,20 @@ CHAT_POOL2_STOP = ROOT / "results/flashnext/20261108-first-chat-guard-stop/veyst
 ASSUMED_WIRED = int(1.9 * GIB)
 TOTAL = 16 * GIB
 
+
+class ConfiguredAgenticTierTests(unittest.TestCase):
+    def test_configured_context_and_cold_limit_are_assessed(self):
+        env = {"VEYSTRIX_MODE": "agentic", "VEYSTRIX_CONTEXT_LIMIT": "262144",
+               "VEYSTRIX_MAX_COLD_PREFILL": "32768", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048"}
+        tier, = R.active_tiers(env)
+        self.assertEqual((tier.context_limit, tier.max_cold_prefill), (262144, 32768))
+        self.assertEqual(tier.peak_bytes, R.cold_prefill_peak_bytes(32768, budgeted=True))
+
+    def test_unbounded_chunks_do_not_get_configured_tier(self):
+        env = {"VEYSTRIX_MODE": "agentic", "VEYSTRIX_CONTEXT_LIMIT": "262144",
+               "VEYSTRIX_MAX_COLD_PREFILL": "32768", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "0"}
+        self.assertNotEqual(R.active_tiers(env)[0].name, "configured")
+
 LIVE_VM_STAT = """Mach Virtual Memory Statistics: (page size of 16384 bytes)
 Pages free:                                   254557.
 Pages active:                                 248297.

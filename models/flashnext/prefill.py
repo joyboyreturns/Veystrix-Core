@@ -194,8 +194,12 @@ def plan_chunks(total: int, chunk: int, boundaries=(), offset: int = 0, policy=N
 
 def _prefill_chunk(language, ids, cache) -> None:
     """Run one non-final chunk: advance every cache, keep nothing else."""
+    from models.flashnext import flight_recorder
+    flight_recorder.record("prefill_forward_begin", tokens=int(ids.shape[1]), final=False)
     output = language(ids, cache=cache, return_hidden=True, skip_logits=True)
+    flight_recorder.record("prefill_state_eval_begin", final=False)
     mx.eval([entry.state for entry in cache])
+    flight_recorder.record("prefill_state_eval_end", final=False)
     output = None
     if PREFILL_CLEAR_CACHE:
         mx.clear_cache()
@@ -243,12 +247,17 @@ def _prefill_target(
     if want_hidden:
         call["capture_layer_ids"] = []
     # ``forward`` replaces the model call when the layers already ran (layer-major order): it returns the same output object.
+    from models.flashnext import flight_recorder
+    flight_recorder.record("prefill_forward_begin", tokens=int(ids.shape[1]), final=True, full_logits=full_logits)
     output = language(ids, **call) if forward is None else forward(**call)
+    flight_recorder.record("prefill_forward_end", final=True)
     logits = output.logits if full_logits else None
     hidden_states = output.hidden_states if (want_hidden or not full_logits) else None
 
     if full_logits:
+        flight_recorder.record("prefill_logits_eval_begin")
         mx.eval(logits)
+        flight_recorder.record("prefill_logits_eval_end")
         if hidden_states:
             mx.eval(hidden_states)
         token = pick(logits[:, -1, :])
@@ -266,6 +275,7 @@ def _prefill_target(
             mx.clear_cache()
     else:
         last_hidden = hidden_states[-1][:, -1:]
+        flight_recorder.record("prefill_projection_begin", sampler=sampler is not None)
         if sampler is None:
             # The fused head skips materialising logits, which is why this
             # path exists. Only a sampler needs them, and only for the final
@@ -276,7 +286,9 @@ def _prefill_target(
         else:
             final_logits = language.speculative_logits_from_hidden(last_hidden)
             token = pick(final_logits)
+        flight_recorder.record("prefill_token_state_eval_begin")
         mx.eval(token, [entry.state for entry in cache])
+        flight_recorder.record("prefill_token_state_eval_end")
         if _LOGITS_HOOK[0] is not None:
             if sampler is None:
                 raise RuntimeError("layer gate requires the actual sampler logits")
@@ -304,6 +316,7 @@ def _prefill_target(
     else:
         retained_logits = None
     retained_hidden = hidden_states if want_hidden else None
+    flight_recorder.record("prefill_target_return")
     return retained_logits, retained_hidden, token
 
 
@@ -433,16 +446,20 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
         spans = plan_chunks(total, chunk, boundaries, offset, anchors=anchors) or [(0, total)]
     if trace is not None:
         trace.planned_edges = [offset + e for _, e in spans[:-1]]
+    from models.flashnext import flight_recorder
+    flight_recorder.record("prefill_plan", offset=offset, total=total, spans=[[offset + a, offset + b] for a, b in spans])
     # A short tool-result prefill is one span and has no chunk edge, and it skips the F_NOCACHE ring (under 512 tokens).
     # If the controller is still ELEVATED or RECOVERING from the previous turn, start it with uncached reads.
     _uncache_reads_when_elevated(language, trace)
     if len(spans) == 1:
         began, active = time.perf_counter(), _active_memory()
+        flight_recorder.record("prefill_chunk_begin", start=offset, end=offset + total, final=True)
         if offset > 0:
             result = _prefill_target(language, ids, cache, want_logits, want_hidden, sampler,
                                      total_tokens=total + offset)
         else:
             result = _prefill_target(language, ids, cache, want_logits, want_hidden, sampler)
+        flight_recorder.record("prefill_chunk_end", start=offset, end=offset + total, seconds=round(time.perf_counter() - began, 3))
         _measured(trace, offset, offset + total, time.perf_counter() - began, active)
         return result
     from models.flashnext import layer_major
@@ -455,8 +472,10 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
     index = 0
     while index < len(spans) - 1:
         start, end = spans[index]
+        flight_recorder.record("prefill_chunk_begin", start=offset + start, end=offset + end, final=False)
         began, active = time.perf_counter(), _active_memory()
         _prefill_chunk(language, ids[:, start:end], cache)
+        flight_recorder.record("prefill_chunk_end", start=offset + start, end=offset + end, seconds=round(time.perf_counter() - began, 3))
         seconds = time.perf_counter() - began
         if trace is not None:
             trace.edges.append(offset + end)
@@ -487,9 +506,11 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
                                             "pressure": data["pressure"]})
         index += 1
     start, end = spans[-1]
+    flight_recorder.record("prefill_chunk_begin", start=offset + start, end=offset + end, final=True)
     began, active = time.perf_counter(), _active_memory()
     result = _prefill_target(language, ids[:, start:end], cache, want_logits, want_hidden, sampler,
                              total_tokens=total + offset)
+    flight_recorder.record("prefill_chunk_end", start=offset + start, end=offset + end, seconds=round(time.perf_counter() - began, 3))
     _log_chunk(offset + start, offset + end, time.perf_counter() - began, None)
     _measured(trace, offset + start, offset + end, time.perf_counter() - began, active)
     return result

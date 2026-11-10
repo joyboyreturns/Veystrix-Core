@@ -96,6 +96,18 @@ class TestPhase3Remediations(unittest.TestCase):
             self.assertIn("e" * 64, cache._ram)
             self.assertNotIn("e" * 64, cache._disk)
 
+    def test_r2_06_evict_ram_retains_unpersisted_leaf(self):
+        cache = P.PrefixCache("testfp" + "0" * 26, ram_budget=1,
+                              directory=self.cache_dir, min_disk_free_bytes=10**15)
+        leaf = make_dummy_entry("l" * 64, n_tokens=10, parent=None)
+        newest = make_dummy_entry("n" * 64, n_tokens=20, parent=None)
+        with mock.patch("shutil.disk_usage", return_value=mock.Mock(free=100)):
+            cache._admit(leaf)
+            cache._admit(newest)
+        self.assertIn(leaf.key, cache._ram)
+        self.assertNotIn(leaf.key, cache._disk)
+        self.assertEqual(cache._ram_bytes, sum(e.nbytes() for e in cache._ram.values()))
+
     def test_r2_07_prefix_cache_evicts_foreign_leaves_first(self):
         """R2-07: Base PrefixCache tracks foreign manifests and reclaims them first on disk over-budget."""
         fp = "testfp" + "0" * 26

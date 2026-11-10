@@ -317,9 +317,12 @@ class PrefixSession:
                 return
             # Chain each snapshot to the previous one (or to the restored hit) so KV is stored once.
             stored = time.perf_counter()
+            from models.flashnext import flight_recorder
+            flight_recorder.record("prefix_snapshot_begin", position=position)
             entry = store.put(prompt[:position], cache if frozen is None else frozen, parent=last[-1] if last else hit, language=language,
                               plan=history(position),
                               kind="system" if position == system else None)
+            flight_recorder.record("prefix_snapshot_end", position=position, seconds=round(time.perf_counter() - stored, 3))
             report.snapshot_seconds += time.perf_counter() - stored
             held.enter_context(store.lease((entry.key,)))   # the next snapshot chains to it: keep it until we finish
             last.append(entry)

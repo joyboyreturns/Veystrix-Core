@@ -802,17 +802,21 @@ class PrefixCache:
             entry = self._ram[victim]
             if self.directory is not None and victim not in self._disk:
                 self._persist(entry)
-            if victim not in self._disk and self._has_resident_child(victim):
-                # Persistence failed/skipped and entry has resident children: cannot drop it without
-                # breaking the chain. Find an alternative non-parent victim.
-                victim = next((k for k in self._ram_order()
-                               if k != newest and k not in self._leases and not self._has_resident_child(k)),
-                              None)
+            if victim not in self._disk:
+                # A failed spill is not durable, even for a leaf. Keep it and try
+                # other candidates once; never silently discard the only copy.
+                candidates = [k for k in self._ram_order()
+                              if k != newest and k != victim and k not in self._leases]
+                victim = None
+                for key in candidates:
+                    candidate = self._ram[key]
+                    if self.directory is not None and key not in self._disk:
+                        self._persist(candidate)
+                    if key in self._disk:
+                        victim, entry = key, candidate
+                        break
                 if victim is None:
                     break
-                entry = self._ram[victim]
-                if self.directory is not None and victim not in self._disk:
-                    self._persist(entry)
             self._ram.pop(victim)
             self._ram_bytes -= entry.nbytes()
             self.stats.evicted_ram += 1

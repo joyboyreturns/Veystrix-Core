@@ -109,7 +109,7 @@ class Tier:
 
     @property
     def peak_bytes(self) -> int:
-        return cold_prefill_peak_bytes(self.max_cold_prefill)
+        return cold_prefill_peak_bytes(self.max_cold_prefill, budgeted=True if self.name == "configured" else None)
 
 
 TIERS = (Tier("standard", 8192, 4096), Tier("compact", 2048, 1536), Tier("minimal", 1536, 1024))
@@ -140,6 +140,18 @@ def required_context(environ=None) -> int | None:
 def active_tiers(environ=None) -> tuple:
     """The tiers admission may choose from, largest first: TIERS plus the long tier under the budgeted plan, restricted to
     tiers whose context serves a stated requirement (if none does, the largest tier, so the refusal reports the real gap)."""
+    env = os.environ if environ is None else environ
+    # Agentic requests use bounded chunks. Assess the configured workload as a
+    # whole instead of silently substituting an unrelated legacy context tier.
+    # The estimate includes KV growth and remains subject to the normal gate.
+    try:
+        context = int(env.get("VEYSTRIX_CONTEXT_LIMIT", "0"))
+        cold = int(env.get("VEYSTRIX_MAX_COLD_PREFILL", "0"))
+        chunk = int(env.get("FLASHNEXT_PREFILL_CHUNK_TOKENS", "0"))
+    except ValueError:
+        context = cold = chunk = 0
+    if env.get("VEYSTRIX_MODE") == "agentic" and context > 0 and cold > 0 and 0 < chunk <= 2048:
+        return (Tier("configured", context, cold),)
     tiers = (LONG_TIER, MID_TIER, *TIERS) if budgeted_plan_active(environ) else TIERS
     need = required_context(environ)
     if need:

@@ -977,6 +977,8 @@ class FlashNextBackend(Conversation):
         finally:
             set_prefill_progress(None)
         prefill_seconds = time.perf_counter() - prefill_began
+        from models.flashnext import flight_recorder
+        flight_recorder.record("prefill_backend_return", seconds=round(prefill_seconds, 3))
         if gate_probe is not None:
             try:
                 gate_probe.prefilled(self, token, prefill_seconds)
@@ -1004,6 +1006,7 @@ class FlashNextBackend(Conversation):
         timer = DecodeTimer()
         finish = "length"
         self.routing.begin_decode()
+        flight_recorder.record("decode_enter")
         if decoder is not None:
             decoder.set_route_observer(self.routing._observe)
 
