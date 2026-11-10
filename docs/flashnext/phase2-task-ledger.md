@@ -29,3 +29,4 @@ Regression commands: `.venv/bin/python -m unittest discover -s macqwen/tests -t 
 - [~] 8K-after-turns gate, second attempt: preflight passed, server admission refused the first short request (4.94 GiB available vs 6.26 GiB required). Needs a measured full-routing footprint before any change to the admission constants, or the gate must run on the reference server.
 - [x] Full-routing paired 8K prefill: layer-major 1.70-1.84x faster than chunk-major, identical digest in 3/3 pairs, swap peak 1.62 GiB. Engine memory policy is now swap-only at 3 GiB (admission, margin, 8K harness gates removed).
 - [ ] Open: 8K-after-turns session on layer-major, real two-session cache restoration TTFT, Qwen Code / DeepSeek Harness sessions, 16K, decode GPU split, speculation.
+- [x] 8K-after-turns on layer-major completed under swap-only: peak swap 1,353 MiB, cold 8,139 tokens, 0 cached. Not yet: long-decode-then-8K, cancel/restart cleanup, repeat runs.
