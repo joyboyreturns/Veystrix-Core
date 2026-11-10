@@ -26,7 +26,7 @@ jobs:
       - name: Test Flash-Next runtime
         run: python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py' -q
       - name: Test Nemotron runtime (synthetic, model-free)
-        run: python -m unittest models.nemotron35.test_synthetic models.nemotron35.test_real_layout models.nemotron35.test_backend models.nemotron35.test_full_size_structure models.nemotron35.test_template_parity -q
+        run: python -m unittest models.nemotron35.tests.unit.test_synthetic models.nemotron35.tests.unit.test_real_layout models.nemotron35.tests.unit.test_backend models.nemotron35.tests.unit.test_full_size_structure models.nemotron35.tests.unit.test_template_parity -q
       - name: Secret scan
         run: python scripts/security/secret_scan.py
 

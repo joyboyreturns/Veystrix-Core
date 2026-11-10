@@ -2,8 +2,8 @@
 import unittest
 import mlx.core as mx
 import numpy as np
-from .model import make_synthetic_model
-from .config import ConfigurationError, inspect_checkpoint
+from models.nemotron35.model import make_synthetic_model
+from models.nemotron35.config import ConfigurationError, inspect_checkpoint
 
 class SyntheticModelTests(unittest.TestCase):
     def test_missing_checkpoint_fails_without_network(self):
@@ -23,7 +23,7 @@ class SyntheticModelTests(unittest.TestCase):
     def test_snapshot_restore_and_prefix_mismatch(self):
         import tempfile
         from pathlib import Path
-        from .state import save, restore, SnapshotError
+        from models.nemotron35.state import save, restore, SnapshotError
         model = make_synthetic_model()
         cache = model.make_cache()
         model(mx.array([[1, 2, 3]], dtype=mx.int32), cache=cache)
@@ -55,7 +55,7 @@ class SyntheticStorageTests(unittest.TestCase):
     def test_expert_reads_lru_and_corruption(self):
         import hashlib, tempfile
         from pathlib import Path
-        from .expert_store import ExpertStore
+        from models.nemotron35.expert_store import ExpertStore
         a, b = b'1234', b'abcd'
         sha = lambda data: hashlib.sha256(data).hexdigest()
         with tempfile.TemporaryDirectory() as root:
@@ -128,7 +128,7 @@ class ReferenceMathTests(unittest.TestCase):
 
 class SyntheticRuntimeTests(unittest.TestCase):
     def test_generate_and_cancel_clear_hybrid_state(self):
-        from .runtime import SyntheticRuntime, Cancelled
+        from models.nemotron35.runtime import SyntheticRuntime, Cancelled
         runtime = SyntheticRuntime(make_synthetic_model())
         logits = runtime.prefill([1, 2, 3, 4], chunk_size=2)
         output = runtime.greedy_decode(logits, 3)
@@ -141,7 +141,7 @@ class SyntheticRuntimeTests(unittest.TestCase):
 
 class MemoryPlanningTests(unittest.TestCase):
     def test_budget_counts_recurrent_kv_and_fails_closed(self):
-        from .memory import estimate, require_budget
+        from models.nemotron35.memory import estimate, require_budget
         config = dict(layers_block_type=['mamba', 'attention'], mamba_num_heads=4,
                       mamba_head_dim=4, ssm_state_size=32, n_groups=2, conv_kernel=4,
                       num_key_value_heads=2, head_dim=4)
@@ -182,8 +182,8 @@ class StreamingExpertsTests(unittest.TestCase):
     def test_ssd_affine_experts_match_resident_quantized_computation(self):
         import hashlib, tempfile
         from pathlib import Path
-        from .expert_store import ExpertStore
-        from .streaming_moe import StreamedExperts
+        from models.nemotron35.expert_store import ExpertStore
+        from models.nemotron35.streaming_moe import StreamedExperts
         import mlx.nn as nn
         rng = np.random.default_rng(42)
         records, specs, raw = {}, {}, bytearray()
@@ -234,7 +234,7 @@ class StreamingExpertsTests(unittest.TestCase):
             step = mx.concatenate([model(tokens[:, i:i+1], cache=step_cache) for i in range(4)], axis=1)
             mx.eval(full, step)
             np.testing.assert_allclose(np.asarray(full), np.asarray(step), atol=1e-4, rtol=1e-4)
-            from .hybrid import StreamingHybrid
+            from models.nemotron35.hybrid import StreamingHybrid
             hybrid = StreamingHybrid(model.args, lambda layer: streamed)
             # No upstream resident SwitchMLP or routed expert weight arrays are constructed.
             self.assertEqual([layer.kind for layer in hybrid.layers], ["M", "*", "E"])
@@ -263,7 +263,7 @@ class LocalCheckpointFixtureTests(unittest.TestCase):
     def test_tiny_checkpoint_loads_dense_and_streams_experts(self):
         import tempfile
         from pathlib import Path
-        from .fixture import create_fixture, load_fixture
+        from models.nemotron35.fixture import create_fixture, load_fixture
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'fixture'
             original = create_fixture(path)
@@ -282,7 +282,7 @@ class SyntheticAdapterTests(unittest.TestCase):
         from pathlib import Path
         from veystrix.backends.base import GenerationCancelled
         from veystrix.backends.nemotron35 import SyntheticBackend
-        from .fixture import create_fixture
+        from models.nemotron35.fixture import create_fixture
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'fixture'
             create_fixture(path)
@@ -320,7 +320,7 @@ class CliSafetyTests(unittest.TestCase):
 
 class CheckpointMetadataTests(unittest.TestCase):
     def test_exact_architecture_and_wrong_order(self):
-        from .config import EXPECTED, LAYER_ORDER, validate_config, ConfigurationError
+        from models.nemotron35.config import EXPECTED, LAYER_ORDER, validate_config, ConfigurationError
         config = dict(EXPECTED, layers_block_type=list(LAYER_ORDER))
         validate_config(config)
         config["layers_block_type"][0], config["layers_block_type"][1] = config["layers_block_type"][1], config["layers_block_type"][0]
@@ -328,7 +328,7 @@ class CheckpointMetadataTests(unittest.TestCase):
             validate_config(config)
 
     def test_nvfp4_is_not_silently_treated_as_affine(self):
-        from .config import EXPECTED, LAYER_ORDER, validate_config, ConfigurationError
+        from models.nemotron35.config import EXPECTED, LAYER_ORDER, validate_config, ConfigurationError
         config = dict(EXPECTED, layers_block_type=list(LAYER_ORDER), quantization_config={"format": "NVFP4"})
         with self.assertRaisesRegex(ConfigurationError, "NVFP4"):
             validate_config(config)
@@ -337,7 +337,7 @@ class SafeTensorIndexTests(unittest.TestCase):
     def test_metadata_offsets_and_path_rejection_without_tensor_loading(self):
         import tempfile
         from pathlib import Path
-        from .safetensors_index import index_shard, IndexError
+        from models.nemotron35.safetensors_index import index_shard, IndexError
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'weights.safetensors'
             mx.save_safetensors(str(path), {'a': mx.array([[1.0, 2.0]])})
@@ -352,7 +352,7 @@ class SafeTensorIndexTests(unittest.TestCase):
     def test_sharded_index_validates_tensor_membership(self):
         import json, tempfile
         from pathlib import Path
-        from .safetensors_index import index_checkpoint, IndexError
+        from models.nemotron35.safetensors_index import index_checkpoint, IndexError
         with tempfile.TemporaryDirectory() as root:
             path = Path(root)
             mx.save_safetensors(str(path / 'model-1.safetensors'), {'layer.expert.weight': mx.ones((2, 2))})
@@ -367,7 +367,7 @@ class AffineCheckpointIndexTests(unittest.TestCase):
     def test_per_expert_affine_tensors_read_from_safetensors(self):
         import json, tempfile
         from pathlib import Path
-        from .affine_index import AffineExpertIndex
+        from models.nemotron35.affine_index import AffineExpertIndex
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
             matrices = [mx.array(np.arange(1024, dtype=np.float32).reshape(32, 32) / 1000)] * 2
@@ -388,7 +388,7 @@ class AffineCheckpointIndexTests(unittest.TestCase):
                 np.testing.assert_array_equal(np.asarray(value), np.asarray(actual[name]))
             with self.assertRaisesRegex(ValueError, 'missing'):
                 index.read(1, 1)
-            from .streaming_moe import IndexedAffineExperts
+            from models.nemotron35.streaming_moe import IndexedAffineExperts
             streamed = IndexedAffineExperts(index, layer=1, max_resident_bytes=100000)
             x = mx.ones((1, 2, 32))
             output = streamed(x, mx.array([[[0], [0]]]))
@@ -404,7 +404,7 @@ class AffineCheckpointIndexTests(unittest.TestCase):
     def test_half_precision_affine_metadata_round_trips(self):
         import json, tempfile
         from pathlib import Path
-        from .affine_index import AffineExpertIndex
+        from models.nemotron35.affine_index import AffineExpertIndex
         for precision in (mx.float16, mx.bfloat16):
             with self.subTest(precision=precision), tempfile.TemporaryDirectory() as root:
                 root = Path(root)
@@ -426,8 +426,8 @@ class StackedCheckpointTests(unittest.TestCase):
     def test_selective_slice_and_streamed_compute(self):
         import json, tempfile
         from pathlib import Path
-        from .affine_index import StackedAffineExpertIndex
-        from .streaming_moe import IndexedAffineExperts
+        from models.nemotron35.affine_index import StackedAffineExpertIndex
+        from models.nemotron35.streaming_moe import IndexedAffineExperts
         import mlx.nn as nn
         rng = np.random.default_rng(42)
         fields = {}
@@ -463,10 +463,10 @@ class CheckpointCompletenessTests(unittest.TestCase):
     def test_missing_shard_is_reported_without_loading_weights(self):
         import json, tempfile
         from pathlib import Path
-        from .config import EXPECTED, LAYER_ORDER, inspect_checkpoint, ConfigurationError
+        from models.nemotron35.config import EXPECTED, LAYER_ORDER, inspect_checkpoint, ConfigurationError
         with tempfile.TemporaryDirectory() as root:
             path = Path(root)
-            from .inventory import expected_tensors
+            from models.nemotron35.inventory import expected_tensors
             config = dict(EXPECTED, layers_block_type=list(LAYER_ORDER), vocab_size=131072,
                           quantization={'group_size': 64, 'bits': 4, 'mode': 'affine'})
             names = list(expected_tensors(config))

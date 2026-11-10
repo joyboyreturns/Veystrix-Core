@@ -1,6 +1,6 @@
 # Benchmark plan — not run
 
-`python -m models.nemotron35.benchmark_plan` prints the target matrix without loading models or running a benchmark. Implement a measurement runner only after the loader, safe offload and instrumentation exist. Follow `docs/measurement-standard.md`: same machine, full-quality routing, fresh-process paired alternating order, identical prompts/sampling, explicit cold/warm storage and cache conditions, thermal/power observations, and no simultaneous model residency.
+`python -m models.nemotron35.tests.bench.benchmark_plan` prints the target matrix without loading models or running a benchmark. Implement a measurement runner only after the loader, safe offload and instrumentation exist. Follow `docs/measurement-standard.md`: same machine, full-quality routing, fresh-process paired alternating order, identical prompts/sampling, explicit cold/warm storage and cache conditions, thermal/power observations, and no simultaneous model residency.
 
 Measure 1K/4K/8K/16K/32K cold and warm prefill, TTFT, 128 and 512 decode tokens, context growth, physical SSD bytes/token, pool hit/miss, GPU versus I/O time, unified memory, swap and pressure, thermal throttling, Hermes tool latency and successful coding tasks/hour. Record successful-task semantics as well as speed.
 

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from models.nemotron35.tiny_checkpoint import permissive_config_check, write_checkpoint
-from models.nemotron35.test_backend import StubTokenizer, machine
+from models.nemotron35.tests.unit.test_backend import StubTokenizer, machine
 from veystrix import preferences, server as S
 from veystrix.backends.nemotron35 import NemotronBackend
 from veystrix.scheduler import Scheduler

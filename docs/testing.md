@@ -61,7 +61,7 @@ Unit tests, per tree:
 ```
 
 Nemotron's model-free tests run as modules:
-`.venv/bin/python -m unittest models.nemotron35.test_synthetic models.nemotron35.test_real_layout models.nemotron35.test_backend models.nemotron35.test_full_size_structure models.nemotron35.test_template_parity`.
+`.venv/bin/python -m unittest models.nemotron35.tests.unit.test_synthetic models.nemotron35.tests.unit.test_real_layout models.nemotron35.tests.unit.test_backend models.nemotron35.tests.unit.test_full_size_structure models.nemotron35.tests.unit.test_template_parity`.
 Always pass `-t .` to `discover`, so imports resolve from the repository root.
 
 Live tests, through the one test terminal:
