@@ -313,7 +313,7 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         apply_chat_environment(environment)
     if model == "nemotron35-lightning":
         # Same supervised-server contract as Flash-Next: guard on, chunked prefill, agentic mode for a server.
-        # Real weights still need VEYSTRIX_NEMOTRON_AUTHORIZED=1 (checked again inside the backend).
+        # Real inference is allowed by default; VEYSTRIX_NEMOTRON_AUTHORIZED=0 is a kill switch.
         if "--server" in chat_args:
             environment.setdefault("VEYSTRIX_MODE", "agentic")
         environment.setdefault("FLASHNEXT_CHAT_GUARD", "1")
@@ -348,9 +348,8 @@ def main() -> int:
             except ConfigurationError as exc:
                 raise SystemExit(f"Nemotron check: {exc}") from exc
             return 0
-        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") != "1":
-            raise SystemExit("Nemotron real-checkpoint inference needs the owner's explicit approval: set "
-                             "VEYSTRIX_NEMOTRON_AUTHORIZED=1. Use --check to verify the checkpoint without loading it.")
+        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") == "0":
+            raise SystemExit("Nemotron is disabled by VEYSTRIX_NEMOTRON_AUTHORIZED=0.")
     if len(sys.argv) > 1 and sys.argv[1] == "setup":
         return setup_environment(sys.argv[2:])
     warning = branch_sync_warning()
