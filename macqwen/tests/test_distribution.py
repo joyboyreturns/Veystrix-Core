@@ -52,6 +52,14 @@ class DistributionTests(unittest.TestCase):
         self.assertIn("tags: ['v*']", release)
         self.assertIn("needs: test", release)
         self.assertIn("gh release create", release)
+        # Publishing is gated: an approval environment, a token scoped to the PUBLIC repo, and a signed-only condition.
+        self.assertIn("environment: release", release)
+        self.assertIn("-R joyboyreturns/Veystrix", release)
+        self.assertIn("needs.build.outputs.signed == 'true'", release)
+        self.assertIn("PUBLIC_RELEASES_TOKEN", release)
+        self.assertNotIn("github.token", release)            # the default token must never publish
+        self.assertIn("development3.81", ci)
+        self.assertIn("swift test", ci)
 
 
 if __name__ == "__main__":

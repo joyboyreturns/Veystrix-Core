@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, development3.8]
+    branches: [main, development3.8, development3.81]
   pull_request:
   workflow_dispatch:
 
@@ -31,3 +31,15 @@ jobs:
         run: python -m unittest discover -s models/k2_horizon/tests/unit -t . -p 'test_*.py' -q
       - name: Test Bonsai-2 runtime
         run: python -m unittest discover -s models/bonsai2/tests/unit -t . -p 'test_*.py' -q
+      - name: Secret scan
+        run: python scripts/security/secret_scan.py
+
+  app:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test the macOS app logic (no engine, no model)
+        run: swift test --package-path apps/macos/Veystrix
+      - name: Build the app (development, ad-hoc signed)
+        run: packaging/macos/build_app.sh

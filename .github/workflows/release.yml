@@ -1,5 +1,15 @@
 name: Release
 
+# Tag v* in THIS (private) repository -> test -> build + sign + notarize -> publish to the PUBLIC repository's Releases.
+# Nothing is published unless every signing secret is present; otherwise the run ends with a clearly labelled
+# development artifact (kept 7 days as a workflow artifact, never attached to a public release).
+# Required secrets live in the `release` environment (add required reviewers there):
+#   VEYSTRIX_DEVID_P12_BASE64, VEYSTRIX_DEVID_P12_PASSWORD, VEYSTRIX_SIGN_IDENTITY,
+#   VEYSTRIX_NOTARY_APPLE_ID, VEYSTRIX_NOTARY_TEAM_ID, VEYSTRIX_NOTARY_PASSWORD,
+#   VEYSTRIX_SPARKLE_PRIVATE_KEY, VEYSTRIX_SPARKLE_PUBLIC_KEY,
+#   PUBLIC_RELEASES_TOKEN  (fine-grained PAT: ONLY repository joyboyreturns/Veystrix, ONLY Contents: read/write)
+# See docs/release/RELEASE_PROCESS.md.
+
 on:
   push:
     tags: ['v*']
@@ -10,7 +20,7 @@ permissions:
 jobs:
   test:
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -29,18 +39,110 @@ jobs:
         run: python -m unittest discover -s models/k2_horizon/tests/unit -t . -p 'test_*.py' -q
       - name: Test Bonsai-2 runtime
         run: python -m unittest discover -s models/bonsai2/tests/unit -t . -p 'test_*.py' -q
+      - name: Test the macOS app logic
+        run: swift test --package-path apps/macos/Veystrix
+      - name: Secret scan
+        run: python scripts/security/secret_scan.py
 
-  release:
+  build:
     needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    outputs:
+      signed: ${{ steps.mode.outputs.signed }}
+    env:
+      VEYSTRIX_SIGN_IDENTITY: ${{ secrets.VEYSTRIX_SIGN_IDENTITY }}
+      VEYSTRIX_SPARKLE_PUBLIC_KEY: ${{ secrets.VEYSTRIX_SPARKLE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v7
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Tag must match the project version
         run: |
           VERSION=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
           test "$GITHUB_REF_NAME" = "v$VERSION"
-          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+      - name: Decide signed release or development artifact
+        id: mode
+        env:
+          HAVE_P12: ${{ secrets.VEYSTRIX_DEVID_P12_BASE64 != '' }}
+          HAVE_NOTARY: ${{ secrets.VEYSTRIX_NOTARY_PASSWORD != '' }}
+          HAVE_SPARKLE: ${{ secrets.VEYSTRIX_SPARKLE_PRIVATE_KEY != '' && secrets.VEYSTRIX_SPARKLE_PUBLIC_KEY != '' }}
+          HAVE_TOKEN: ${{ secrets.PUBLIC_RELEASES_TOKEN != '' }}
+        run: |
+          if [ "$HAVE_P12" = true ] && [ "$HAVE_NOTARY" = true ] && [ "$HAVE_SPARKLE" = true ] && [ "$HAVE_TOKEN" = true ] && [ -n "$VEYSTRIX_SIGN_IDENTITY" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Signing, notarization, update-key or publish credentials are missing. Building a DEVELOPMENT artifact only; public distribution is BLOCKED."
+            echo "VEYSTRIX_SIGN_IDENTITY=" >> "$GITHUB_ENV"
+          fi
+      - name: Import Developer ID certificate into a temporary keychain
+        if: steps.mode.outputs.signed == 'true'
+        env:
+          P12: ${{ secrets.VEYSTRIX_DEVID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.VEYSTRIX_DEVID_P12_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/veystrix.keychain-db"; KCPW="$(uuidgen)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KCPW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          xcrun notarytool store-credentials VEYSTRIX_NOTARY --apple-id "${{ secrets.VEYSTRIX_NOTARY_APPLE_ID }}" \
+            --team-id "${{ secrets.VEYSTRIX_NOTARY_TEAM_ID }}" --password "${{ secrets.VEYSTRIX_NOTARY_PASSWORD }}" --keychain "$KC"
+      - name: Build engine bundle
+        run: packaging/engine/build_engine_bundle.sh dist/engine
+      - name: Build, sign, package${{ steps.mode.outputs.signed == 'true' && ' and notarize' || ' (development)' }}
+        run: |
+          if [ "${{ steps.mode.outputs.signed }}" = true ]; then
+            packaging/macos/make_release.sh --engine dist/engine --notarize
+          else
+            packaging/macos/make_release.sh --engine dist/engine
+          fi
+      - name: Update feed (EdDSA) and validation
+        if: steps.mode.outputs.signed == 'true'
+        env:
+          VEYSTRIX_SPARKLE_PRIVATE_KEY: ${{ secrets.VEYSTRIX_SPARKLE_PRIVATE_KEY }}
+        run: |
+          mkdir -p dist/feed && cp dist/Veystrix-*-arm64.zip dist/feed/
+          packaging/macos/make_appcast.sh dist/feed "$GITHUB_REF_NAME"
+      - name: Upload release candidate (workflow artifact; not public)
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.mode.outputs.signed == 'true' && 'veystrix-release-candidate' || 'veystrix-DEV-UNSIGNED-do-not-distribute' }}
+          path: |
+            dist/Veystrix-*.dmg
+            dist/Veystrix-*.zip
+            dist/SHA256SUMS.txt
+            dist/feed/appcast.xml
+          retention-days: 7
+
+  publish:
+    needs: build
+    if: needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: veystrix-release-candidate
+          path: out
+      - name: Publish GitHub Release in the PUBLIC repository
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASES_TOKEN }}     # fine-grained, scoped to the public repo only
+        run: |
+          set -e
+          cd out
+          shasum -a 256 -c SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" -R joyboyreturns/Veystrix --title "Veystrix ${GITHUB_REF_NAME#v}" \
+            --notes-file ../docs/release/RELEASE_NOTES_TEMPLATE.md --draft \
+            Veystrix-*.dmg Veystrix-*.zip SHA256SUMS.txt
+          echo "Draft release created in joyboyreturns/Veystrix. Review it, then publish it and commit updates/appcast.xml to the public repo."
