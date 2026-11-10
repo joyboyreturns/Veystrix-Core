@@ -28,6 +28,12 @@ Not released. No hardware validation was done for these changes: no model was lo
   conditional `sudo -n purge`, refused only under pressure), auto-warm for `--overnight` (one prefix, own state), pool /
   prefetch / prefix-cache / readiness telemetry in `/health` (`engine`), and `python -m models.nemotron35.verify_real`
   (layer-at-a-time stock reference vs the streamed engine on the real checkpoint). Decode is ~3 tok/s and compute-bound.
+- **Statistics** page in the desktop app: lifetime (not per-session) totals per model and overall: requests, input,
+  cached, uncached and output tokens, total tokens, time spent answering (prefill/decode), time the model was loaded, cache
+  hit rate and average decode/prefill speed, with All time / Today / 7 / 30 day views. The engine appends one counts-only line
+  per finished request to `~/Library/Application Support/Veystrix/usage/requests.jsonl` (`VEYSTRIX_USAGE_LOG` overrides the
+  path, `=0` turns it off; no prompt or answer text is stored; files rotate to archives and are never deleted except by
+  "Reset Statistics"). Automatic warm-up requests are left out by default. Requests made before this feature are not counted.
 - Native macOS app (`apps/macos/Veystrix`), packaging and release automation, Sparkle 2 update
   support, Hermes Agent integration and test mocks, security and license audits.
 

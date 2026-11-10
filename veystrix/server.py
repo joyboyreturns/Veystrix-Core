@@ -39,6 +39,7 @@ from veystrix.sessions import (
 )
 from veystrix.backends.base import GenerationCancelled
 from veystrix import effort_slot
+from veystrix import usage_log
 from veystrix import warm as warm_module
 from models.flashnext import flight_recorder
 
@@ -1625,6 +1626,7 @@ class ModelService:
                         )
                 except Exception:
                     pass
+            usage_log.record_request(self, stats, time.perf_counter() - began, usage_counts)
             _log_request(backend, stats, time.perf_counter() - began,
                          first[0] if first else None, text.count("<tool_call>"), began, text=text,
                          extra={"context_budget": self.last_budget, "divergence": self.last_divergence,
@@ -1984,6 +1986,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             self._error("invalid API key", 401, "invalid_api_key")
             return
         self._sse_open = False
+        usage_log.set_warm(self.headers.get(warm_module.WARM_HEADER, "") == "1")   # warm-ups are counted apart
         self._ignored_fields = None
         self._reasoning = None
         path = urlsplit(self.path).path

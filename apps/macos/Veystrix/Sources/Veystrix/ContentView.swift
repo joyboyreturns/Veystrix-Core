@@ -2,11 +2,12 @@ import SwiftUI
 import VeystrixKit
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case dashboard = "Dashboard", model = "Model", harness = "Agents", logs = "Logs", settings = "Settings"
+    case dashboard = "Dashboard", statistics = "Statistics", model = "Model", harness = "Agents", logs = "Logs", settings = "Settings"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .dashboard: return "gauge.with.dots.needle.67percent"
+        case .statistics: return "chart.bar.xaxis"
         case .model: return "externaldrive"
         case .harness: return "point.3.connected.trianglepath.dotted"
         case .logs: return "text.alignleft"
@@ -32,6 +33,7 @@ struct ContentView: View {
         } detail: {
             switch selection.value ?? .dashboard {
             case .dashboard: DashboardView()
+            case .statistics: StatisticsView()
             case .model: ModelView()
             case .harness: HarnessView()
             case .logs: LogsView()
