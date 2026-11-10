@@ -34,7 +34,8 @@ class NemotronServerTests(unittest.TestCase):
         write_checkpoint(Path(cls.dir) / "ck")
         cls.backend = NemotronBackend(
             Path(cls.dir) / "ck", authorized=True, config_check=permissive_config_check, machine=machine(),
-            tokenizer=StubTokenizer(), pool_bytes=64 * 1024, chunk_tokens=4, session_dir=str(Path(cls.dir) / "s"))
+            tokenizer=StubTokenizer(), pool_bytes=64 * 1024, chunk_tokens=4, session_dir=str(Path(cls.dir) / "s"),
+            prefix_dir=str(Path(cls.dir) / "p"))
         cls.backend._current_machine = lambda: machine()
         prefs = preferences.load(str(Path(cls.dir) / "prefs.json"))
         prefs["model"] = "nemotron35-lightning"

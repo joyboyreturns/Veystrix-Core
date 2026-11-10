@@ -46,7 +46,8 @@ def tearDownModule():
 
 def make(**kw):
     args = dict(authorized=True, config_check=permissive_config_check, machine=machine(), tokenizer=StubTokenizer(),
-                pool_bytes=64 * 1024, chunk_tokens=4, session_dir=str(Path(_dir) / "sessions"))
+                pool_bytes=64 * 1024, chunk_tokens=4, session_dir=str(Path(_dir) / "sessions"),
+                prefix_dir=str(Path(_dir) / "prefix"), snapshot_tokens=8)
     args.update(kw)
     backend = NemotronBackend(Path(_dir) / "ck", **args)
     backend._current_machine = lambda: machine()   # no live vm_stat in model-free tests

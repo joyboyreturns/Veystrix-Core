@@ -69,10 +69,13 @@ public struct LaunchPlan: Equatable, Sendable {
             }
         }
 
+        // Nemotron's expert pool is sized from free memory when the setting is left at "none" (0 would disable it).
+        let poolArgument = settings.selectedModel == .nemotron35 && settings.decodePool == .none
+            ? "auto" : String(settings.decodePool.rawValue)
         var args = ["-m", "models.flashnext.overnight",
                     "--host", "127.0.0.1",                       // loopback only, always
                     "--port", String(settings.port),
-                    "--pool-gb", String(settings.decodePool.rawValue),
+                    "--pool-gb", poolArgument,
                     "--checkpoint", settings.activeCheckpointPath]
         if settings.selectedModel == .nemotron35 { args += ["--model", ModelFamily.nemotron35.rawValue] }
         if settings.supervisedRestarts { args.append("--overnight") }

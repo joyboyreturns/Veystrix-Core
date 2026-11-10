@@ -120,6 +120,9 @@ class Stats:
     pool_hits: int = 0
     pool_misses: int = 0
     expert_bytes_read: int = 0
+    prefetch_used: int = 0
+    prefetch_issued: int = 0
+    reused_tokens: int = 0
 
     @property
     def rate(self) -> float:
@@ -142,7 +145,9 @@ class NemotronBackend(Conversation):
     def __init__(self, model_path=None, *, authorized: bool | None = None, pool_bytes: int | None = None,
                  context_tokens: int | None = None, chunk_tokens: int | None = None,
                  session_dir: str = "~/.cache/veystrix/nemotron35/sessions",
-                 config_check=None, machine=None, tokenizer=None, verify: bool = True):
+                 config_check=None, machine=None, tokenizer=None, verify: bool = True,
+                 prefix_dir=None, prefix_cache: bool | None = None, prefix_quota_gb: float | None = None,
+                 snapshot_tokens: int | None = None):
         from models.nemotron35 import admission
         from models.nemotron35.backend_core import EngineCore
         from models.nemotron35.config import validate_config
@@ -161,7 +166,7 @@ class NemotronBackend(Conversation):
         check(config)
         machine = machine or admission.read_machine()
         chunk = chunk_tokens or int(os.environ.get("FLASHNEXT_PREFILL_CHUNK_TOKENS") or 2048)
-        pool = admission.pool_bytes_from_env() if pool_bytes is None else pool_bytes
+        pool = admission.pool_bytes_from_env() if pool_bytes is None else pool_bytes   # None: sized from the plan
         # Plan from the exact dense-core size implied by the verified inventory, BEFORE reading any weight.
         plan = admission.make_plan(config, machine, dense_bytes=estimate_bytes(config)["dense_bytes"],
                                    context_tokens=context_tokens or admission.DEFAULT_CONTEXT,
@@ -191,6 +196,16 @@ class NemotronBackend(Conversation):
         self.stops = {int(t) for t in eos} | ({int(tokenizer.eos_token_id)} if tokenizer.eos_token_id is not None else set())
         self._machine = machine
         self._identity = None
+        self.snapshot_tokens = snapshot_tokens or int(os.environ.get("VEYSTRIX_NEMOTRON_SNAPSHOT_TOKENS") or 4096)
+        self.prefix_cache = None
+        if prefix_cache is None:
+            prefix_cache = os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_CACHE", "1") != "0"
+        if prefix_cache:
+            from models.nemotron35.prefix_cache import PrefixCache
+            quota = prefix_quota_gb if prefix_quota_gb is not None else float(os.environ.get("VEYSTRIX_CACHE_GB") or 20)
+            directory = prefix_dir or os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_DIR") or "~/.cache/veystrix/nemotron35/prefix"
+            self.prefix_cache = PrefixCache(directory, self._session_identity(), quota_bytes=int(quota * 2**30))
+            self._prefix_session = lambda: self.prefix_cache      # what the shared server asks for (health, adoption)
 
     # -- framing: exactly the model's chat template (see chat_template.jinja) ----------------------------------
     @staticmethod
@@ -232,8 +247,7 @@ class NemotronBackend(Conversation):
         return self.core.cached_tokens
 
     def reset(self) -> None:
-        self.core.reset()
-        self.streamed.pool.clear()
+        self.core.reset()          # the expert pool stays warm: it holds weights, not conversation state
         self.tape, self.pending = [], []
         self.turn_closed = True
         self._replay_needed = False
@@ -270,10 +284,28 @@ class NemotronBackend(Conversation):
         feed = (list(self.tape) + pending) if replay else pending
         cached = 0 if fresh else self.cache_tokens
         admission.check_request(self.plan, self._current_machine(), new_tokens=len(feed), cached_tokens=cached)
+        restored = 0
         if fresh:
             self.core.reset()
+            if self.prefix_cache is not None and len(feed) > self.prefix_cache.min_tokens:
+                cache, restored = self.prefix_cache.restore(feed)
+                if restored:
+                    self.core.cache = cache
         self.tape = self.tape + pending
         self.pending, self._replay_needed = [], False
+        total_prompt = len(feed)
+        feed = feed[restored:]
+        snapshots = []
+        start = restored if fresh else cached          # tokens the cache already holds before this prefill
+        mark = [start]
+
+        def checkpoint(done):
+            # A cancelled or restarted long prompt resumes from here instead of from zero.
+            at = start + done
+            if self.prefix_cache is not None and at < len(self.tape) and at - mark[0] >= self.snapshot_tokens:
+                if self.prefix_cache.save(self.core.cache, self.tape[:at]):
+                    snapshots.append(at)
+                mark[0] = at
         cancel = should_cancel or (lambda: False)
         pool0 = self.streamed.pool.stats()
         began = DecodeTimer()
@@ -285,12 +317,12 @@ class NemotronBackend(Conversation):
         def progress(done, total):
             self._tick()
             if on_prefill_progress:
-                on_prefill_progress(done, total)
+                on_prefill_progress(restored + done, total_prompt)
 
         if on_prefill_progress:
-            on_prefill_progress(0, len(feed))
+            on_prefill_progress(restored, total_prompt)
         try:
-            logits = self.core.prefill(feed, cancelled=cancel, progress=progress)
+            logits = self.core.prefill(feed, cancelled=cancel, progress=progress, boundary=checkpoint)
         except Cancelled as exc:
             interrupted()
             raise GenerationCancelled() from exc
@@ -298,6 +330,14 @@ class NemotronBackend(Conversation):
             interrupted()
             raise
         prefill_seconds = began.since(prefill_began)
+        self.last_prefix = {"reused_tokens": restored, "prefilled_tokens": len(feed), "prompt_tokens": total_prompt}
+        if self.prefix_cache is not None and len(feed) >= self.prefix_cache.min_tokens:
+            try:   # the prompt boundary: the next request usually shares this whole prefix
+                if self.prefix_cache.save(self.core.cache, self.tape):
+                    snapshots.append(len(self.tape))
+                self.prefix_cache.prune(self.tape, snapshots)
+            except Exception:
+                pass   # a failed snapshot never fails the request
         if on_prefilled:
             on_prefilled()
         sampler = Sampler(self.sampling)
@@ -355,7 +395,7 @@ class NemotronBackend(Conversation):
                         with timer.emitting():
                             out(piece)
                 try:
-                    logits = self.core.decode(value, cancelled=cancel)
+                    logits = self.core.decode(value)   # one step is ~0.1 s: cancel is checked between tokens so state stays valid
                 except Cancelled as exc:
                     raise GenerationCancelled() from exc
         except GenerationCancelled:
@@ -374,10 +414,12 @@ class NemotronBackend(Conversation):
         seconds = timer.elapsed()
         pool1 = self.streamed.pool.stats()
         self.last_decode_rate = len(produced) / seconds if seconds and produced else None
-        stats = Stats(finish=finish, tokens=len(produced), seconds=seconds, prompt_tokens=len(feed),
+        stats = Stats(finish=finish, tokens=len(produced), seconds=seconds, prompt_tokens=total_prompt,
                       prefill_seconds=prefill_seconds, ui_seconds=timer.emitted,
                       pool_hits=pool1["hits"] - pool0["hits"], pool_misses=pool1["misses"] - pool0["misses"],
-                      expert_bytes_read=pool1["bytes_read"] - pool0["bytes_read"])
+                      expert_bytes_read=pool1["bytes_read"] - pool0["bytes_read"],
+                      prefetch_used=pool1["prefetch_used"] - pool0["prefetch_used"],
+                      prefetch_issued=pool1["prefetch_issued"] - pool0["prefetch_issued"], reused_tokens=restored)
         return "".join(pieces), stats
 
     def _tick(self) -> None:

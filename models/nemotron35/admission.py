@@ -21,6 +21,8 @@ SWAP_REFUSE_BYTES = int(2.5 * GIB)                 # refuse new work at the proj
 MAX_CONTEXT = 262144
 DEFAULT_CONTEXT = 32768
 DEFAULT_POOL_BYTES = 2 * GIB
+AUTO_POOL_MAX = 4 * GIB          # auto-sized pool never exceeds this
+AUTO_POOL_HEADROOM = int(1.25 * GIB)   # and always leaves this much of the budget unplanned
 
 
 try:  # the shared server maps this exception to HTTP 503 memory_admission_refused
@@ -97,9 +99,12 @@ def budget(machine: Machine) -> int:
 
 
 def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_tokens: int = DEFAULT_CONTEXT,
-              chunk_tokens: int = 2048, pool_bytes: int = DEFAULT_POOL_BYTES, allocator_slack: int = GIB // 2,
+              chunk_tokens: int = 2048, pool_bytes: int | None = None, allocator_slack: int = GIB // 2,
               shrink: bool = True) -> Plan:
-    """Fit context, chunk and pool into the budget, shrinking pool, then chunk; refuse if the core cannot fit."""
+    """Fit context, chunk and pool into the budget, shrinking pool, then chunk; refuse if the core cannot fit.
+
+    ``pool_bytes=None`` sizes the expert pool automatically: as large as fits (up to AUTO_POOL_MAX) while leaving
+    AUTO_POOL_HEADROOM of the budget unplanned. A larger pool means more expert hits and fewer SSD reads."""
     if machine.pressure >= 4:
         raise AdmissionRefused('system memory pressure is critical; retry when it falls')
     if machine.swap_used >= SWAP_REFUSE_BYTES:
@@ -112,6 +117,10 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
                         expert_pool_bytes=pool, activation_bytes=chunk * ACTIVATION_BYTES_PER_CHUNK_TOKEN,
                         reserve_bytes=allocator_slack)
 
+    if pool_bytes is None:
+        base = build(0, chunk_tokens).total_bytes
+        room = limit - base - AUTO_POOL_HEADROOM
+        pool_bytes = max(0, min(AUTO_POOL_MAX, room)) // (64 * 2**20) * (64 * 2**20)
     pool, chunk = pool_bytes, chunk_tokens
     while True:
         est = build(pool, chunk)
@@ -143,15 +152,15 @@ def check_request(plan: Plan, machine: Machine, *, new_tokens: int, cached_token
         raise AdmissionRefused('swap is at the safety line; retry when system memory pressure falls')
 
 
-def pool_bytes_from_env(environ=None) -> int:
+def pool_bytes_from_env(environ=None) -> int | None:
     env = os.environ if environ is None else environ
     raw = env.get('VEYSTRIX_NEMOTRON_POOL_GB', '')
     if raw in ('', 'auto'):
-        return DEFAULT_POOL_BYTES
+        return None                      # sized automatically from the memory plan
     try:
         value = float(raw)
     except ValueError as exc:
         raise ValueError('VEYSTRIX_NEMOTRON_POOL_GB must be a number or auto') from exc
-    if not 0 <= value <= 4:
-        raise ValueError('VEYSTRIX_NEMOTRON_POOL_GB must be between 0 and 4')
+    if not 0 <= value <= 6:
+        raise ValueError('VEYSTRIX_NEMOTRON_POOL_GB must be between 0 and 6')
     return int(value * GIB)

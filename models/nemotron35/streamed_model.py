@@ -25,7 +25,7 @@ from mlx_lm.models import nemotron_h
 from .config import validate_config
 from .inventory import CheckpointError, verify_checkpoint, verify_inventory, expected_tensors, _read_json
 from .safetensors_index import index_checkpoint
-from .streamed_experts import ExpertPool, StackedExpertReader, StreamedSwitchMLP
+from .streamed_experts import ExpertPool, NextGate, StackedExpertReader, StreamedSwitchMLP
 
 _NP = {'U32': np.uint32, 'F32': np.float32, 'F16': np.float16, 'BF16': np.uint16}
 
@@ -64,10 +64,12 @@ class StreamedModel:
 
     def close(self) -> None:
         self.pool.clear()
+        self.pool.close()
         self.reader.close()
 
 
-def load_streamed(directory, *, pool_bytes: int, config_check=None, verify: bool = True) -> StreamedModel:
+def load_streamed(directory, *, pool_bytes: int, config_check=None, verify: bool = True,
+                  prefetch: bool = True, staged_bytes: int = 384 * 2**20) -> StreamedModel:
     """Load the dense core resident and stream the routed experts from SSD.
 
     ``verify`` runs the full structural verification (headers, inventory,
@@ -88,7 +90,7 @@ def load_streamed(directory, *, pool_bytes: int, config_check=None, verify: bool
     reader = StackedExpertReader(root, index, layers=moe_layers, expert_count=config['n_routed_experts'],
                                  hidden=config['hidden_size'], moe_dim=config['moe_intermediate_size'],
                                  group_size=group)
-    pool = ExpertPool(reader, pool_bytes)
+    pool = ExpertPool(reader, pool_bytes, staged_bytes=staged_bytes)
     order = iter(moe_layers)
     with _stub_switch_mlp(lambda *a, **k: StreamedSwitchMLP(pool, next(order), group)):
         model = nemotron_h.Model(args)
@@ -97,5 +99,10 @@ def load_streamed(directory, *, pool_bytes: int, config_check=None, verify: bool
                 class_predicate=lambda path, module: hasattr(module, 'to_quantized') and f'{path}.scales' in dense)
     model.load_weights(list(dense.items()), strict=True)
     mx.eval(model.parameters())
+    if prefetch:   # each MoE layer predicts the next one's experts from its own input (exactness is unaffected)
+        for here, there in zip(moe_layers, moe_layers[1:]):
+            gate = model.backbone.layers[there].mixer.gate
+            model.backbone.layers[here].mixer.switch_mlp.next_gate = NextGate(
+                there, gate.weight, gate.e_score_correction_bias, config['num_experts_per_tok'])
     dense_bytes = sum(v.nbytes for v in dense.values())
     return StreamedModel(model, pool, reader, config, dense_bytes)
