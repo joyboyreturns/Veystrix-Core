@@ -60,7 +60,7 @@ def inspect_checkpoint(path: str | Path, *, hashes: bool = False) -> dict:
     except CheckpointError as exc:
         raise ConfigurationError(str(exc)) from exc
     missing = sorted(n for n in names["shards"] if not (root / n).is_file())
-    partial = sorted(p.name for p in root.rglob("*.incomplete"))
+    partial = sorted(p.name for p in root.iterdir() if p.name.endswith((".incomplete", ".part", ".tmp")))
     if missing or partial:
         return {**base, "checkpoint_complete": False, "missing_shards": missing, "partial_files": len(partial),
                 "inventory_names_verified": True, "inference_ready": False,

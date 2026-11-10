@@ -554,6 +554,7 @@ ARCHITECTURAL_CONTEXT_MAXIMUM = 262144
 
 _MODEL_DISPLAY_NAMES = {
     "flashnext": "Veystrix Flash-Next",
+    "nemotron35-lightning": "Veystrix Nemotron 3.5 Lightning",
     "bonsai2": "Veystrix Bonsai-2",
     "k2-horizon": "Veystrix K2-Horizon",
     "k2_horizon": "Veystrix K2-Horizon",
@@ -562,6 +563,7 @@ _MODEL_DISPLAY_NAMES = {
 
 _BACKEND_DISPLAY_NAMES = {
     "FlashNextBackend": "Veystrix Flash-Next",
+    "NemotronBackend": "Veystrix Nemotron 3.5 Lightning",
     "BonsaiBackend": "Veystrix Bonsai-2",
     "K2HorizonBackend": "Veystrix K2-Horizon",
     "FrankensteinBackend": "Veystrix Qwen3.8-27B",
@@ -730,7 +732,8 @@ def model_card(service) -> dict:
     return {
         "slug": slug,
         "display_name": caps["display_name"],
-        "description": "Local low-memory Qwen runtime",
+        "description": ("Local SSD-streamed NVIDIA Nemotron 3.5 Lightning runtime (experimental)"
+                        if "nemotron" in slug else "Local low-memory Qwen runtime"),
         "default_reasoning_level": "medium",
         "supported_reasoning_levels": [
             {"effort": "low", "description": "Low reasoning effort"},
@@ -830,9 +833,14 @@ def _context_report(service, limit, enforced) -> dict:
         "memory_admitted_max_cold_prefill": getattr(service, "max_cold_prefill", None),
         "incremental_accumulation_required": True,
         "preferred_internal_chunk_size": 2048,
-        "validated_on_this_machine": dict(context_budget.VALIDATION),
+        "validated_on_this_machine": (
+            {"largest_real_cold_prefill_tokens": 0, "evidence": "none: no real Nemotron inference has been run",
+             "real_8k": "unverified", "above_validated": "unverified"}
+            if type(backend).__name__ == "NemotronBackend" else dict(context_budget.VALIDATION)),
         "overflow": f"a prompt over the configured limit is refused with HTTP 400 context_length_exceeded; cold prefill > {cold} (or uncached increment > {incremental}) refused with oversized_prefill_rejected / recovery_required",
-        "validated_prefill_tokens_on_real_checkpoint": context_budget.VALIDATION["largest_real_cold_prefill_tokens"],
+        "validated_prefill_tokens_on_real_checkpoint": (
+            0 if type(backend).__name__ == "NemotronBackend"
+            else context_budget.VALIDATION["largest_real_cold_prefill_tokens"]),
     }
 
 

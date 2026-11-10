@@ -28,6 +28,7 @@ from models.k2_horizon.settings import (
 PYTHON_ENV = {
     "shared": "VEYSTRIX_PYTHON",
     "flashnext": "VEYSTRIX_FLASHNEXT_PYTHON",
+    "nemotron35-lightning": "VEYSTRIX_NEMOTRON_PYTHON",
     BONSAI2: BONSAI2_PYTHON_ENV,
     K2_HORIZON: K2_HORIZON_PYTHON_ENV,
     "qwen27b": "VEYSTRIX_QWEN27B_PYTHON",
@@ -47,6 +48,11 @@ RUNTIME_PROBES = {
     "flashnext": """
 from mlx_vlm.utils import (apply_generation_config_defaults, get_model_and_args,
                            load_config, update_module_configs)
+""",
+    "nemotron35-lightning": """
+from mlx_lm.models.nemotron_h import Model, ModelArgs
+from mlx_lm.models.cache import ArraysCache, KVCache
+from transformers import AutoTokenizer
 """,
     BONSAI2: """
 from mlx_vlm.models.qwen3_5 import Model, ModelConfig
@@ -281,8 +287,6 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     known, remaining = parser.parse_known_args(argv)
 
     model = known.model or ("qwen27b" if build else "flashnext")
-    if model == "nemotron35-lightning":
-        raise SystemExit("Nemotron inference is not implemented yet. Use --check to inspect local checkpoint metadata; no model was loaded.")
     if known.mode and model != "flashnext":
         raise SystemExit("--mode applies to the flashnext model only")
     # A benchmark launch states its own conditions and must not be re-configured by a mode.
@@ -353,6 +357,17 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         from models.flashnext.settings.launch import apply_chat_environment
 
         apply_chat_environment(environment)
+    if model == "nemotron35-lightning":
+        # Same supervised-server contract as Flash-Next: guard on, chunked prefill, agentic mode for a server.
+        # Real weights still need VEYSTRIX_NEMOTRON_AUTHORIZED=1 (checked again inside the backend).
+        if "--server" in chat_args:
+            environment.setdefault("VEYSTRIX_MODE", "agentic")
+        environment.setdefault("FLASHNEXT_CHAT_GUARD", "1")
+        environment.setdefault("FLASHNEXT_PREFILL_CHUNK_TOKENS", "2048")
+        if known.pool_gb:
+            environment["VEYSTRIX_NEMOTRON_POOL_GB"] = known.pool_gb
+        if known.context_limit:
+            environment["VEYSTRIX_CONTEXT_LIMIT"] = str(known.context_limit)
     if model == "qwen27b":
         environment.setdefault("MLX_QMM_BM", "64")
         environment.setdefault("MLX_QMM_BK", "32")
@@ -371,19 +386,21 @@ def main() -> int:
     probe.add_argument("--check", action="store_true")
     options, _ = probe.parse_known_args(sys.argv[1:])
     if options.model == "nemotron35-lightning":
-        if not options.checkpoint:
-            raise SystemExit("Nemotron requires --checkpoint /path/to/model; no download was attempted.")
-        if not Path(options.checkpoint).expanduser().is_dir():
+        if options.checkpoint and not Path(options.checkpoint).expanduser().is_dir():
             raise SystemExit(f"Nemotron checkpoint folder does not exist: {options.checkpoint}; no download was attempted.")
-        if not options.check:
-            raise SystemExit("Nemotron inference is not implemented yet. Use --check to inspect local checkpoint metadata; no model was loaded.")
-        import json
-        from models.nemotron35.config import ConfigurationError, inspect_checkpoint
-        try:
-            print(json.dumps(inspect_checkpoint(options.checkpoint), indent=2))
-        except ConfigurationError as exc:
-            raise SystemExit(f"Nemotron check: {exc}") from exc
-        return 0
+        if options.check and not options.checkpoint:
+            raise SystemExit("Nemotron --check requires --checkpoint /path/to/model; no download was attempted.")
+        if options.check:
+            import json
+            from models.nemotron35.config import ConfigurationError, inspect_checkpoint
+            try:
+                print(json.dumps(inspect_checkpoint(options.checkpoint, hashes="--hashes" in sys.argv), indent=2))
+            except ConfigurationError as exc:
+                raise SystemExit(f"Nemotron check: {exc}") from exc
+            return 0
+        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") != "1":
+            raise SystemExit("Nemotron real-checkpoint inference needs the owner's explicit approval: set "
+                             "VEYSTRIX_NEMOTRON_AUTHORIZED=1. Use --check to verify the checkpoint without loading it.")
     if len(sys.argv) > 1 and sys.argv[1] == "setup":
         return setup_environment(sys.argv[2:])
     warning = branch_sync_warning()

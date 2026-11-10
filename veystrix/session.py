@@ -578,6 +578,17 @@ def build_backend(name: str, args, prefs: dict):
         }
         mirror_preferences(backend, prefs, prefs["profile"])
         return backend
+    if name == NEMOTRON:
+        if not args.model_path:
+            raise SystemExit("--model-path is required for model 'nemotron35-lightning'")
+        from veystrix.backends.nemotron35 import NemotronBackend
+
+        backend = NemotronBackend(
+            model_path=args.model_path,
+            session_dir=(args.session_dir or "~/.cache/veystrix/nemotron35/sessions"),
+        )
+        mirror_preferences(backend, prefs, prefs["profile"])
+        return backend
     if name == "k2-horizon":
         if not args.model_path:
             raise SystemExit("--model-path is required for model 'k2-horizon'")
@@ -592,7 +603,24 @@ def build_backend(name: str, args, prefs: dict):
         mirror_preferences(backend, prefs, prefs["profile"])
         return backend
     raise SystemExit(
-        f"unknown model {name!r}. Use 'flashnext', 'bonsai2', 'k2-horizon', or 'qwen27b'.")
+        f"unknown model {name!r}. Use 'flashnext', 'nemotron35-lightning', 'bonsai2', 'k2-horizon', or 'qwen27b'.")
+
+
+NEMOTRON = "nemotron35-lightning"
+# Models that get the shared power gate, the swap/thermal/battery chat guard and the supervised-server rule.
+GUARDED_MODELS = ("flashnext", NEMOTRON)
+
+
+def _apply_backend_limits(backend) -> None:
+    """A backend that admitted a smaller context than the environment asks for tightens the server limits."""
+    context = getattr(backend, "context_limit", None)
+    if not isinstance(context, int) or context <= 0:
+        return
+    current = os.environ.get("VEYSTRIX_CONTEXT_LIMIT")
+    os.environ["VEYSTRIX_CONTEXT_LIMIT"] = str(min(context, int(current)) if current and current.isdigit() else context)
+    for name in ("VEYSTRIX_MAX_COLD_PREFILL", "VEYSTRIX_MAX_INCREMENTAL_PREFILL"):
+        value = os.environ.get(name)
+        os.environ[name] = str(min(context, int(value)) if value and value.isdigit() else context)
 
 
 def _apply_seed(seed: int | None) -> None:
@@ -604,7 +632,7 @@ def _apply_seed(seed: int | None) -> None:
 
 def _enforce_power_gate(prefs, benchmarking, display) -> None:
     """Battery use is allowed; a battery below the floor (default 25%) refuses the start, before any model load."""
-    if prefs["model"] != "flashnext" or benchmarking:
+    if prefs["model"] not in GUARDED_MODELS or benchmarking:
         return
     from models.flashnext import power_gate
 
@@ -792,7 +820,7 @@ def main() -> int:
     from veystrix.model_settings import FLASHNEXT_DEFAULTS
     parser.add_argument(
         "--model", default=None,
-        choices=("flashnext", "bonsai2", "k2-horizon", "qwen27b"),
+        choices=("flashnext", NEMOTRON, "bonsai2", "k2-horizon", "qwen27b"),
     )
     parser.add_argument("--profile", default=None, choices=("plain", "agent"))
     parser.add_argument("--model-path", "--checkpoint", dest="model_path", default=None)
@@ -1002,6 +1030,15 @@ def main() -> int:
             parser.error(str(exc))
         if explicit_checkpoint or saved_only or not (environment_checkpoint or saved_checkpoint):
             prefs["flashnext_checkpoint"] = args.model_path
+    elif prefs["model"] == NEMOTRON:
+        from veystrix.checkpoints import resolve_nemotron35
+
+        choice = args.model_path or os.environ.get("VEYSTRIX_NEMOTRON_MODEL") or prefs.get("nemotron35_checkpoint") or None
+        try:
+            args.model_path = str(resolve_nemotron35(choice))
+        except ValueError as exc:
+            parser.error(str(exc))
+        prefs["nemotron35_checkpoint"] = args.model_path
     elif prefs["model"] == "bonsai2":
         from models.bonsai2.checkpoint import resolve_bonsai2
         from models.bonsai2.settings import CHECKPOINT_ENV
@@ -1053,7 +1090,7 @@ def main() -> int:
     recovery, prepared = _prepare_startup(prefs, benchmarking, display)
     _admit_agentic(prefs, benchmarking, display, prepared)
     chat_guard = None
-    if (prefs["model"] == "flashnext" and not benchmarking
+    if (prefs["model"] in GUARDED_MODELS and not benchmarking
             and os.environ.get("FLASHNEXT_CHAT_GUARD") == "1"):
         import tempfile
         from models.flashnext.chat_guard import ChatGuard
@@ -1076,7 +1113,8 @@ def main() -> int:
         else:
             backend = build_backend(prefs["model"], args, prefs)
     _progress.PROGRESS.stage("idle")
-    if chat_guard is not None:
+    _apply_backend_limits(backend)
+    if chat_guard is not None and hasattr(backend, "store"):
         chat_guard.tracer.store = backend.store
     _apply_seed(args.seed)
     session = Session(

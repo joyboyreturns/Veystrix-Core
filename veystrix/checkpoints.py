@@ -74,6 +74,7 @@ def installed_checkpoints(root: Path | None = None) -> list[tuple[str, Path]]:
     from models.k2_horizon.checkpoint import installed as installed_k2
 
     choices = [("flashnext", path) for path in installed_flashnext(root)]
+    choices.extend(("nemotron35-lightning", path) for path in installed_nemotron35(root))
     choices.extend(("bonsai2", path) for path in installed_bonsai2(root))
     choices.extend(("k2-horizon", path) for path in installed_k2(root))
     choices.extend(("qwen27b", path) for path in installed_qwen27b(root))
@@ -107,6 +108,47 @@ def flashnext_compatible(path: Path, complete: bool = True) -> bool:
     if not all(_sane_shard_name(value) for value in values):
         return False
     return not complete or all((path / shard).is_file() for shard in set(values))
+
+
+def nemotron35_compatible(path: Path) -> bool:
+    """Complete, structurally verified mlx-community affine-4-bit Nemotron checkpoint (headers only, no weights)."""
+    from models.nemotron35.inventory import CheckpointError, verify_checkpoint
+    try:
+        verify_checkpoint(path)
+    except (CheckpointError, OSError, ValueError):
+        return False
+    return True
+
+
+def installed_nemotron35(root: Path | None = None) -> list[Path]:
+    root = root or model_root()
+    children = root.iterdir() if root.is_dir() else ()
+    found = []
+    for path in sorted(children):
+        config = _json(path / "config.json") if path.is_dir() else {}
+        if config.get("model_type") == "nemotron_h" and nemotron35_compatible(path):
+            found.append(path)
+    return found
+
+
+def resolve_nemotron35(requested: str | os.PathLike[str] | None = None) -> Path:
+    """An explicit, complete, verified checkpoint. Never guesses among several and never downloads."""
+    from models.nemotron35.inventory import CheckpointError, verify_checkpoint
+    if requested:
+        path = Path(requested).expanduser()
+        try:
+            verify_checkpoint(path)
+        except CheckpointError as exc:
+            raise ValueError(f"Nemotron checkpoint {path} is not usable: {exc}") from exc
+        return path
+    found = installed_nemotron35()
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        raise ValueError("no complete Nemotron checkpoint found; pass --checkpoint /path/to/model "
+                         "(nothing is downloaded automatically)")
+    raise ValueError("several Nemotron checkpoints found; choose one with --checkpoint: "
+                     + ", ".join(str(p) for p in found))
 
 
 def installed_flashnext(root: Path | None = None) -> list[Path]:

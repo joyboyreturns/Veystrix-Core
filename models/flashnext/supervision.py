@@ -21,8 +21,8 @@ LAUNCH_COMMAND = ("./chat.sh --mode agentic --pool-gb 0 --context-limit 262144 "
 
 
 def check(environ: dict, *, model: str, server: bool, benchmarking: bool = False) -> str | None:
-    """None when the launch is supervised (or is not a flashnext server); otherwise the refusal message."""
-    if model != "flashnext" or not server or benchmarking:
+    """None when the launch is supervised (or is not a guarded-model server); otherwise the refusal message."""
+    if model not in ("flashnext", "nemotron35-lightning") or not server or benchmarking:
         return None
     problems = []
     if environ.get("VEYSTRIX_MODE") != "agentic":

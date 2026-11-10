@@ -17,7 +17,7 @@ from mlx_lm.models import nemotron_h
 
 TINY_CONFIG = {
     "architectures": ["NemotronHForCausalLM"], "model_type": "nemotron_h", "vocab_size": 64,
-    "hidden_size": 64, "intermediate_size": 64, "num_hidden_layers": 4, "max_position_embeddings": 256,
+    "hidden_size": 64, "intermediate_size": 64, "num_hidden_layers": 4, "max_position_embeddings": 4096,
     "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 16, "attention_bias": False,
     "mamba_num_heads": 4, "mamba_head_dim": 16, "mamba_proj_bias": False, "ssm_state_size": 32,
     "conv_kernel": 4, "n_groups": 2, "mlp_bias": False, "layer_norm_epsilon": 1e-5,
