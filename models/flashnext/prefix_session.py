@@ -95,6 +95,7 @@ class Report:
     bytes_restored: int = 0
     snapshots: list = field(default_factory=list)       # token counts stored during this prefill
     snapshot_seconds: float = 0.0                       # time spent storing them (SSD write included)
+    snapshots_skipped: list = field(default_factory=list)  # {position, reason}; a skipped boundary needs recomputation
     plan_rejections: int = 0                            # stored prefixes skipped for an incompatible chunk history
     plan_edges: list = field(default_factory=list)      # internal chunk edges of this prompt's cold plan
     executed_edges: list = field(default_factory=list)  # internal chunk edges that really ran (differs if the guard re-planned)
@@ -287,13 +288,16 @@ class PrefixSession:
         needed = len(prompt) - offset
         max_cold = int(os.environ.get("VEYSTRIX_MAX_COLD_PREFILL") or 32768)
         max_inc = int(os.environ.get("VEYSTRIX_MAX_INCREMENTAL_PREFILL") or max_cold)
-        effective_limit = min(max_inc, max_cold) if offset > 0 else max_cold
+        # Use the incremental allowance only after an actual successful restore;
+        # a failed or incompatible lookup remains subject to the cold limit.
+        effective_limit = max_inc if offset > 0 else max_cold
         if needed > effective_limit:
             outcome_str = getattr(res, "outcome", outcome) if restore else "COLD"
             raise RecoveryRequiredError(
                 f"session state could not be recovered from memory or SSD cache (total prompt: {len(prompt)} "
                 f"tokens, matched prefix: {offset} tokens, uncached tokens: {needed}, outcome: {outcome_str}). "
-                f"Re-prefilling {needed} tokens cold would exceed the safe prefill limit of {effective_limit} "
+                f"Prefilling {needed} uncached tokens would exceed the configured "
+                f"{'incremental' if offset else 'cold'} prefill limit of {effective_limit} "
                 "tokens and is prohibited on 16 GB hardware. A compatible state snapshot is required for recovery. "
                 "Shorten the prompt or resume from a saved session snapshot.",
                 code="recovery_required",
@@ -316,9 +320,16 @@ class PrefixSession:
         def snapshot(position, frozen=None):
             if not restore:
                 return
+            from models.flashnext import memory_controller, flight_recorder
+            usage = store.usage()
+            reason = ("memory_pressure" if memory_controller.forbid_optional() else
+                      "ram_budget_exceeded" if usage["ram_bytes"] > usage["ram_budget"] else None)
+            if reason is not None:
+                report.snapshots_skipped.append({"position": position, "reason": reason})
+                flight_recorder.record("prefix_snapshot_skipped", position=position, reason=reason)
+                return
             # Chain each snapshot to the previous one (or to the restored hit) so KV is stored once.
             stored = time.perf_counter()
-            from models.flashnext import flight_recorder
             flight_recorder.record("prefix_snapshot_begin", position=position)
             snapshot_plan = history(position)
             entry = store.put(prompt[:position], cache if frozen is None else frozen, parent=last[-1] if last else hit, language=language,

@@ -619,6 +619,8 @@ class Stats:
     ssd_bytes_written: int = 0
     ssd_bytes_read: int = 0
     evicted_ram: int = 0
+    pressure_invalidated: int = 0
+    pressure_invalidated_bytes: int = 0
     evicted_ssd: int = 0
     invalidated: int = 0
     restore_seconds: float = 0.0
@@ -868,6 +870,40 @@ class PrefixCache:
                 self._ram_bytes -= entry.nbytes()
                 self.stats.evicted_ram += 1
             return before - self._ram_bytes
+
+    def invalidate_unbacked_under_pressure(self, target_bytes: int = 0) -> dict:
+        """Explicitly discard unleased, undurable leaf snapshots under pressure.
+
+        Persisted copies and their ancestry are never removed here. A discarded
+        snapshot becomes a cache miss and must be recomputed; a lease always wins.
+        """
+        with self._lock:
+            freed = count = 0
+            target = max(0, int(target_bytes))
+            while self._ram_bytes > target:
+                parents = {entry.parent for entry in self._ram.values()}
+                parents.update(meta["parent"] for meta in self._disk.values())
+                key = next((k for k in self._ram_order()
+                            if k not in self._disk and k not in self._leases and k not in parents), None)
+                if key is None:
+                    break
+                entry = self._ram.pop(key)
+                size = entry.nbytes()
+                self._ram_bytes -= size
+                self._tokens.pop(key, None)
+                self._plans.pop(key, None)
+                self._evicted_keys[key] = time.time()
+                if len(self._evicted_keys) > 2048:
+                    self._evicted_keys.popitem(last=False)
+                count += 1
+                freed += size
+            if count:
+                self.stats.invalidated += count
+                self.stats.pressure_invalidated += count
+                self.stats.pressure_invalidated_bytes += freed
+                self._lengths = {m["n"] for m in self._disk.values()} | {e.n_tokens for e in self._ram.values()}
+            return {"invalidated_entries": count, "invalidated_bytes": freed,
+                    "remaining_ram_bytes": self._ram_bytes, "recompute_required": bool(count)}
 
     def _has_resident_child(self, key) -> bool:
         return any(e.parent == key for e in self._ram.values())
@@ -1227,6 +1263,8 @@ class PrefixCache:
                     "ssd_bytes_written": self.stats.ssd_bytes_written,
                     "ssd_bytes_read": self.stats.ssd_bytes_read,
                     "writes_skipped": self.stats.writes_skipped,
+                    "pressure_invalidated": self.stats.pressure_invalidated,
+                    "pressure_invalidated_bytes": self.stats.pressure_invalidated_bytes,
                     "evicted_ram": self.stats.evicted_ram,
                     "evicted_ssd": self.stats.evicted_ssd,
                 },

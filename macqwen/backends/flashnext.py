@@ -686,7 +686,13 @@ class FlashNextBackend(Conversation):
             except Exception:
                 pass
             if memory_controller.elevated() and getattr(self, "_prefix", None) is not None:
-                released["snapshots_moved_bytes"] = int(self._prefix_session().store().shrink_ram(0))
+                prefix_store = self._prefix_session().store()
+                released["snapshots_moved_bytes"] = int(prefix_store.shrink_ram(0))
+                invalidated = prefix_store.invalidate_unbacked_under_pressure(0)
+                released["snapshots_invalidated"] = invalidated
+                if invalidated["invalidated_entries"]:
+                    from models.flashnext import flight_recorder
+                    flight_recorder.record("prefix_pressure_invalidation", **invalidated)
             self.last_turn_memory = {"before": getattr(self, "turn_memory_before", None),
                                      "after": self._turn_memory(), "released": released,
                                      "controller": memory_controller.ledger()}

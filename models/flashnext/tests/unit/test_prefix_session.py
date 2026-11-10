@@ -55,6 +55,28 @@ class Base(unittest.TestCase):
 
 
 class WorkflowTests(Base):
+    def test_restored_suffix_uses_incremental_limit_and_miss_uses_cold_limit(self):
+        system = [5] * 62 + MARK
+        with mock.patch.dict(os.environ, {"VEYSTRIX_MAX_COLD_PREFILL": "100",
+                                          "VEYSTRIX_MAX_INCREMENTAL_PREFILL": "128"}):
+            model, session = self.engine()
+            self.go(model, session, system + [7] * 30)
+            _, _, report = self.go(model, session, system + [7] * 120)
+            self.assertEqual((report.hit_tokens, report.prefilled_tokens), (64, 120))
+            with mock.patch.dict(os.environ, {S.FLAG_DIR: str(self.tmp / "miss")}):
+                with self.assertRaises(S.RecoveryRequiredError):
+                    self.go(build_model(), S.PrefixSession(encode, compat), system + [7] * 120)
+
+    def test_pressure_skips_snapshot_without_changing_live_result(self):
+        model, session = self.engine()
+        with mock.patch("models.flashnext.memory_controller.forbid_optional", return_value=True):
+            token, cache, report = self.go(model, session, self.system + self.suffix_a)
+        self.assertEqual(report.snapshots, [])
+        self.assertEqual(report.snapshots_skipped, [{"position": len(self.system), "reason": "memory_pressure"}])
+        self.assertEqual(session.store().usage()["ram_entries"], 0)
+        self.assertIsInstance(token, int)
+        self.assertTrue(cache)
+
     def test_full_routing_never_restores_a_pruned_routing_snapshot(self):
         from models.flashnext.routing import RoutingProfile
         from models.flashnext.tests.unit.test_routing import FakeStore
@@ -585,6 +607,20 @@ class ResumablePrefillTests(Base):
         self.assertEqual(session.anchors(prompt), (300,))
         _, _, report = self.go(model, session, prompt)
         self.assertEqual(report.snapshots, [100, 200, 300], "three equal pieces of the system message, each stored")
+
+    def test_failed_disk_spill_stops_additional_snapshots_over_ram_budget(self):
+        prompt = self.system_of(300, 1) + [7] * 100
+        with mock.patch.dict(os.environ, {S.FLAG_RAM_GB: "0.000000001"}), \
+                mock.patch.object(P, "write_entry", side_effect=OSError("disk unavailable")):
+            model, session = self.engine()
+            _, _, report = self.go(model, session, prompt)
+        self.assertEqual(report.snapshots, [100])
+        self.assertEqual([row["reason"] for row in report.snapshots_skipped],
+                         ["ram_budget_exceeded", "ram_budget_exceeded"])
+        store = session.store()
+        self.assertEqual(store.usage()["ram_entries"], 1)
+        self.assertEqual(store.usage()["disk_entries"], 0)
+        self.assertGreater(store.stats.writes_skipped, 0)
 
     def test_the_old_modes_are_unchanged(self):
         system = self.system_of(300, 1)

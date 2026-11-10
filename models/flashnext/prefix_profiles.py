@@ -522,6 +522,17 @@ class ProfiledPrefixCache(P.PrefixCache):
             self._flush_index(force=entry.key in self._disk and self._dirty)   # a new snapshot's record is saved at once
             return entry
 
+    def invalidate_unbacked_under_pressure(self, target_bytes=0):
+        with self._lock:
+            before = set(self._ram)
+            result = super().invalidate_unbacked_under_pressure(target_bytes)
+            for key in before - set(self._ram):
+                self._meta.pop(key, None)
+            if result["invalidated_entries"]:
+                self._dirty = True
+                self._flush_index(force=True)
+            return result
+
     def observe(self, tokens) -> int:
         """Count one request that starts with exactly these tokens (the system message). Returns the sightings before this
         one, so 0 means a new prompt and 1 or more a recognised one."""

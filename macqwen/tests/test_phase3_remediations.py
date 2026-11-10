@@ -122,6 +122,32 @@ class TestPhase3Remediations(unittest.TestCase):
         self.assertNotIn(child.key, cache._disk)
         self.assertIn(child.key, cache._ram)
 
+    def test_pressure_invalidation_removes_only_unleased_unbacked_leaves(self):
+        cache = P.PrefixCache("testfp" + "0" * 26, ram_budget=10**8,
+                              directory=self.cache_dir, min_disk_free_bytes=10**15)
+        parent = make_dummy_entry("p" * 64, n_tokens=10, parent=None)
+        child = make_dummy_entry("c" * 64, n_tokens=20, parent=parent.key, parent_tokens=10)
+        cache._admit(parent)
+        cache._admit(child)
+        with cache.lease((child.key,)):
+            self.assertEqual(cache.invalidate_unbacked_under_pressure()["invalidated_entries"], 0)
+        result = cache.invalidate_unbacked_under_pressure()
+        self.assertEqual(result["invalidated_entries"], 2)
+        self.assertTrue(result["recompute_required"])
+        self.assertEqual(cache._ram_bytes, 0)
+        self.assertEqual(cache.inspect()["stats"]["pressure_invalidated"], 2)
+        self.assertNotIn(child.key, cache._plans)
+
+    def test_pressure_invalidation_never_discards_durable_snapshot(self):
+        cache = P.PrefixCache("testfp" + "0" * 26, ram_budget=10**8, directory=self.cache_dir)
+        entry = make_dummy_entry("e" * 64, n_tokens=10, parent=None)
+        cache._admit(entry)
+        cache._disk[entry.key] = {"n": 10, "parent": None, "bytes": 10, "atime": 0}
+        result = cache.invalidate_unbacked_under_pressure()
+        self.assertEqual(result["invalidated_entries"], 0)
+        self.assertIn(entry.key, cache._ram)
+        self.assertIn(entry.key, cache._disk)
+
     def test_r2_07_prefix_cache_evicts_foreign_leaves_first(self):
         """R2-07: Base PrefixCache tracks foreign manifests and reclaims them first on disk over-budget."""
         fp = "testfp" + "0" * 26
