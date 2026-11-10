@@ -65,6 +65,18 @@ class NemotronServerTests(unittest.TestCase):
         status, raw, _ = call(self.port, "GET", "/health")
         body = json.loads(raw)
         self.assertEqual((status, body["model"]), (200, "veystrix-nemotron35-lightning"))
+        engine = body["engine"]               # pool, prefetch, prefix cache and readiness telemetry
+        for key in ("pool", "prefetch", "prefill", "expert_gb_read"):
+            self.assertIn(key, engine)
+
+    def test_cache_diagnostics_carry_the_last_prefill_the_warmup_client_reads(self):
+        call(self.port, "POST", "/v1/chat/completions", {
+            "model": "x", "messages": [{"role": "user", "content": "hi there"}], "max_tokens": 2})
+        status, raw, _ = call(self.port, "GET", "/v1/cache/diagnostics")
+        last = json.loads(raw)["last_prefix"]
+        self.assertEqual(status, 200)
+        for key in ("prompt_tokens", "hit_tokens", "prefilled_tokens", "outcome"):
+            self.assertIn(key, last)
 
     def test_non_streaming_chat_reports_usage(self):
         status, raw, _ = call(self.port, "POST", "/v1/chat/completions", {

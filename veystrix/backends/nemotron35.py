@@ -101,6 +101,25 @@ AUTHORIZE_ENV = "VEYSTRIX_NEMOTRON_AUTHORIZED"
 RUNTIME_VERSION = "veystrix-nemotron35-stream-1"
 _SESSION_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 UNLIMITED = (1 << 31) - 1
+LAYER_MAJOR_DEFAULT = 8192   # layer-major prefill segment in tokens (measured: 17% faster, 39% less SSD read, 40% lower peak than chunk-major); 0 = chunk-major
+
+
+@dataclass
+class LastPrefix:
+    """What the last prefill reused and computed, in the shape the shared server and the warm-up client read."""
+    prompt_tokens: int = 0
+    hit_tokens: int = 0
+    prefilled_tokens: int = 0
+    prefill_seconds: float = 0.0
+    snapshot_seconds: float = 0.0
+    outcome: str = "cold"
+    layer_major: bool = False
+
+    def as_dict(self) -> dict:
+        return {"prompt_tokens": self.prompt_tokens, "hit_tokens": self.hit_tokens,
+                "reused_tokens": self.hit_tokens, "prefilled_tokens": self.prefilled_tokens,
+                "prefill_seconds": round(self.prefill_seconds, 3), "snapshot_seconds": round(self.snapshot_seconds, 3),
+                "outcome": self.outcome, "layer_major": self.layer_major}
 
 
 @dataclass
@@ -147,7 +166,7 @@ class NemotronBackend(Conversation):
                  session_dir: str = "~/.cache/veystrix/nemotron35/sessions",
                  config_check=None, machine=None, tokenizer=None, verify: bool = True,
                  prefix_dir=None, prefix_cache: bool | None = None, prefix_quota_gb: float | None = None,
-                 snapshot_tokens: int | None = None):
+                 snapshot_tokens: int | None = None, layer_major_tokens: int | None = None):
         from models.nemotron35 import admission
         from models.nemotron35.backend_core import EngineCore
         from models.nemotron35.config import validate_config
@@ -177,7 +196,9 @@ class NemotronBackend(Conversation):
             tokenizer = _load_transformers_tokenizer().from_pretrained(str(root))
         super().__init__(tokenizer)
         self.streamed = load_streamed(root, pool_bytes=plan.pool_bytes, config_check=check, verify=verify)
-        self.core = EngineCore(self.streamed, chunk_tokens=plan.chunk_tokens)
+        if layer_major_tokens is None:
+            layer_major_tokens = int(os.environ.get("VEYSTRIX_NEMOTRON_LAYER_MAJOR_TOKENS") or LAYER_MAJOR_DEFAULT)
+        self.core = EngineCore(self.streamed, chunk_tokens=plan.chunk_tokens, layer_major_tokens=layer_major_tokens)
         self.model_path = str(root)
         self.config = config
         self.context_limit = plan.context_tokens
@@ -270,8 +291,58 @@ class NemotronBackend(Conversation):
                 "context_limit": self.context_limit, "expert_bytes_read": self.streamed.reader.bytes_read}
 
     # -- generation --------------------------------------------------------------------------------------------
+    last_readiness = None
+    _recovery = None
+
+    def _purge(self, required: int):
+        """Conditional file-cache purge (FLASHNEXT_AUTO_PURGE=1 and ``sudo -n`` permission); (action, detail)."""
+        from models.flashnext import purge_recovery as P
+        if not P.enabled():
+            return "skipped", "auto purge is off"
+        if self._recovery is None:
+            self._recovery = P.PurgeRecovery(P.Config.from_environment())
+        outcome = self._recovery.attempt(required, "request")
+        return outcome.action, outcome.reason
+
     def generate(self, max_tokens: int, out=None, on_prefilled=None, on_prefill_progress=None,
                  on_decode_token=None, should_cancel=None):
+        from models.flashnext import purge_recovery as P
+        from models.nemotron35 import readiness
+        if self.pending:
+            self.last_readiness = readiness.ensure_ready(
+                self._current_machine, plan=self.plan, resident_pool_bytes=self.streamed.pool.resident_bytes,
+                reclaim=self.reclaim_owned_memory, purge=self._purge)
+        with P.ACTIVITY.request():         # a purge never overlaps a request
+            return self._generate(max_tokens, out, on_prefilled, on_prefill_progress, on_decode_token, should_cancel)
+
+    def health_snapshot(self) -> dict:
+        """What /health reports about this engine: pool, prefetch, prefix cache, last prefill, memory readiness."""
+        pool = self.streamed.pool.stats()
+        asked = pool["hits"] + pool["misses"]
+        used, issued = pool["prefetch_used"], pool["prefetch_issued"]
+        snapshot = {
+            "model": "nemotron35-lightning", "runtime": RUNTIME_VERSION,
+            "pool": {"budget_gib": round(pool["budget_bytes"] / 2**30, 2), "resident_gib": round(pool["resident_bytes"] / 2**30, 2),
+                     "hit_rate": round(pool["hits"] / asked, 3) if asked else None,
+                     "staged_mib": round(pool["staged_bytes"] / 2**20, 1)},
+            "prefetch": {"issued": issued, "used": used, "wasted": pool["prefetch_wasted"],
+                         "precision": round(used / issued, 3) if issued else None},
+            "expert_gb_read": round(pool["bytes_read"] / 1e9, 2),
+            "prefill": {"layer_major_tokens": self.core.layer_major_tokens, "chunk_tokens": self.core.chunk_tokens},
+            "last_prefix": self.last_prefix.as_dict() if self.last_prefix is not None else None,
+            "readiness": self.last_readiness.as_dict() if self.last_readiness is not None else None,
+        }
+        if self.prefix_cache is not None:
+            st = self.prefix_cache.stats
+            snapshot["prefix_cache"] = {"snapshots": len(self.prefix_cache._disk),
+                                        "gb": round(sum(m["bytes"] for m in list(self.prefix_cache._disk.values())) / 1e9, 2),
+                                        "ssd_hits": st.ssd_hits, "cold_lookups": st.cold_lookups,
+                                        "reused_tokens": st.reused_tokens, "restore_failures": st.restore_failures,
+                                        "evicted": st.evicted_ssd}
+        return snapshot
+
+    def _generate(self, max_tokens: int, out=None, on_prefilled=None, on_prefill_progress=None,
+                  on_decode_token=None, should_cancel=None):
         import mlx.core as mx
         from models.nemotron35 import admission
         from models.nemotron35.runtime import Cancelled
@@ -330,7 +401,8 @@ class NemotronBackend(Conversation):
             interrupted()
             raise
         prefill_seconds = began.since(prefill_began)
-        self.last_prefix = {"reused_tokens": restored, "prefilled_tokens": len(feed), "prompt_tokens": total_prompt}
+        outcome = ("extended" if not fresh else "ssd_hit" if restored else "cold")
+        snapshot_began = time.perf_counter()
         if self.prefix_cache is not None and len(feed) >= self.prefix_cache.min_tokens:
             try:   # the prompt boundary: the next request usually shares this whole prefix
                 if self.prefix_cache.save(self.core.cache, self.tape):
@@ -338,6 +410,11 @@ class NemotronBackend(Conversation):
                 self.prefix_cache.prune(self.tape, snapshots)
             except Exception:
                 pass   # a failed snapshot never fails the request
+        self.last_prefix = LastPrefix(
+            prompt_tokens=(restored if fresh else cached) + len(feed), hit_tokens=(restored if fresh else cached),
+            prefilled_tokens=len(feed),
+            prefill_seconds=prefill_seconds, snapshot_seconds=time.perf_counter() - snapshot_began, outcome=outcome,
+            layer_major=bool(self.core.layer_major_tokens and len(feed) > self.core.chunk_tokens))
         if on_prefilled:
             on_prefilled()
         sampler = Sampler(self.sampling)
