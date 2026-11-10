@@ -80,12 +80,12 @@ class RingCase(unittest.TestCase):
     create_main_pool = True         # False: a first turn, before any decode pool
     extra_env = {}
 
-    @classmethod
     def need_ring(self, ring):
         """A ring is granted only when this machine has the memory and Metal limits for it (a small CI runner may not)."""
         if ring is None:
             self.skipTest(f"scratch ring not granted on this machine: {prefill_ring.LAST_REASON[0]}")
 
+    @classmethod
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory()
         build_checkpoint(cls.directory.name)
