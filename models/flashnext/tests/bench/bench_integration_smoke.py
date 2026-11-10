@@ -202,25 +202,40 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, default=G.CHECKPOINT)
     parser.add_argument("--pool-gb", default="2")
+    parser.add_argument("--power-rules", choices=("ac", "battery-ok"), default="ac",
+                        help="battery-ok (owner permission 2026-11-10) allows discharging above 25%%; recorded in the run")
+    parser.add_argument("--server", choices=("layer-major", "reference"), default="layer-major",
+                        help="reference runs the chunk-major default server instead of the layer-major candidate")
+    parser.add_argument("--buffered-fill", action="store_true", help="reference server only: enable pool-buffered-fill")
     args = parser.parse_args()
+    if args.buffered_fill and args.server != "reference":
+        parser.error("--buffered-fill applies to --server reference")
     checkpoint = args.checkpoint.expanduser().resolve(strict=True)
-    initial, postponed, purge = G.prepare_headroom(candidate=True, memory_rules="swap-only", power_rules="ac")
+    initial, postponed, purge = G.prepare_headroom(candidate=args.server == "layer-major", memory_rules="swap-only", power_rules=args.power_rules)
     if postponed:
         print(f"Smoke postponed (nothing started): {postponed}", flush=True)
         return 2
     path = output_path("flashnext", "integration-smoke", "integration-smoke.jsonl")
     run = MeasurementRun(path, runtime="flashnext", experiment="integration-smoke", metadata={
-        "checkpoint": str(checkpoint), "pool_gb": args.pool_gb, "memory_rules": "swap-only", "initial_machine": initial,
+        "checkpoint": str(checkpoint), "pool_gb": args.pool_gb, "memory_rules": "swap-only", "power_rules": args.power_rules, "server": args.server, "buffered_fill": args.buffered_fill, "initial_machine": initial,
         "purpose": "protocol and cancel smoke with layer-major + layer-prefetch; not a speed or exactness result"})
     run.start()
     report = {}
     try:
-        command, evidence, machine = G.run_arm("layer", "smoke", checkpoint, None, path.parent, candidate="layer-major",
-                                               uncached=True, memory_rules="swap-only", prefetch=True, base_pool_gb=args.pool_gb,
-                                               reads="prefill", power_rules="ac", driver=make_driver(checkpoint, report),
-                                               auto_purge=True,
-                                               extra_env={"FLASHNEXT_SWAP_CEILING_MIB": "3072", "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "768"})
-        run.arm(arm_id="smoke", condition="layer", round_index=1, command=command, metrics=evidence, **machine)
+        if args.server == "layer-major":
+            command, evidence, machine = G.run_arm("layer", "smoke", checkpoint, None, path.parent, candidate="layer-major",
+                                                   uncached=True, memory_rules="swap-only", prefetch=True, base_pool_gb=args.pool_gb,
+                                                   reads="prefill", power_rules=args.power_rules, driver=make_driver(checkpoint, report),
+                                                   auto_purge=True,
+                                                   extra_env={"FLASHNEXT_SWAP_CEILING_MIB": "3072", "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "768"})
+        else:
+            command, evidence, machine = G.run_arm("chunk", "smoke", checkpoint, None, path.parent, uncached=True,
+                                                   memory_rules="swap-only", base_pool_gb=args.pool_gb, reads="prefill",
+                                                   power_rules=args.power_rules, driver=make_driver(checkpoint, report),
+                                                   auto_purge=True,
+                                                   extra_env={"FLASHNEXT_SWAP_CEILING_MIB": "3072", "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "768"},
+                                                   extra_enables=("pool-buffered-fill",) if args.buffered_fill else ())
+        run.arm(arm_id="smoke", condition=args.server, round_index=1, command=command, metrics=evidence, **machine)
         problems = verdict(report)
         run.validation("integration-smoke", "fail" if problems else "pass", reason="; ".join(problems) or None)
         print(json.dumps(report, indent=1, default=str), flush=True)
