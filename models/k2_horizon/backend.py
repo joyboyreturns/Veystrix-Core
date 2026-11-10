@@ -11,19 +11,19 @@ import re
 import tempfile
 import time
 
-from macqwen.backends.base import (
+from veystrix.backends.base import (
     CANCELLABLE_PREFILL_STEP_SIZE,
     DecodeTimer,
     GenerationCancelled,
 )
-from macqwen.conversation import (
+from veystrix.conversation import (
     Conversation,
     EXTRA_REASONING,
     content_sentinel,
     split_content_slots,
 )
-from macqwen.sampling import Sampler, Sampling
-from macqwen.text import stream_decode
+from veystrix.sampling import Sampler, Sampling
+from veystrix.text import stream_decode
 
 from .checkpoint import resolve_k2_horizon
 from .protocol import ProtocolTranslator

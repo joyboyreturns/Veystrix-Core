@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-This report reviews the MLX 0.32.2 Metal backend against the Flash-Next decode loop used by **MACQWEN**, a 176B sparse MoE running on an M4 Mac with 16 GB unified memory and streaming expert weights from SSD.
+This report reviews the MLX 0.32.2 Metal backend against the Flash-Next decode loop used by **VEYSTRIX**, a 176B sparse MoE running on an M4 Mac with 16 GB unified memory and streaming expert weights from SSD.
 
 The central observation is:
 

@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 from models.flashnext.tests.bench.bench_long_states import PROMPT, Clocks  # noqa: E402
 
 # Timers the runtime keeps in `expert_cache._TIMERS`, in seconds. The rest of
@@ -83,13 +83,13 @@ def main() -> int:
         shutil.copy2(item, private / item.name)
     os.environ["FLASHNEXT_PIN_CACHE"] = str(private / "pins.json")
 
-    from macqwen.backends.flashnext import FlashNextBackend
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.backends.flashnext import FlashNextBackend
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext import expert_cache
     from models.flashnext.checkpoint_policy import resolve_resident_experts
     from models.flashnext.diskio import ReadMeter
 
-    checkpoint = str(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+    checkpoint = str(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
     resident = resolve_resident_experts(None, checkpoint) or 32
     backend = FlashNextBackend(model_path=checkpoint, resident_experts=resident)
     clocks, meter = Clocks(), ReadMeter()

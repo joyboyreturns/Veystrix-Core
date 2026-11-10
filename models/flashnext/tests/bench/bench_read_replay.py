@@ -43,7 +43,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 
 TRACE = ROOT / "results/flashnext/20260922-221213-route-trace-manual/route-trace.json.gz"
 PROJECTIONS = ("gate_proj", "up_proj", "down_proj")
@@ -96,14 +96,14 @@ def main() -> int:
     import mlx.core as mx
     import numpy as np
 
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext import expert_cache as ec
     from models.flashnext.diskio import disk_bytes_read, free_memory_mb
     from models.flashnext.slab_pack import RECORD_STRIDE
     from models.flashnext.store import SafeTensorStore
 
     trace = json.load(gzip.open(TRACE))
-    checkpoint = str(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+    checkpoint = str(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
     store = SafeTensorStore(checkpoint)
     slab = ec._slab_allocation(store, int(os.environ["FLASHNEXT_SLAB_GLOBAL"]), 32)
     slab = {int(layer): set(experts) for layer, experts in slab.items()}

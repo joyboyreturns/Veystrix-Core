@@ -39,7 +39,7 @@ def run_one_arm(wired_gb_val: float, tokens: int) -> dict:
     os.environ["FLASHNEXT_METAL_RUNTIME"] = "1"
     os.environ["FLASHNEXT_SLAB"] = "0"
 
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
     from models.flashnext.diskio import ReadMeter, free_memory_mb
     from models.flashnext.loader import wired_gb, set_wired_gb
 

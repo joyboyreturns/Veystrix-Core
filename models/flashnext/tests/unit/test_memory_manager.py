@@ -385,7 +385,7 @@ class RealPieceTests(unittest.TestCase):
 
 class BackendWiringTests(unittest.TestCase):
     def backend(self, reusable=2046):
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         backend = object.__new__(FlashNextBackend)
         backend.language = object()
@@ -439,7 +439,7 @@ class BackendWiringTests(unittest.TestCase):
             self.run_hook(2068, others=11.0, reusable=0)
         import inspect
 
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         source = inspect.getsource(FlashNextBackend._generate)
         self.assertIn("except memory_manager.MemoryBudgetRefused:\n                    self._mark_replay_needed()", source)
@@ -447,7 +447,7 @@ class BackendWiringTests(unittest.TestCase):
     def test_cleanup_runs_in_a_finally_so_cancellation_and_errors_are_covered(self):
         import inspect
 
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         source = inspect.getsource(FlashNextBackend.generate)
         self.assertIn("self._after_request()", source)

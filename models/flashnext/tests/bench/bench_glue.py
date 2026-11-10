@@ -83,7 +83,7 @@ def main() -> int:
                         help="routed slots per layer; decode keeps about 8")
     args = parser.parse_args()
 
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
 
     path = str(resolve_flashnext(args.model))
     config = json.load(open(os.path.join(path, "config.json")))

@@ -331,7 +331,7 @@ def build_agent_prompts(tokenizer, path=AGENT_PROMPT_FILE) -> dict:
     The token counts are measured with the real chat template, and the system-message count is where the
     first ``<|im_end|>\\n`` ends, which is where the prefix cache snapshots.
     """
-    from macqwen.conversation import Conversation
+    from veystrix.conversation import Conversation
 
     system = Path(path).read_text().strip()
     marker = tokenizer.encode("<|im_end|>\n", add_special_tokens=False)
@@ -357,7 +357,7 @@ def build_long_prompts(tokenizer, source: str, tokens: int = 1025) -> dict:
     reference notes cut from the fixed source text, sized so that the first request is close to ``tokens``
     after the chat template. Token counts are measured with the real template, never assumed.
     """
-    from macqwen.conversation import Conversation
+    from veystrix.conversation import Conversation
 
     ids = tokenizer.encode(source)
     needed = max(LONG_QUESTION_OFFSETS.values()) + LONG_QUESTION_TOKENS
@@ -516,6 +516,8 @@ def swapin_mib(vm: dict | None, page_bytes: int) -> float:
 @dataclass
 class SafetyPolicy:
     min_battery_percent: int = 25
+    allow_low_power: bool = False
+    require_ac: bool = False
     swap_growth_mb: float = 64.0
     # Cumulative swap-in growth allowed per arm, measured from that arm's own counter.
     # A few pages are touched back in when a process maps its memory while old swap
@@ -574,10 +576,12 @@ class Watchdog:
                      "compressor_warning": bool(growth is not None and growth > policy.compressor_limit_mib),
                      "swapin_mib": round(grown, 3),
                      "swapout_pages": max((vm or {}).get("swapout", 0), 0)}
-        if sample.get("low_power"):
+        if sample.get("low_power") and not policy.allow_low_power:
             return "Low Power Mode is on"
         percent = sample.get("battery_percent")
         source = sample.get("power_source")
+        if policy.require_ac and source != "ac":
+            return "AC power is required by Veystrix Settings"
         if source == "battery" and percent is not None and percent < policy.min_battery_percent:
             return f"battery {percent}% is below {policy.min_battery_percent}%"
         if policy.final:

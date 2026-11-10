@@ -57,13 +57,13 @@ The earlier architecture work is committed and should be preserved:
 - Failure-path protection drains expert-pool fill writes and invalidates failed slots before reuse. N-gram per-lookup deduplication is an **unmeasured opt-in prototype** (`--enable ngram-dedup`), not a claimed performance win.
 - Integration-smoke verdicts were strengthened to reject missing/malformed expected tool calls, SSE errors followed by `[DONE]`, and invalid Anthropic/Responses envelopes.
 
-On the last committed full-routing tree, the full offline suites exited successfully: **1,791 FlashNext tests run, 3 skipped; 689 MacQwen tests run**. After a test-only isolation edit, 78 focused tests passed. These do not establish live model exactness, server memory safety, or real client compatibility.
+On the last committed full-routing tree, the full offline suites exited successfully: **1,791 FlashNext tests run, 3 skipped; 689 Veystrix tests run**. After a test-only isolation edit, 78 focused tests passed. These do not establish live model exactness, server memory safety, or real client compatibility.
 
 ## Uncommitted work at interruption — review before relying on it
 
 At handoff the following modifications exist in addition to this handoff document:
 
-- `macqwen/backends/flashnext.py` and `macqwen/tests/test_flashnext_backend.py`: routing-change replay preserves the previous `turn_closed` flag to avoid adding a duplicate end-of-message marker. The agent reported 13 focused tests passed.
+- `veystrix/backends/flashnext.py` and `veystrix/tests/test_flashnext_backend.py`: routing-change replay preserves the previous `turn_closed` flag to avoid adding a duplicate end-of-message marker. The agent reported 13 focused tests passed.
 - `models/flashnext/expert_cache.py`, `expert_pool.py`, and `tests/unit/test_expert_pool.py`: when the routed unique expert count exceeds pool capacity, use the streamed path rather than overwrite slots still needed by the same dispatch; direct oversized assignments fail before mutation. Review fallback arithmetic, G32 BF16 cast, route order, error handling and lifetimes. The agent reported 119 focused pool/ring tests passed; no checkpoint test.
 - `models/flashnext/tests/bench/bench_decode_profile.py` and `tests/unit/test_decode_profile.py`: a `--buffered-fill` option, AC as the current default (which can be explicitly changed for your battery experiments), and a process physical-read delta divided by later output tokens rather than the smaller timed-tail count. This is process I/O and may include housekeeping, not expert-only bytes. It marks optional expert-I/O statistics unavailable when no layers were instrumented. A combined focused command completed with **37 tests, exit 0** before the interruption; inspect the precise changes and rerun suitable focused tests.
 - `models/flashnext/tests/bench/bench_layer_gate.py` and `tests/unit/test_layer_gate_probe.py`: the interrupted safety agent was adding a strict proactive swap stop and faster strict-mode monitoring. Review the diff and tests. Strict-mode behavior is different from older historical `swap-only` runs; do not mislabel comparisons.
@@ -89,16 +89,16 @@ Relevant regression commands, from the repository root:
 
 ```bash
 .venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
 ```
 
-Keep `-t .`: the MacQwen test package sets an isolated warm-cache directory. Older unqualified discovery failed the isolation assertion and must not be used as final evidence. Expect some test output to contain intentional failures from tests of gate reporting; use the actual unittest summary and process exit code.
+Keep `-t .`: the Veystrix test package sets an isolated warm-cache directory. Older unqualified discovery failed the isolation assertion and must not be used as final evidence. Expect some test output to contain intentional failures from tests of gate reporting; use the actual unittest summary and process exit code.
 
 ## Research and measurement standards
 
 Review the references in `phase2-reference-research.md` and the original owner mission, especially moe-offload, Vates, streamlx, Palm-Infra, Apple's SpecMD, Layered Prefill, MLX custom Metal kernel documentation, vLLM Metal offload, and MacPaw's Apple Silicon study. Check model architecture, quantization, license, MLX version and hardware differences before transferring ideas. In particular, moe-offload's public Qwen3.8 native path uses a different Q2 repack and different hardware and contains read-error-handling assumptions unsuitable for direct copying.
 
-Use the project measurement standard: schema 1 records via `macqwen.results`/`MeasurementRun`, preserve raw arms, interruptions and validation failures, record checkpoint/source/environment/prompt/sampler/cache/provenance, exact token digests and state, physical bytes and memory, and reversed-order paired arms with a resolution band. Profiled runs may perturb synchronization; report diagnostic splits separately from unprofiled performance. Historical cache simulations are logical-demand models, not physical SSD results. Respect fanless thermal drift, avoid benchmarking until unsafe preflight conditions are resolved, and keep the checkpoint and user data unchanged.
+Use the project measurement standard: schema 1 records via `veystrix.results`/`MeasurementRun`, preserve raw arms, interruptions and validation failures, record checkpoint/source/environment/prompt/sampler/cache/provenance, exact token digests and state, physical bytes and memory, and reversed-order paired arms with a resolution band. Profiled runs may perturb synchronization; report diagnostic splits separately from unprofiled performance. Historical cache simulations are logical-demand models, not physical SSD results. Respect fanless thermal drift, avoid benchmarking until unsafe preflight conditions are resolved, and keep the checkpoint and user data unchanged.
 
 ## Commands and rollback context
 

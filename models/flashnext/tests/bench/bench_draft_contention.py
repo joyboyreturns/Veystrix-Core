@@ -81,7 +81,7 @@ def stop_draft(proc) -> dict:
 def run_target(args) -> dict:
     """One target arm, in its own process, exactly as the chat runs it."""
     command = [
-        PYTHON, "-u", os.path.join(ROOT, "macqwen", "session.py"),
+        PYTHON, "-u", os.path.join(ROOT, "veystrix", "session.py"),
         "--model", "flashnext",
         "--profile", "plain",
         "--exact-quality",

@@ -6,8 +6,8 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from macqwen.testsuite.api import TestContext, TestSpec
-from macqwen.testsuite.catalog import build_catalog
+from veystrix.testsuite.api import TestContext, TestSpec
+from veystrix.testsuite.catalog import build_catalog
 
 
 class ComparisonCaseTests(unittest.TestCase):

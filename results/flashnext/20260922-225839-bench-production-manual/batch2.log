@@ -16,7 +16,7 @@
   keepwarm vs baseline: +3.5% gen median
   matched paired two-SE band is 25.2%, too wide for a small-effect decision (mean +3.0%).
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-223051-bench-production-manual/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-223051-bench-production-manual/production.json
 === glue at P15
   system load average before: (3.19140625, 4.74267578125, 5.22265625)
   !! round 1 of compiled produced different tokens; exact comparison rejected
@@ -39,7 +39,7 @@
   interactive vs default: +0.0% gen median
   paired mean effect +1.2% is inside the matched paired two-SE band of 2.1 percent, so this remains unresolved.
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-223458-bench-production-manual/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-223458-bench-production-manual/production.json
 === stream embed
   every fresh median settled after 5 rounds
 
@@ -62,5 +62,5 @@
   This is a diagnostic association, not a causal conclusion;
   inspect the environment before interpreting the arm effect.
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-223751-bench-production-manual/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-223751-bench-production-manual/production.json
 === BATCH DONE

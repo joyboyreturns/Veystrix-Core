@@ -7,7 +7,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from macqwen import cli
+from veystrix import cli
 
 
 class LauncherTests(unittest.TestCase):
@@ -17,9 +17,9 @@ class LauncherTests(unittest.TestCase):
             python.touch()
             with patch.dict(
                 os.environ,
-                {"MACQWEN_BONSAI2_PYTHON": str(python)},
+                {"VEYSTRIX_BONSAI2_PYTHON": str(python)},
                 clear=False,
-            ), patch("macqwen.cli._supports_python", return_value=True):
+            ), patch("veystrix.cli._supports_python", return_value=True):
                 command, _ = cli.command([
                     "--model", "bonsai2", "--checkpoint", "b2",
                 ])
@@ -28,8 +28,8 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(command[command.index("--model-path") + 1], "b2")
 
     def test_chat_construction_caps_the_allocator_cache(self):
-        from macqwen import preferences
-        from macqwen.session import build_backend
+        from veystrix import preferences
+        from veystrix.session import build_backend
 
         args = SimpleNamespace(
             model_path="/models/b2",

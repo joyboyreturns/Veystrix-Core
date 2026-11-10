@@ -26,12 +26,12 @@
 - **Status**: `VERIFIED`
 - **Subgoals**:
   - [x] 0.1 Verify working tree (branch `development3.8`, `main` untouched, uncommitted work preserved).
-  - [x] 0.2 Verify test counts & resolve 28th fault scenario anomaly (audited: 1,189 passed / 5 skipped in FlashNext, 427 passed in MACQWEN; 28th scenario was an arming instrumentation discrepancy on full cache hits).
+  - [x] 0.2 Verify test counts & resolve 28th fault scenario anomaly (audited: 1,189 passed / 5 skipped in FlashNext, 427 passed in VEYSTRIX; 28th scenario was an arming instrumentation discrepancy on full cache hits).
   - [x] 0.3 Identify unfinished implementation (short-prefill decode pool bypass, 4-5s delay, 512-token ring floor).
   - [x] 0.4 Create dependency map (`expert_cache.py`, `expert_pool.py`, `prefill.py`, `memory_manager.py`).
 - **Dependencies**: None.
 - **Files Modified**: `task.md`, `implementation_plan.md`, `walkthrough.md`, `docs/flashnext/phase2-engineering-evidence.md`.
-- **Tests Executed**: `unittest discover -s macqwen/tests`, `unittest discover -s models/flashnext/tests/unit`.
+- **Tests Executed**: `unittest discover -s veystrix/tests`, `unittest discover -s models/flashnext/tests/unit`.
 - **Evidence**: `phase2-engineering-evidence.md` Section 1 & 2.
 - **Remaining Risks**: None.
 
@@ -230,8 +230,8 @@
 - **Status**: `VERIFIED`
 - **Subgoals**:
   - [x] 14.1 Full FlashNext unit suite (**1,208 passed, 5 skipped**, 0 failed out of 1,213 tests).
-  - [x] 14.2 MACQWEN regression suite (**427 passed**, 0 failed).
-  - [x] 14.3 Full diff inspection (only `macqwen/` and `models/flashnext/` modified; `main` untouched; no weights/routing/quantization modified; production defaults strictly preserved).
+  - [x] 14.2 VEYSTRIX regression suite (**427 passed**, 0 failed).
+  - [x] 14.3 Full diff inspection (only `veystrix/` and `models/flashnext/` modified; `main` untouched; no weights/routing/quantization modified; production defaults strictly preserved).
 - **Dependencies**: All prior goals.
 - **Evidence Produced**: `docs/flashnext/phase2-engineering-evidence.md` Section 10.
 - **Remaining Risks**: None. Combined passing tests: **1,643 tests passed (100% pass rate)**.

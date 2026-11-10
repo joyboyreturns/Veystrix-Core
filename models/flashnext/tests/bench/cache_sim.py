@@ -293,7 +293,7 @@ def main(argv=None) -> int:
     parser.add_argument("--json", default="")
     args = parser.parse_args(argv)
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[4]))
-    from macqwen.results import output_path
+    from veystrix.results import output_path
 
     target = output_path("flashnext", "cache-sim", "cache-sim.json", args.json)
 

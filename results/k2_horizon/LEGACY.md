@@ -29,12 +29,12 @@ contract change from these measurements.
 
 ## Reproduction commands
 
-We ran the benchmark from `/Users/gioma/Developer/MACQWEN` with the recorded
+We ran the benchmark from `/Users/gioma/Developer/VEYSTRIX` with the recorded
 model interpreter and checkpoint alias. These are the exact argv for the
 retained run shapes (the greedy seed does not affect the required digest):
 
 ```bash
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 
 .venv/bin/python -m models.k2_horizon.tests.bench.bench --checkpoint k2 --compare baseline --fixture context-2k --horizon product --window 32 --rounds 3 --sampling greedy --prefill-step-size 512 --seed 7 --jsonl docs/k2_horizon/measurements/20260916-baseline-product.jsonl
 
@@ -136,7 +136,7 @@ Our separate [`k2-metal-diagnostic.jsonl`](k2-metal-diagnostic.jsonl) records on
 under Xcode-beta's Metal System Trace. We used this command:
 
 ```bash
-/Applications/Xcode-beta.app/Contents/Developer/usr/bin/xctrace record --template "Metal System Trace" --output "/var/folders/58/86027c3j0tvc1gkm43k28c180000gn/T/opencode/k2-product-metal.trace" --time-limit 100s --launch -- /Users/gioma/Developer/MACQWEN/.venv/bin/python -m models.k2_horizon.tests.bench.bench --child --checkpoint k2 --arm-id metal-diagnostic --condition control --round 0 --options-json '{}' --record docs/k2_horizon/measurements/k2-metal-diagnostic.jsonl --fixture context-2k --horizon 256 --window 32 --effort medium --sampling greedy --prefill-step-size 512 --seed 7
+/Applications/Xcode-beta.app/Contents/Developer/usr/bin/xctrace record --template "Metal System Trace" --output "/var/folders/58/86027c3j0tvc1gkm43k28c180000gn/T/opencode/k2-product-metal.trace" --time-limit 100s --launch -- /Users/gioma/Developer/VEYSTRIX/.venv/bin/python -m models.k2_horizon.tests.bench.bench --child --checkpoint k2 --arm-id metal-diagnostic --condition control --round 0 --options-json '{}' --record docs/k2_horizon/measurements/k2-metal-diagnostic.jsonl --fixture context-2k --horizon 256 --window 32 --effort medium --sampling greedy --prefill-step-size 512 --seed 7
 ```
 
 The trace starts at `2026-09-16T20:22:28.578-03:00` and ends after 57.636162 seconds.

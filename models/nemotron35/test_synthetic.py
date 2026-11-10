@@ -266,8 +266,8 @@ class SyntheticAdapterTests(unittest.TestCase):
     def test_adapter_executes_streamed_fixture_and_cancels_safely(self):
         import tempfile
         from pathlib import Path
-        from macqwen.backends.base import GenerationCancelled
-        from macqwen.backends.nemotron35 import SyntheticBackend
+        from veystrix.backends.base import GenerationCancelled
+        from veystrix.backends.nemotron35 import SyntheticBackend
         from .fixture import create_fixture
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'fixture'
@@ -287,7 +287,7 @@ class CliSafetyTests(unittest.TestCase):
     def test_nemotron_launcher_never_initializes_runtime(self):
         import sys
         from unittest.mock import patch
-        from macqwen import cli
+        from veystrix import cli
         with patch.object(sys, 'argv', ['chat.sh', '--model', 'nemotron35-lightning', '--checkpoint', '/missing']), \
              patch.object(cli, '_interpreter') as interpreter:
             with self.assertRaisesRegex(SystemExit, 'no download'):
@@ -297,7 +297,7 @@ class CliSafetyTests(unittest.TestCase):
     def test_check_missing_checkpoint_does_not_initialize_runtime(self):
         import sys
         from unittest.mock import patch
-        from macqwen import cli
+        from veystrix import cli
         with patch.object(sys, 'argv', ['chat.sh', '--model', 'nemotron35-lightning', '--checkpoint', '/missing', '--check']), \
              patch.object(cli, '_interpreter') as interpreter:
             with self.assertRaisesRegex(SystemExit, 'no download'):

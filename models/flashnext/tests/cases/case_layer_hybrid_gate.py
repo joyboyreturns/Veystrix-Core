@@ -1,5 +1,5 @@
 """Supervised gate for the experimental hybrid prefill plan."""
-from macqwen.testsuite.api import TestSpec, bench_module
+from veystrix.testsuite.api import TestSpec, bench_module
 
 
 def command(config, _result_path):

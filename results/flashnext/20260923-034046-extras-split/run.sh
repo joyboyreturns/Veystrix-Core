@@ -2,7 +2,7 @@
 # One candidate at a time vs chat defaults, fresh process per arm.
 # D defaults, S 120-slot slab over 20 layers, C FLASHNEXT_COMPILE, P prewarm.
 # Order: D S C P D P C S D. 128 greedy tokens, 8 pins. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 arm() {
   local n=$1 name=$2; shift 2

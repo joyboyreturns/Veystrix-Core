@@ -31,7 +31,7 @@
    "ms_per_token": 6.16
   },
   {
-   "site": "macqwen/backends/flashnext.py:708 standard_tokens",
+   "site": "veystrix/backends/flashnext.py:708 standard_tokens",
    "share": 0.0154,
    "ms_per_token": 5.86
   },
@@ -233,7 +233,7 @@
  ],
  "inclusive": [
   {
-   "site": "macqwen/backends/flashnext.py:717 generate",
+   "site": "veystrix/backends/flashnext.py:717 generate",
    "share": 0.997,
    "ms_per_token": 379.68
   },
@@ -243,7 +243,7 @@
    "ms_per_token": 373.82
   },
   {
-   "site": "macqwen/backends/flashnext.py:706 standard_tokens",
+   "site": "veystrix/backends/flashnext.py:706 standard_tokens",
    "share": 0.9816,
    "ms_per_token": 373.82
   },
@@ -378,7 +378,7 @@
    "ms_per_token": 6.16
   },
   {
-   "site": "macqwen/backends/flashnext.py:708 standard_tokens",
+   "site": "veystrix/backends/flashnext.py:708 standard_tokens",
    "share": 0.0154,
    "ms_per_token": 5.86
   },
@@ -413,7 +413,7 @@
    "ms_per_token": 1.18
   },
   {
-   "site": "macqwen/backends/flashnext.py:721 generate",
+   "site": "veystrix/backends/flashnext.py:721 generate",
    "share": 0.003,
    "ms_per_token": 1.15
   },

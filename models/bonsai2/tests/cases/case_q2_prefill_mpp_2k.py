@@ -1,7 +1,7 @@
 """Screen the opt-in packed-Q2 prefill candidate with paging counters retained."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def command(config, result_path: Path) -> list[str]:

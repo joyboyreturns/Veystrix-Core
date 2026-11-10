@@ -1,6 +1,6 @@
 # Real checkpoint validation checklist
 
-Do not load or download a checkpoint for this prototype. When a compatible local checkpoint is later provided, inspect metadata without loading weights:
+The user authorized download of the mlx-community 4-bit checkpoint; do not load full model weights until the bounded runtime is implemented and explicitly authorized. When a compatible local checkpoint is later provided, inspect metadata without loading weights:
 
 ```sh
 cd /Users/vincent/Documents/Veystrix-nemotron35

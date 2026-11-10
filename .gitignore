@@ -23,3 +23,15 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Swift / macOS app build output
+.build/
+.swiftpm/
+*.xcarchive
+# signing material must never be committed
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+sparkle_ed25519_private*

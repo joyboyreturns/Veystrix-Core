@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # corpus stays byte-identical, so bench_decode.py and profile_prefill.py
 # stay in this repo even though nothing imports them.
 HELD_OUT = [
-    "macqwen/tools/repo_token_cache.py",
+    "veystrix/tools/repo_token_cache.py",
     "models/qwen27b/tools/speculative_prefill.py",
     "models/qwen27b/tests/bench/profile_prefill.py",
     "models/qwen27b/tools/repo_context_image.py",

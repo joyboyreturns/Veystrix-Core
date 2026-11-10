@@ -116,7 +116,7 @@ def gate(allow_battery=False):
             heavy.append(f"{os.path.basename(name)} {mb:.0f} MB")
     check("no memory-heavy applications", not heavy, ", ".join(heavy) or "none")
     stray = [l for l in sh("ps", "-axo", "pid=,command=").splitlines()
-             if re.search(r"(macqwen/cli\.py|models\.flashnext\.watchdog|unittest|veystrix)", l) and "smoke_run.py" not in l
+             if re.search(r"(veystrix/cli\.py|models\.flashnext\.watchdog|unittest|veystrix)", l) and "smoke_run.py" not in l
              and " ps " not in l and "grep" not in l]
     check("no stray Veystrix/test processes", not stray, "; ".join(s.strip()[:90] for s in stray) or "none")
     check(f"port {PORT} free", not sh("lsof", "-nP", f"-iTCP:{PORT}", "-sTCP:LISTEN").strip(), f"port {PORT}")
@@ -209,7 +209,7 @@ def main():
         "git_head": sh("git", "-C", str(REPO), "rev-parse", "HEAD").strip(),
         "git_status_lines": len(sh("git", "-C", str(REPO), "status", "--short").splitlines()),
         "python": sys.version}, indent=2))
-    env = {**os.environ, "MACQWEN_SERVER_API_KEY": key, "MACQWEN_REQUEST_LOG": str(out / "requests.jsonl")}
+    env = {**os.environ, "VEYSTRIX_SERVER_API_KEY": key, "VEYSTRIX_REQUEST_LOG": str(out / "requests.jsonl")}
     if args.stub:
         cmd = [sys.executable, str(SMOKE / "stub_server.py"), str(PORT), key]
     else:
@@ -323,7 +323,7 @@ def main():
     if (out / "requests.jsonl").exists():
         summary["requests"] = [json.loads(l) for l in open(out / "requests.jsonl")]
     leftovers = [l for l in sh("ps", "-axo", "pid=,command=").splitlines()
-                 if "models.flashnext.watchdog" in l or "macqwen/cli.py" in l]
+                 if "models.flashnext.watchdog" in l or "veystrix/cli.py" in l]
     summary["leftover_processes"] = leftovers
     summary["outcome"] = summary["outcome"] or "completed (judge the stages from the evidence, not this field)"
     save()

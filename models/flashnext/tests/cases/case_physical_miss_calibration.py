@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from macqwen.testsuite.api import TestSpec, bench_module
+from veystrix.testsuite.api import TestSpec, bench_module
 from .case_product_long import live_parser
 
 

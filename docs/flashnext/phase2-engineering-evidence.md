@@ -31,7 +31,7 @@ For a cached 2K prompt with a 21-token suffix:
 ### 2.2 Baseline Test Count Reconciliation
 - FlashNext Unit Suite: 1,189 passed, 5 skipped (total: 1,194 test cases).
   - Skipped tests: 5 tests with explicit skip conditions (e.g. platform-specific or intentionally bypassed).
-- MACQWEN Regression Suite: 427 tests passed, 0 skipped.
+- VEYSTRIX Regression Suite: 427 tests passed, 0 skipped.
 - Total active passing tests in repository: 1,616 passed (1,621 executed).
 
 ---
@@ -89,7 +89,7 @@ In `StreamingSwitchGLU._read_weights()` (`models/flashnext/expert_cache.py`):
 
 ### 5.1 Architecture & Implementation
 - **Suffix-Aware Request Planning**:
-  - In `macqwen/backends/flashnext.py` and `models/flashnext/memory_manager.py`:
+  - In `veystrix/backends/flashnext.py` and `models/flashnext/memory_manager.py`:
   - When prefix cache hits occur, `tokens = len(prompt) - reusable`.
   - Planning and ring eligibility evaluate `tokens` (uncached suffix) rather than `len(prompt)`. A 2,048-token prompt with 2,027 reusable prefix tokens plans for 21 tokens, avoiding unnecessary prefill ring activation or decode pool release.
 - **Warm Pool Retention**:
@@ -188,8 +188,8 @@ In `StreamingSwitchGLU._read_weights()` (`models/flashnext/expert_cache.py`):
 ## 10. Integration & Full Regression Verification (Goal 14)
 
 ### 10.1 Suite Test Execution
-- **MACQWEN Test Suite**:
-  - Command: `python -m unittest discover -s macqwen/tests`
+- **VEYSTRIX Test Suite**:
+  - Command: `python -m unittest discover -s veystrix/tests`
   - Results: **427 tests passed** (0 failures, 0 errors, 4.47s duration).
 - **FlashNext Unit Suite**:
   - Command: `python -m unittest discover -s models/flashnext/tests/unit`

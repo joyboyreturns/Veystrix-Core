@@ -6,7 +6,7 @@ changing or measuring K2-Horizon.
 ## Environment and launch
 
 The launcher uses the selected environment, then the project `.venv`. Override
-the interpreter with `MACQWEN_K2_HORIZON_PYTHON`.
+the interpreter with `VEYSTRIX_K2_HORIZON_PYTHON`.
 
 Start the installed checkpoint with:
 
@@ -15,7 +15,7 @@ Start the installed checkpoint with:
 ```
 
 The `k2` alias resolves to `~/models/K2-Horizon-7B-MLX-8bit` under
-`MACQWEN_MODEL_ROOT`. We can also pass a full compatible checkpoint path. The
+`VEYSTRIX_MODEL_ROOT`. We can also pass a full compatible checkpoint path. The
 checkpoint contains executable `model.py`; use only a source we trust.
 
 ## Current defaults
@@ -58,8 +58,8 @@ Run checkpoint-free K2 tests:
 Run affected shared tests and compile checks:
 
 ```bash
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'
-.venv/bin/python -m compileall -q macqwen models/k2_horizon
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
+.venv/bin/python -m compileall -q veystrix models/k2_horizon
 ```
 
 A live model comparison must use the interpreter, checkpoint, prompts, token

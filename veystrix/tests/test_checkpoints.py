@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from veystrix.checkpoints import installed_flashnext, resolve_flashnext, resolve_qwen27b
+
+
+def flashnext(root: Path, name: str, model_type: str = "qwen4_exp") -> Path:
+    path = root / name
+    path.mkdir()
+    (path / "config.json").write_text(json.dumps({"model_type": model_type}))
+    (path / "model.safetensors.index.json").write_text(json.dumps({
+        "weight_map": {"weight": "model-00001-of-00001.safetensors"}
+    }))
+    (path / "model-00001-of-00001.safetensors").touch()
+    for filename in ("tokenizer.json", "tokenizer_config.json"):
+        (path / filename).touch()
+    return path
+
+
+def qwen27b(root: Path, name: str = "qwen") -> Path:
+    path = root / name
+    path.mkdir()
+    (path / "config.json").write_text(json.dumps({"vocab_size": 248320}))
+    for filename in (
+        "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
+        "model-00001-of-00001.safetensors",
+    ):
+        (path / filename).touch()
+    (path / "model.safetensors.index.json").write_text(json.dumps({
+        "weight_map": {"weight": "model-00001-of-00001.safetensors"}
+    }))
+    assets = path / "bf16-ends"
+    assets.mkdir()
+    (assets / "embed.bf16").write_bytes(b"\0\0")
+    (assets / "head.bf16").write_bytes(b"\0\0")
+    (assets / "meta.json").write_text(json.dumps({
+        "embed_shape": [1, 1], "head_shape": [1, 1],
+    }))
+    return path
+
+
+class CheckpointTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._environment = patch.dict(os.environ, {}, clear=False)
+        self._environment.start()
+        for name in (
+            "VEYSTRIX_FLASHNEXT_MODEL",
+            "VEYSTRIX_QWEN27B_MODEL",
+            "VEYSTRIX_MODEL_ROOT",
+        ):
+            os.environ.pop(name, None)
+        self.addCleanup(self._environment.stop)
+
+    def test_auto_selects_the_only_complete_compatible_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = flashnext(root, "custom")
+            flashnext(root, "wrong", "other")
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                self.assertEqual(installed_flashnext(), [expected])
+                self.assertEqual(resolve_flashnext(), expected.resolve())
+
+    def test_partial_download_is_not_selected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = flashnext(root, "partial")
+            (path / "model-00001-of-00001.safetensors").unlink()
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                self.assertEqual(installed_flashnext(), [])
+
+    def test_partial_download_explains_how_to_repair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = flashnext(root, "partial")
+            (path / "model-00001-of-00001.safetensors").unlink()
+            with self.assertRaisesRegex(ValueError, "model-00001-of-00001.safetensors"):
+                resolve_flashnext(path)
+
+    def test_multiple_checkpoints_require_an_explicit_choice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            flashnext(root, "first")
+            flashnext(root, "second")
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                with self.assertRaisesRegex(ValueError, "choose a Flash-Next checkpoint"):
+                    resolve_flashnext()
+
+    def test_stale_saved_checkpoint_falls_back_to_the_only_complete_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = flashnext(root, "reap288")
+            stale = root / "deleted-oq4"
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                with self.assertRaisesRegex(ValueError, "incomplete or incompatible"):
+                    resolve_flashnext(stale)
+                self.assertEqual(
+                    resolve_flashnext(stale, allow_stale_fallback=True),
+                    expected.resolve(),
+                )
+
+    def test_stale_fallback_requires_one_complete_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stale = root / "deleted-oq4"
+            flashnext(root, "first")
+            flashnext(root, "second")
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                with self.assertRaisesRegex(ValueError, "incomplete or incompatible"):
+                    resolve_flashnext(stale, allow_stale_fallback=True)
+
+    def test_existing_incomplete_checkpoint_does_not_fall_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            damaged = flashnext(root, "damaged")
+            (damaged / "model-00001-of-00001.safetensors").unlink()
+            flashnext(root, "reap288")
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                with self.assertRaisesRegex(ValueError, "incomplete or incompatible"):
+                    resolve_flashnext(damaged, allow_stale_fallback=True)
+
+    def test_invalid_environment_checkpoint_does_not_fall_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            flashnext(root, "reap288")
+            with patch.dict(
+                os.environ,
+                {
+                    "VEYSTRIX_MODEL_ROOT": str(root),
+                    "VEYSTRIX_FLASHNEXT_MODEL": str(root / "deleted-oq4"),
+                },
+                clear=False,
+            ):
+                with self.assertRaisesRegex(ValueError, "incomplete or incompatible"):
+                    resolve_flashnext()
+
+    def test_vontra_mtp_alias_resolves(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = flashnext(root, "Qwen3.8-Flash-Next-MLX-4bit-MTP")
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                self.assertEqual(
+                    resolve_flashnext("vontra-mtp"), expected.resolve())
+
+    def test_qwen27b_discovery_uses_config_instead_of_a_local_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = qwen27b(root, "any-name")
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
+                self.assertEqual(resolve_qwen27b(), expected.resolve())
+
+    def test_qwen27b_incomplete_bf16_assets_explain_the_repair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = qwen27b(root)
+            (expected / "bf16-ends" / "head.bf16").unlink()
+            with self.assertRaisesRegex(ValueError, "bf16-ends/head.bf16"):
+                resolve_qwen27b(expected)
+
+
+if __name__ == "__main__":
+    unittest.main()

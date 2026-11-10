@@ -136,7 +136,7 @@ decided before the tape changes) calls `pool_lifecycle.make_room`. It releases o
 is ring-eligible with the scratch option, no other request is in flight and no ring is leased; then it fences the GPU, detaches the pool,
 drops every reference, collects and clears the allocator cache. Any error leaves the pool attached and is reported in
 `backend.last_pool_release`. Prefix-cache snapshots are not touched. Offline: 25 pool tests (all branches, concurrency, cancellation-order,
-repeat, wiring order, registry), unit suite 1102 OK, macqwen suite 427 OK.
+repeat, wiring order, registry), unit suite 1102 OK, veystrix suite 427 OK.
 
 Real run: one fresh process, `F2Bnr` (balanced 2,048 plan, restore off, eager linear state, 512-expert scratch ring, 2 GB decode pool, release
 flag on), request A then request B (full cold prefill, plan [2046, 21]), `results/flashnext/20261108-005555-prefill-memory-manual/`. Started at 9.8 GB

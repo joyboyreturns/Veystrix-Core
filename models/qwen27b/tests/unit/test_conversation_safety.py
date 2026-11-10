@@ -1,14 +1,14 @@
 """Hostile-marker safety for FrankensteinEngine conversation builders.
 
 The engine inherits open_conversation/append_user/append_tool_results from
-macqwen.conversation.Conversation. These tests prove pasted control markers
+veystrix.conversation.Conversation. These tests prove pasted control markers
 never become chat structure, BoundaryTokenizer style.
 """
 from __future__ import annotations
 
 import unittest
 
-from macqwen.conversation import IM_END, IM_START, Conversation
+from veystrix.conversation import IM_END, IM_START, Conversation
 from models.qwen27b.frankenstein_engine import FrankensteinEngine
 
 

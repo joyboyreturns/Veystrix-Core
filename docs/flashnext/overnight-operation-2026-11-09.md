@@ -31,7 +31,7 @@ Now refused (exit 71), and ready is only reported while the supervisor's own chi
 * Real `dsh` session 2 (new session): 5,385 of 5,603 tokens restored from SSD in 0.28 s, 218 prefilled. This is the cross-session system-prompt reuse. (That run failed on the malformed `bash` call, fixed above.)
 * Real `dsh` tool loop, two more new sessions after a restart: both exit 0 with correct answers; session start `SNAPSHOT_HIT` 5,385 tokens; each later tool turn prefilled 20-112 tokens on the live state; swap growth 0.
 * `kill -9` of the server: supervisor restarted it, ready again after ~50 s; SSD cache intact.
-* Unit suites (Haiku, unverified by me beyond counts): macqwen 640 OK, flashnext unit 1,611 OK (3 skipped).
+* Unit suites (Haiku, unverified by me beyond counts): veystrix 640 OK, flashnext unit 1,611 OK (3 skipped).
 * Second `./serve.sh` while one runs: refused, nothing started.
 
 ## Decode speed

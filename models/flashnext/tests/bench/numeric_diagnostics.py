@@ -30,7 +30,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
-from macqwen.sampling import Sampler, Sampling
+from veystrix.sampling import Sampler, Sampling
 
 
 # -- recorders -------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ class MarginSampler(Sampler):
 
 @contextmanager
 def margin_sampler(module, sink):
-    """Make ``module.Sampler`` (for example ``macqwen.backends.flashnext``) record margins into ``sink``."""
+    """Make ``module.Sampler`` (for example ``veystrix.backends.flashnext``) record margins into ``sink``."""
     original = module.Sampler
 
     class Recording(MarginSampler):

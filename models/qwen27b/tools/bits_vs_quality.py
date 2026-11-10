@@ -26,7 +26,7 @@ STORE = Path.home() / ".frankenstein" / "v4" / "q8"
 # corpus stays byte-identical, so bench_decode.py and profile_prefill.py
 # stay in this repo even though nothing imports them.
 HELD_OUT = [
-    "macqwen/tools/repo_token_cache.py",
+    "veystrix/tools/repo_token_cache.py",
     "models/qwen27b/tools/speculative_prefill.py",
     "models/qwen27b/tests/bench/bench_decode.py",
 ]

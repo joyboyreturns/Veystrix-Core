@@ -1,0 +1,35 @@
+name: Security
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths: ['pyproject.toml', 'uv.lock', 'apps/**', 'scripts/security/**', '.github/workflows/**']
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Secret scan (working tree and full history)
+        run: |
+          python scripts/security/secret_scan.py
+          python scripts/security/secret_scan.py --history
+      - name: Known-vulnerability audit of pinned Python dependencies
+        run: |
+          python - <<'PY' > requirements-audit.txt
+          import tomllib
+          print("\n".join(tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"]))
+          PY
+          python -m pip install pip-audit==2.9.0
+          pip-audit --requirement requirements-audit.txt --no-deps --disable-pip

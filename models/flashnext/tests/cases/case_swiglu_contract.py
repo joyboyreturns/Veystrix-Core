@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 
-from macqwen.testsuite.api import TestSpec
+from veystrix.testsuite.api import TestSpec
 
 
 def command(config, _result_path: Path) -> list[str]:

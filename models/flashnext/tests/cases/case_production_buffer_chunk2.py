@@ -1,2 +1,2 @@
-from macqwen.testsuite.api import production_case
+from veystrix.testsuite.api import production_case
 TEST = production_case("buffer-chunk2", "Confirms the selected chunk-two shared-buffer path head to head.")

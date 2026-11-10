@@ -14,5 +14,5 @@ round 1 coalesce0          2031 tok   74.85 s   27.13 tok/s   60.66 GB  0.81 GB/
 {"tokens": 512, "equal": false, "max_abs_difference": 0.125, "argmax_equal": true, "full_seconds": 31.48, "last_row_seconds": 33.93, "full_peak_gb": 5.098, "last_row_peak_gb": 5.097}
 {"tokens": 1024, "equal": false, "max_abs_difference": 0.125, "argmax_equal": true, "full_seconds": 39.356, "last_row_seconds": 38.623, "full_peak_gb": 6.128, "last_row_peak_gb": 6.593}
 {"tokens": 2000, "equal": false, "max_abs_difference": 0.125, "argmax_equal": true, "full_seconds": 57.677, "last_row_seconds": 57.466, "full_peak_gb": 7.875, "last_row_peak_gb": 7.174}
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-222525-prefill-last-row-manual/prefill-last-row.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-222525-prefill-last-row-manual/prefill-last-row.json
 === BATCH DONE

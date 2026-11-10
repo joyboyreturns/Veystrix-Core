@@ -1,7 +1,7 @@
 """Startup settings for the Qwen27B backend."""
 from __future__ import annotations
 
-from macqwen.backend_settings import Setting
+from veystrix.backend_settings import Setting
 
 
 def _env(name, default):

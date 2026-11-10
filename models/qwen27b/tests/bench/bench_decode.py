@@ -8,7 +8,7 @@ ContextVM V0 engine. One process per KV configuration.
     python3 bench_decode.py                 # fp16 KV, fused attention kernel
 """
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 import argparse, re, subprocess, sys, time
 from pathlib import Path
 

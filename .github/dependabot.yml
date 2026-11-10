@@ -11,3 +11,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: swift
+    directory: /apps/macos/Veystrix
+    schedule:
+      interval: weekly

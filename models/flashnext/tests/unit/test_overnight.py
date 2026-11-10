@@ -2,6 +2,7 @@ import argparse
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from models.flashnext import overnight as O
@@ -115,6 +116,19 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(kw["env"]["VEYSTRIX_API_KEY"], "local")
         self.assertEqual(kw["env"]["VEYSTRIX_INVALID_TOOL_CALLS"], "pass")
         self.assertTrue(kw["start_new_session"])
+
+    def test_missing_launcher_is_reported_without_restart(self):
+        sup, _ = self.build([], overnight=True)
+        sup.popen = lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("missing chat.sh"))
+        self.assertEqual(sup.run(), O.CONFIG_EXIT)
+        self.assertIn("launch_failed", self.events())
+        self.assertEqual(sup.starts, 1)
+
+    def test_bundled_launcher_preserves_arguments(self):
+        with patch.object(O, "bundled", return_value=True):
+            cmd = O.server_command(args(checkpoint="/model with spaces"))
+        self.assertEqual(cmd[:3], [O.sys.executable, "-m", "veystrix.cli"])
+        self.assertEqual(cmd[-1], "/model with spaces")
 
     def test_without_overnight_the_supervisor_runs_once_and_reports_the_exit(self):
         sup, launches = self.build([(5, 75)], overnight=False)

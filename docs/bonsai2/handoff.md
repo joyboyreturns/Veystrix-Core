@@ -6,7 +6,7 @@ changing or measuring Bonsai-2.
 ## Environment and launch
 
 The launcher uses the selected environment, then the project `.venv`. Override
-the interpreter with `MACQWEN_BONSAI2_PYTHON`.
+the interpreter with `VEYSTRIX_BONSAI2_PYTHON`.
 
 Start the installed checkpoint with:
 
@@ -15,7 +15,7 @@ Start the installed checkpoint with:
 ```
 
 The `b2` alias resolves to `~/models/Ternary-Bonsai-2-27B-mlx-2bit` under
-`MACQWEN_MODEL_ROOT`. The checkpoint requires its bundled `runtime/` loader;
+`VEYSTRIX_MODEL_ROOT`. The checkpoint requires its bundled `runtime/` loader;
 use only a source we trust. Milestone 1 is text-only.
 
 Two startup messages are expected advisories, not errors. Transformers logs
@@ -61,8 +61,8 @@ Run checkpoint-free Bonsai-2 tests:
 Run affected shared tests and compile checks:
 
 ```bash
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'
-.venv/bin/python -m compileall -q macqwen models/bonsai2
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
+.venv/bin/python -m compileall -q veystrix models/bonsai2
 ```
 
 A live model comparison must use the interpreter, checkpoint, prompts, token

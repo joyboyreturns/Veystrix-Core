@@ -77,7 +77,7 @@ many bytes are read.
    predictor for prompts below the dense threshold (layer L+1's router on
    layer L's hidden state, recall unmeasured), and a cancel call from the
    prefill cancellation hook (`layer_completed` in
-   `macqwen/backends/flashnext.py`) and on error.
+   `veystrix/backends/flashnext.py`) and on error.
 4. Worker count and I/O priority: the default 4 prefetch workers are
    unmeasured, and prefetch reads must not starve demand reads. Either inject
    the existing `_POOL` or measure a separate pool.

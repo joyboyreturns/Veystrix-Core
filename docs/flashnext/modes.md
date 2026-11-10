@@ -1,9 +1,9 @@
 # CHAT and AGENTIC: the two launch modes (2026-11-08)
 
-One runtime, two presets. Both modes start the same `macqwen/session.py` process, load the same checkpoint through the same
+One runtime, two presets. Both modes start the same `veystrix/session.py` process, load the same checkpoint through the same
 `FlashNextBackend`, and use the same Metal kernels, expert streaming, cache-integrity rules and safety supervisor
 (`ChatGuard`, exit on a memory, swap, thermal or battery stop; refuses to start under 9 GiB available). A mode is
-configuration: `models/flashnext/settings/modes.py` (pure Python, no dependencies) builds an environment preset, `macqwen/cli.py`
+configuration: `models/flashnext/settings/modes.py` (pure Python, no dependencies) builds an environment preset, `veystrix/cli.py`
 applies it, and `session.py` prints the startup banner from the environment the process actually received.
 There is no live reconfiguration: the flags are read at import or first request, so switching mode means a new process.
 `chat.sh` is the only launcher; `./chat.sh` with no `--mode` is CHAT.
@@ -42,7 +42,7 @@ snapshots every message end and chunk edge (`FLASHNEXT_PREFIX_CACHE_BOUNDARIES=a
 
 AGENTIC defaults (2026-11-09): context 262,144 (a stated requirement, so memory tiers do not shrink it), cold prefill and uncached
 increment 32,768 each (admission ceilings; prefill still runs in 2,048-token chunks; only 16K has real-checkpoint evidence).
-`macqwen/session.py --server` must **not** be launched directly: it now refuses (exit 70) unless the launcher's environment is present,
+`veystrix/session.py --server` must **not** be launched directly: it now refuses (exit 70) unless the launcher's environment is present,
 because the swap supervisor, chunked prefill and prefix cache are enabled by this launcher, not by `session.py`.
 See `docs/flashnext/deepseek-swap-incident-2026-11-09.md`.
 

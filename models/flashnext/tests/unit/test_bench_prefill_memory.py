@@ -16,7 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from macqwen import results
+from veystrix import results
 from models.flashnext import prefill_memory, prefill_ring
 from models.flashnext.settings.launch import CHAT_ENV, apply_chat_environment
 from models.flashnext.tests.bench import bench_prefill_memory as B
@@ -1207,7 +1207,7 @@ class ReadinessTests(unittest.TestCase):
         rows = sizes if sizes is not None else [
             {"size": "1k", "target": 1024, "first": 1025, "later": 1024}]
         with mock.patch.object(B, "prompt_sizes", return_value=rows), \
-                mock.patch("macqwen.checkpoints.resolve_flashnext", return_value=Path(resolved)):
+                mock.patch("veystrix.checkpoints.resolve_flashnext", return_value=Path(resolved)):
             return B.check_ready(
                 args or ready_args(), sampler=sampler or SimpleNamespace(sample=lambda: good_sample()),
                 preflight_module=preflight or ready_preflight(), tokenizer_loader=lambda path: CharTokenizer(),
@@ -1283,7 +1283,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(self.status(self.run_ready(environ=flags), "environment"), "PASS")
 
     def test_a_checkpoint_the_child_would_not_resolve_is_a_failure(self):
-        with mock.patch("macqwen.checkpoints.resolve_flashnext", side_effect=ValueError("choose a checkpoint\nx")):
+        with mock.patch("veystrix.checkpoints.resolve_flashnext", side_effect=ValueError("choose a checkpoint\nx")):
             report = B.check_ready(
                 ready_args(), sampler=SimpleNamespace(sample=lambda: good_sample()),
                 preflight_module=ready_preflight(), tokenizer_loader=lambda p: CharTokenizer(),
@@ -1307,7 +1307,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(B.backend_contract(), [])
 
     def test_the_contract_check_notices_a_removed_parameter(self):
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         def generate(self, max_tokens, on_decode_token=None):
             return None
@@ -1337,10 +1337,10 @@ class ReadinessTests(unittest.TestCase):
         report = SimpleNamespace(verdict="READY", text=lambda: "")
         with mock.patch.dict(os.environ, {}, clear=False), mock.patch.object(B, "check_ready", return_value=report), \
                 contextlib.redirect_stdout(io.StringIO()):
-            os.environ.pop("MACQWEN_FLASHNEXT_MODEL", None)
+            os.environ.pop("VEYSTRIX_FLASHNEXT_MODEL", None)
             B.main(["--check-ready", "--checkpoint", "/models/ckpt"])
-            self.assertEqual(os.environ["MACQWEN_FLASHNEXT_MODEL"], "/models/ckpt")
-            os.environ.pop("MACQWEN_FLASHNEXT_MODEL", None)
+            self.assertEqual(os.environ["VEYSTRIX_FLASHNEXT_MODEL"], "/models/ckpt")
+            os.environ.pop("VEYSTRIX_FLASHNEXT_MODEL", None)
 
 
 class PolicyTests(unittest.TestCase):

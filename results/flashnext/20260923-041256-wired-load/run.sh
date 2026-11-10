@@ -3,7 +3,7 @@
 # Loaded phase: a helper holds 3 GB of active anonymous memory throughout.
 # Order loaded: w0 w35 w35 w0; then quiet: w35 w0. 128 greedy tokens, 8 pins,
 # chat defaults otherwise. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 arm() {
   local n=$1 name=$2; shift 2

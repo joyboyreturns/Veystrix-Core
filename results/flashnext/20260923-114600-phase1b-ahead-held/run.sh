@@ -3,7 +3,7 @@
 # experts cold per layer, chat defaults (keep-warm on). --ahead reads the next
 # layer's route one layer early on a separate pool; same routes and bytes.
 # Order: off ahead ahead off off ahead. Fresh process each, 60 tokens.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-114600-phase1b-ahead-held
 CHAT=($($PY -c "from models.flashnext.settings.launch import CHAT_ENV; print(' '.join(f'{k}={v}' for k,v in CHAT_ENV.items()))"))

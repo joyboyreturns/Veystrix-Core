@@ -1,0 +1,5 @@
+# Pinned Python runtime for the bundled engine (python-build-standalone, CPython 3.12, Apple silicon, stripped).
+# The SHA-256 is the digest GitHub publishes for the release asset (checked 2026-11-10). The build refuses a mismatch.
+PBS_TAG=20261026
+PBS_FILE=cpython-3.12.16+20261026-aarch64-apple-darwin-install_only_stripped.tar.gz
+PBS_SHA256=353d5f1b4fd2715e7053f12f068435d5bbad16b91e057006b5d01e0925709a7e

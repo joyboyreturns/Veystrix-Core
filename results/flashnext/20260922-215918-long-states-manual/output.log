@@ -54,4 +54,4 @@
   qos-keepwarm tok  352  2.58 tok/s   452.3 MB/tok  gpu state 14.98  pcpu state 18.97
   qos-keepwarm tok  384  2.41 tok/s   518.6 MB/tok  gpu state 14.99  pcpu state 18.97
   qos-keepwarm: gen 2.591 tok/s, digest 3edafe06a771eaa3
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-215918-long-states-manual/long-states.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-215918-long-states-manual/long-states.json

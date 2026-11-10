@@ -779,7 +779,7 @@ reuse it thereafter
 The engine replaces the HTTP server for tool work. No server is needed.
 
 ```text
-~/Developer/MACQWEN/frankenstein_engine.py
+~/Developer/VEYSTRIX/frankenstein_engine.py
 ```
 
 ### 30.1 Template selftest
@@ -788,7 +788,7 @@ Run this first. It loads the tokenizer only. It takes about 2 seconds.
 
 ```bash
 "$HOME/mlx-qwen38-apple/bin/python3" \
-~/Developer/MACQWEN/frankenstein_engine.py --mode selftest
+~/Developer/VEYSTRIX/frankenstein_engine.py --mode selftest
 ```
 
 Expected:
@@ -803,7 +803,7 @@ A FAIL means the append-only segment builder no longer matches the chat template
 
 ```bash
 caffeinate -i "$HOME/mlx-qwen38-apple/bin/python3" \
-~/Developer/MACQWEN/frankenstein_engine.py \
+~/Developer/VEYSTRIX/frankenstein_engine.py \
 --mode demo --reasoning-effort low --max-tokens 250
 ```
 
@@ -818,7 +818,7 @@ invariant cache==tape: True
 
 ```bash
 caffeinate -i "$HOME/mlx-qwen38-apple/bin/python3" \
-~/Developer/MACQWEN/frankenstein_engine.py \
+~/Developer/VEYSTRIX/frankenstein_engine.py \
 --mode agent \
 --kv-bits 4 --quantized-kv-start 1024 \
 --prefill-step-size 1024 \

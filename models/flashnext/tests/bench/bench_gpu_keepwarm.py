@@ -24,7 +24,7 @@ import time
 
 import mlx.core as mx
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 from models.flashnext.tests.bench.gpu_pstates import GpuStates, summarize
 
 _SPIN_SOURCE = """

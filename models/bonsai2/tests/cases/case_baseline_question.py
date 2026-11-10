@@ -1,7 +1,7 @@
 """Run the shortest Bonsai-2 speed arm with FlashNext's reference question."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def command(config, result_path: Path) -> list[str]:

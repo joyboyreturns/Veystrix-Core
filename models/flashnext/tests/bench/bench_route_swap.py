@@ -63,7 +63,7 @@ def main() -> None:
     os.environ.setdefault("FLASHNEXT_READ", "pread")
     os.environ.setdefault("FLASHNEXT_TOPK_THRESHOLD", "0.85")
 
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
     from models.flashnext.adaptive_topk import set_route_observer
 
     backend = FlashNextBackend()

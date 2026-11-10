@@ -360,7 +360,7 @@ class LifecycleTests(unittest.TestCase):
 
 class BackendWiringTests(unittest.TestCase):
     def test_generate_marks_the_engine_busy_for_the_whole_call_including_cleanup(self):
-        from macqwen.tests.test_flashnext_backend import FlashNextBackendTests
+        from veystrix.tests.test_flashnext_backend import FlashNextBackendTests
 
         backend = FlashNextBackendTests().backend()
         seen = {}
@@ -380,7 +380,7 @@ class BackendWiringTests(unittest.TestCase):
         self.assertIsNone(P.ACTIVITY.busy_reason())
 
     def test_reclaim_hook_trims_the_allocator_and_keeps_snapshots_unless_stressed(self):
-        from macqwen.tests.test_flashnext_backend import FlashNextBackendTests
+        from veystrix.tests.test_flashnext_backend import FlashNextBackendTests
 
         backend = FlashNextBackendTests().backend()
         shrunk = []

@@ -20,22 +20,22 @@ reference  {'tokens': 128, 'gen_rate': 2.672, 'ms_per_token': 374.28, 'mb_per_to
 Traceback (most recent call last):
   File "<frozen runpy>", line 198, in _run_module_as_main
   File "<frozen runpy>", line 88, in _run_code
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/tests/bench/bench_split_p15.py", line 138, in <module>
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/tests/bench/bench_split_p15.py", line 138, in <module>
     raise SystemExit(main())
                      ^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/tests/bench/bench_split_p15.py", line 116, in main
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/tests/bench/bench_split_p15.py", line 116, in main
     profiled = decode(backend, args.tokens, clocks, meter)
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/tests/bench/bench_split_p15.py", line 53, in decode
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/tests/bench/bench_split_p15.py", line 53, in decode
     _text, stats = backend.generate(tokens, on_prefilled=on_prefilled)
                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/macqwen/backends/flashnext.py", line 637, in generate
+  File "/Users/gioma/Developer/VEYSTRIX/veystrix/backends/flashnext.py", line 637, in generate
     _, token = prefill_language(
                ^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/prefill.py", line 103, in prefill_language
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/prefill.py", line 103, in prefill_language
     _logits, _hidden, token = prefill_target(
                               ^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/prefill.py", line 60, in prefill_target
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/prefill.py", line 60, in prefill_target
     output = language(ids, **call)
              ^^^^^^^^^^^^^^^^^^^^^
   File "/Users/gioma/models/.venv-qwen4exp/lib/python3.12/site-packages/mlx_vlm/models/qwen3_5/language.py", line 2072, in __call__
@@ -44,7 +44,7 @@ Traceback (most recent call last):
   File "/Users/gioma/models/.venv-qwen4exp/lib/python3.12/site-packages/mlx_vlm/models/qwen4_exp/language.py", line 819, in __call__
     hidden_states = layer(
                     ^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/compile_glue.py", line 42, in _decoder_call
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/compile_glue.py", line 42, in _decoder_call
     return _ORIGINAL["decoder"](
            ^^^^^^^^^^^^^^^^^^^^^
   File "/Users/gioma/models/.venv-qwen4exp/lib/python3.12/site-packages/mlx_vlm/models/qwen4_exp/language.py", line 753, in __call__
@@ -56,21 +56,21 @@ Traceback (most recent call last):
   File "/Users/gioma/models/.venv-qwen4exp/lib/python3.12/site-packages/mlx_vlm/models/qwen4_exp/language.py", line 641, in __call__
     embeddings = self.ngram_embedding(ngram_ids)
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/ngram.py", line 185, in __call__
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/ngram.py", line 185, in __call__
     values = self._direct(flat) if self.direct else self._legacy(flat)
              ^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/ngram.py", line 133, in _direct
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/ngram.py", line 133, in _direct
     result = self._direct_rows(flat)
              ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/ngram.py", line 169, in _direct_rows
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/ngram.py", line 169, in _direct_rows
     blocks = self._parallel_blocks(groups)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/ngram.py", line 151, in _parallel_blocks
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/ngram.py", line 151, in _parallel_blocks
     weight, scales, biases = (
     ^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/ngram.py", line 152, in <genexpr>
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/ngram.py", line 152, in <genexpr>
     shard.store.to_mx(f"{shard.prefix}.{part}", future.result())
-  File "/Users/gioma/Developer/MACQWEN/models/flashnext/store.py", line 589, in to_mx
+  File "/Users/gioma/Developer/VEYSTRIX/models/flashnext/store.py", line 589, in to_mx
     array = mx.from_dlpack(out, copy=False) if self._dlpack else mx.array(out)
             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 TypeError: from_dlpack(): incompatible function arguments. The following argument types are supported:
@@ -107,4 +107,4 @@ profiled   {'tokens': 128, 'gen_rate': 2.701, 'ms_per_token': 370.26, 'mb_per_to
   shared_expert      0.40 ms/token
   ngram_wait         5.70 ms/token
   remainder         22.66 ms/token
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260923-113438-phase0-p15/split-p15-rerun.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260923-113438-phase0-p15/split-p15-rerun.json

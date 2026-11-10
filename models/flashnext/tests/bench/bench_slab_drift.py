@@ -12,8 +12,8 @@ import subprocess
 import sys
 import time
 
-from macqwen.measurement import MeasurementRun, source_hash, validate_path
-from macqwen.results import ROOT, output_path
+from veystrix.measurement import MeasurementRun, source_hash, validate_path
+from veystrix.results import ROOT, output_path
 
 
 def _prompt(question: str) -> str:
@@ -62,14 +62,14 @@ def child(args) -> None:
 
 
 def measure(args) -> None:
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext.tests.bench.bench_production import benchmark_provenance
 
     destination = output_path("flashnext", "bench_slab_drift", "slab-drift.json", args.json)
     record = validate_path(
         args.record or destination.with_name("slab-drift-arms.jsonl"), ROOT, "flashnext"
     )
-    checkpoint = resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL"))
+    checkpoint = resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL"))
     provenance = benchmark_provenance(checkpoint)
     if not LIVE_PINS.is_file():
         raise RuntimeError(f"normal-chat pin history is missing: {LIVE_PINS}")

@@ -1,7 +1,7 @@
 """Compare broad and narrow expert pinning on the REAP reference path."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def command(config, result_path: Path) -> list[str]:

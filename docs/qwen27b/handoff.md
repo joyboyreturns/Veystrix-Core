@@ -8,8 +8,8 @@ Qwen3.8-27B uses the same managed runtime as the other supported models:
 .venv/bin/python
 ```
 
-MACQWEN prepares it with `./chat.sh setup` or on the first launch. We retain
-`MACQWEN_QWEN27B_PYTHON` as an explicitly validated developer override.
+VEYSTRIX prepares it with `./chat.sh setup` or on the first launch. We retain
+`VEYSTRIX_QWEN27B_PYTHON` as an explicitly validated developer override.
 
 ## Model selection
 
@@ -34,7 +34,7 @@ checkpoint-local `bf16-ends/` assets required by the default loader.
 
 | Path | Responsibility |
 |---|---|
-| `macqwen/backends/frankenstein.py` | Shared chat adapter |
+| `veystrix/backends/frankenstein.py` | Shared chat adapter |
 | `models/qwen27b/frankenstein_engine.py` | Stateful model engine |
 | `models/qwen27b/paged_kv.py` | Paged attention cache and SSD spill |
 | `models/qwen27b/bf16_ends.py` | External embedding and shortlist head |
@@ -55,7 +55,7 @@ Run backend and parser tests in the managed environment:
 
 ```bash
 .venv/bin/python -m unittest \
-  macqwen.tests.test_qwen27b_backend macqwen.tests.test_tools
+  veystrix.tests.test_qwen27b_backend veystrix.tests.test_tools
 ```
 
 Run the lightweight import check:
@@ -66,7 +66,7 @@ Run the lightweight import check:
 ```
 
 For kernel-specific experiments, a compatible external environment may be
-selected explicitly with `MACQWEN_QWEN27B_PYTHON`.
+selected explicitly with `VEYSTRIX_QWEN27B_PYTHON`.
 
 A live test requires an installed compatible checkpoint.
 
@@ -85,9 +85,9 @@ The research file contains the measurements. Do not retry these without a new me
 
 Current work is tracked in the public issue tracker:
 
-- [#12](https://github.com/1architect/macqwen-releases/issues/12) Install a compatible Qwen27B V4 checkpoint for live regression.
-- [#13](https://github.com/1architect/macqwen-releases/issues/13) Compare pure-knapsack and bit-floor builds at equal size.
-- [#14](https://github.com/1architect/macqwen-releases/issues/14) Calibrate bit allocation with output-loss sensitivity.
-- [#15](https://github.com/1architect/macqwen-releases/issues/15) Validate sparse paged-attention gather performance and quality.
-- [#16](https://github.com/1architect/macqwen-releases/issues/16) Run an interleaved fp16 versus Q4 decode benchmark.
-- [#17](https://github.com/1architect/macqwen-releases/issues/17) Extend the SketchUp code guard checks.
+- #12 Install a compatible Qwen27B V4 checkpoint for live regression.
+- #13 Compare pure-knapsack and bit-floor builds at equal size.
+- #14 Calibrate bit allocation with output-loss sensitivity.
+- #15 Validate sparse paged-attention gather performance and quality.
+- #16 Run an interleaved fp16 versus Q4 decode benchmark.
+- #17 Extend the SketchUp code guard checks.

@@ -4,7 +4,7 @@
 # for the model's memory, 2.6 ms sleep per layer for the GPU phase, expert pages
 # evicted from the file cache before each run. Production read path against an
 # the same destinations read by one native call per layer. Order: P N N P.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-133612-read-replay-native
 run() {

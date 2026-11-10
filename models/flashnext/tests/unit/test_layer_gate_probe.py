@@ -39,7 +39,7 @@ class StateProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "probe.jsonl"
             path.write_text("preserve")
-            with mock.patch("macqwen.results.ensure_inside", return_value=path):
+            with mock.patch("veystrix.results.ensure_inside", return_value=path):
                 with self.assertRaises(FileExistsError):
                     probe.Probe(path)
             self.assertEqual(path.read_text(), "preserve")
@@ -47,7 +47,7 @@ class StateProbeTests(unittest.TestCase):
     def test_prefill_probe_captures_actual_final_logits_without_changing_token(self):
         import json
         import os
-        from macqwen.sampling import Sampler, Sampling
+        from veystrix.sampling import Sampler, Sampling
         from models.flashnext import prefill
 
         model = build_model()
@@ -59,7 +59,7 @@ class StateProbeTests(unittest.TestCase):
                 path = Path(directory) / "probe.jsonl"
                 path.touch()
                 with mock.patch.dict(os.environ, {probe.FLAG: str(path)}), \
-                        mock.patch("macqwen.results.ensure_inside", return_value=path):
+                        mock.patch("veystrix.results.ensure_inside", return_value=path):
                     _, _, observed = prefill.prefill_target(model, ids, model.make_cache(),
                                                            sampler=Sampler(Sampling.greedy_settings()))
                 records = [json.loads(line) for line in path.read_text().splitlines()]
@@ -132,6 +132,10 @@ class GateValidationTests(unittest.TestCase):
         self.assertIn("never lower the floor", gate.headroom_reason({"available_mb": 1}))
 
     def test_postponed_gate_starts_nothing(self):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()          # the gate only resolves the path here; no weights are read
+        self.addCleanup(tmp.cleanup)
+        self.checkpoint_dir = tmp.name
         low = {"power_source": "ac", "battery_percent": 80, "battery_state": "charging", "low_power": False,
                "thermal_readable": True, "thermal_warning": False, "thermal_speed_limit": None,
                "pressure_level": 1, "swap_used_mb": 100, "available_mb": 8300, "compressor_mb": 400}
@@ -140,7 +144,7 @@ class GateValidationTests(unittest.TestCase):
                 mock.patch.object(gate, "make_prompt") as prompt, \
                 mock.patch.object(gate, "run_arm") as arm, \
                 mock.patch.object(gate, "checkpoint_fingerprint"), \
-                mock.patch("sys.argv", ["bench_layer_gate", "--memory-rules", "strict"]), \
+                mock.patch("sys.argv", ["bench_layer_gate", "--memory-rules", "strict", "--checkpoint", self.checkpoint_dir]), \
                 mock.patch("builtins.print"), \
                 mock.patch("shutil.disk_usage") as disk:
             disk.return_value = mock.Mock(free=10**12)

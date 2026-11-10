@@ -143,7 +143,7 @@ def main(argv=None) -> int:
     result = compare(load(args.reference), load(args.candidate), args.relation)
     print(text(result))
     if args.json:
-        from macqwen.results import output_path
+        from veystrix.results import output_path
 
         target = output_path("flashnext", "quality-compare", "comparison.json", args.json)
         target.write_text(json.dumps(result, indent=1) + "\n")

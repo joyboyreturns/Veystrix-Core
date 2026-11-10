@@ -291,7 +291,7 @@ class SessionAdmissionTests(unittest.TestCase):
         return verdict
 
     def test_chat_mode_never_reads_the_machine(self):
-        from macqwen import session
+        from veystrix import session
 
         with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "chat"}), \
                 mock.patch.object(R, "live", side_effect=AssertionError("CHAT must not be gated")):
@@ -302,7 +302,7 @@ class SessionAdmissionTests(unittest.TestCase):
                 self.assertIsNone(session._admit_agentic(self.PREFS, False, io.StringIO()))
 
     def test_benchmarks_and_other_backends_are_not_gated(self):
-        from macqwen import session
+        from veystrix import session
 
         with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic"}), \
                 mock.patch.object(R, "live", side_effect=AssertionError("not gated")):
@@ -310,7 +310,7 @@ class SessionAdmissionTests(unittest.TestCase):
             self.assertIsNone(session._admit_agentic({"model": "bonsai2"}, False, io.StringIO()))
 
     def test_agentic_refusal_exits_before_loading_and_explains(self):
-        from macqwen import session
+        from veystrix import session
 
         err = io.StringIO()
         with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic", "FLASHNEXT_MEMORY_POLICY": "strict-staged", R.LOG_FLAG: os.devnull}), \
@@ -324,7 +324,7 @@ class SessionAdmissionTests(unittest.TestCase):
         self.assertIn("No guard was weakened", text)
 
     def test_agentic_admission_returns_the_verdict_and_prints_the_headroom(self):
-        from macqwen import session
+        from veystrix import session
 
         ok = R.evaluate(P.Reading(page=1, free=11 * GIB, anonymous=2 * GIB, wired=int(1.9 * GIB), compressor=GIB), TOTAL)
         self.assertTrue(ok.admitted)

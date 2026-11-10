@@ -34,8 +34,8 @@ class CheckpointTests(unittest.TestCase):
             root = Path(directory)
             expected = checkpoint(root)
             environment = {
-                "MACQWEN_MODEL_ROOT": str(root),
-                "MACQWEN_K2_HORIZON_MODEL": "",
+                "VEYSTRIX_MODEL_ROOT": str(root),
+                "VEYSTRIX_K2_HORIZON_MODEL": "",
             }
             with patch.dict(os.environ, environment, clear=False):
                 self.assertEqual(installed(), [expected])

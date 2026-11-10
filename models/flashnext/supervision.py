@@ -1,9 +1,9 @@
 """Refuse to serve without the safety supervisor.
 
 Root cause of the 2026-11-09 DeepSeek Harness incident (see docs/flashnext/deepseek-swap-incident-2026-11-09.md): the server
-was started with ``macqwen/session.py --server`` directly. Everything that makes the AGENTIC server safe (ChatGuard and its
+was started with ``veystrix/session.py --server`` directly. Everything that makes the AGENTIC server safe (ChatGuard and its
 +2.5 GiB swap stop, 2K chunked prefill, the prefix cache, the stall watchdog) is switched on by the launcher
-(``./chat.sh --mode agentic``, i.e. ``macqwen/cli.py`` -> ``settings.modes.apply_mode``), not by ``session.py``. A direct launch
+(``./chat.sh --mode agentic``, i.e. ``veystrix/cli.py`` -> ``settings.modes.apply_mode``), not by ``session.py``. A direct launch
 therefore ran with no supervisor at all, prefilled an ~8.9K-token DeepSeek request in one call, and nothing could stop it.
 
 ``check`` is pure so it can be tested; ``session.py`` calls it before any model loads and exits with ``EXIT_CODE``.

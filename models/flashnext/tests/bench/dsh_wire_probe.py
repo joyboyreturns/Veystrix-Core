@@ -33,7 +33,7 @@ def patch_yaml(port: int, window: int, max_tokens: int, profile: str) -> str:
         api: openai-completions
         baseURL: http://127.0.0.1:{port}/v1
         models:
-          - id: macqwen-flashnext
+          - id: veystrix-flashnext
             name: Qwen3.8 Flash-Next Q4
             contextWindow: {window}
             maxTokens: {max_tokens}
@@ -41,7 +41,7 @@ def patch_yaml(port: int, window: int, max_tokens: int, profile: str) -> str:
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: veystrix
-    model: macqwen-flashnext
+    model: veystrix-flashnext
 - id: session-title-llm
   disabled: true
 """
@@ -67,10 +67,10 @@ def make_project(root: Path, decoy: bool = True) -> None:
 
 def run(target: int, window: int, max_tokens: int, profile: str, limit: int, timeout: int = 240, task_text: str | None = None, decoy: bool = True) -> dict:
     from transformers import AutoTokenizer
-    from macqwen import preferences, server as S
-    from macqwen.scheduler import Scheduler
-    from macqwen.tests.test_agentic_long_fixtures import RealTokenizerBackend
-    from macqwen.tests.test_server import FakeSession
+    from veystrix import preferences, server as S
+    from veystrix.scheduler import Scheduler
+    from veystrix.tests.test_agentic_long_fixtures import RealTokenizerBackend
+    from veystrix.tests.test_server import FakeSession
     from models.flashnext.tests.bench.fixtures import agentic_fixture as F
 
     tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
@@ -83,7 +83,7 @@ def run(target: int, window: int, max_tokens: int, profile: str, limit: int, tim
     session.preferences = dict(preferences.DEFAULTS, model="flashnext", thinking_enabled=False)
     service = S.ModelService(session, context_limit=limit)
     records = []
-    original_chat = S.MacqwenHandler._chat
+    original_chat = S.VeystrixHandler._chat
 
     def chat(self, payload):
         records.append({"max_completion_tokens": payload.get("max_completion_tokens"),
@@ -102,8 +102,8 @@ def run(target: int, window: int, max_tokens: int, profile: str, limit: int, tim
         return out
 
     service.complete = complete
-    S.MacqwenHandler._chat = chat
-    server = S.MacqwenHTTPServer(("127.0.0.1", 0), service, api_key=KEY, scheduler=Scheduler())
+    S.VeystrixHandler._chat = chat
+    server = S.VeystrixHTTPServer(("127.0.0.1", 0), service, api_key=KEY, scheduler=Scheduler())
     threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,7 +128,7 @@ def run(target: int, window: int, max_tokens: int, profile: str, limit: int, tim
                     "stdout_tail": done.stdout[-600:], "stderr_tail": done.stderr[-400:]}
     finally:
         server.shutdown(); server.server_close()
-        S.MacqwenHandler._chat = original_chat
+        S.VeystrixHandler._chat = original_chat
 
 
 TINY_TASK = "List the configuration files under services."

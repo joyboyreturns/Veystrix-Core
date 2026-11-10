@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleExecutable</key><string>Veystrix</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIdentifier</key><string>io.github.joyboyreturns.veystrix</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>Veystrix</string>
+    <key>CFBundleDisplayName</key><string>Veystrix</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <!-- marketing version: shown to users -->
+    <key>CFBundleShortVersionString</key><string>@SHORT_VERSION@</string>
+    <!-- build number: a strictly increasing integer. Sparkle orders updates by this, never by the marketing string. -->
+    <key>CFBundleVersion</key><string>@BUILD_NUMBER@</string>
+    <key>LSMinimumSystemVersion</key><string>@MIN_MACOS@</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSHumanReadableCopyright</key><string>Veystrix freeware. Contains MIT-licensed code and third-party components; see Resources/THIRD_PARTY_NOTICES.md.</string>
+    <!-- The app talks only to 127.0.0.1 (the local engine). -->
+    <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+
+    <!-- Sparkle 2. SUPublicEDKey is injected at build time from the release key; a build without it has updates OFF. -->
+    <key>SUFeedURL</key><string>https://raw.githubusercontent.com/joyboyreturns/Veystrix/main/updates/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>@SPARKLE_PUBLIC_ED_KEY@</string>
+    <key>SUEnableAutomaticChecks</key><false/>
+    <key>SUAutomaticallyUpdate</key><false/>
+    <key>SUAllowsAutomaticUpdates</key><false/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
+</dict>
+</plist>

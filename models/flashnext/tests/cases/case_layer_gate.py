@@ -1,5 +1,5 @@
 """Supervised exactness gate for the opt-in layer-major prefill path."""
-from macqwen.testsuite.api import TestSpec, bench_module
+from veystrix.testsuite.api import TestSpec, bench_module
 
 
 def command(config, _result_path):

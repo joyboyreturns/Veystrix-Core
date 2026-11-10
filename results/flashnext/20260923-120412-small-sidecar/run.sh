@@ -3,7 +3,7 @@
 # Chat defaults, fresh process per arm, bench_split_p15 (unprofiled 128 tokens
 # then profiled 128 tokens). Order: off side side off off side.
 # Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-120412-small-sidecar
 arm() {

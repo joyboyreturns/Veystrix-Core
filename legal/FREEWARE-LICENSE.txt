@@ -1,0 +1,176 @@
+VEYSTRIX FREEWARE LICENSE AGREEMENT
+Draft v0.1 — 2026-11-10
+
+DRAFT FOR LEGAL REVIEW. This text has not been reviewed by a lawyer. The owner
+must complete the bracketed fields and have the whole agreement reviewed before
+the first public release is announced.
+
+Veystrix is proprietary software that is free to download and use. It is NOT
+open-source software. Some components inside it are open source and remain
+under their own licenses (see "Third-party components" below and the file
+THIRD_PARTY_NOTICES.md).
+
+1. PARTIES AND DEFINITIONS
+
+"Licensor" means [OWNER LEGAL NAME / TRADING NAME], the owner of the Veystrix
+components that the Licensor authored, as identified in section 6.
+
+"Software" means the Veystrix macOS application and the Veystrix inference
+engine helper bundled inside it, in the unmodified form published by the
+Licensor as an "Official Build" at
+https://github.com/joyboyreturns/Veystrix/releases, including any update the
+Licensor publishes through the application's update feed.
+
+"Official Build" means a file published by the Licensor at the address above
+whose SHA-256 checksum matches the checksum the Licensor published for it. When
+the release notes state that a build is signed with the Licensor's Developer ID
+and notarized by Apple, its code signature must also verify. A build that the
+release notes describe as "free build, not notarized" is signed ad hoc and is an
+Official Build on the strength of its checksum alone; macOS will warn when you
+first open it.
+
+"Model Checkpoint" means a machine-learning model, weights or tokenizer that you
+obtain from anyone other than the Licensor. Model Checkpoints are not part of
+the Software.
+
+"You" means the person or organization that installs or uses the Software.
+
+2. GRANT OF LICENSE
+
+Subject to this agreement, the Licensor grants You a worldwide, non-exclusive,
+non-transferable, revocable (for breach, see section 10), royalty-free license
+to download, install and run Official Builds of the Software on computers that
+You own or control, for any lawful purpose, including personal, educational and
+commercial use of the Software and of the text it generates.
+
+No payment, account, registration or network activation is required to use the
+Software. The Software is designed to run fully offline once installed.
+
+3. REDISTRIBUTION
+
+You may share an Official Build with others only if ALL of the following hold:
+(a) the file is unmodified, byte for byte, and its checksum (and, for builds
+described as Developer ID signed, its code signature) still verifies;
+(b) You provide it free of charge, with no fee, subscription, advertising,
+bundle, donation wall or other consideration tied to it; and
+(c) You keep this agreement and THIRD_PARTY_NOTICES.md with it, and tell the
+recipient that the official source is the Releases page named in section 1.
+
+You may always link to the official Releases page.
+
+4. WHAT YOU MAY NOT DO
+
+Unless the Licensor gives You separate written permission, You may not:
+(a) modify, translate, adapt or create derivative works of the Software, or
+repackage it, or distribute any modified or repackaged version;
+(b) rename, rebrand or present a modified build as Veystrix, use the name
+"Veystrix", its logo or its icons in a way that suggests a build is official or
+endorsed, or publish a build that could reasonably be mistaken for an Official
+Build;
+(c) sell, rent, lease, sublicense or charge for the Software, an Official Build,
+or access to either, or include the Software in a paid product or paid
+collection;
+(d) remove or alter copyright, license, attribution or update-signature
+notices;
+(e) disable, bypass or forge the checksum, code-signature or update-signature
+checks in order to distribute or install an altered build; or
+(f) distribute the Software in a manner that violates export-control or other
+laws that apply to You.
+
+5. RIGHTS THAT CANNOT BE WAIVED; THIRD-PARTY RIGHTS
+
+Nothing in this agreement limits any right that the law of Your country gives You
+and that cannot be removed by contract. In particular, and to the extent
+applicable law gives them to You, nothing here prevents You from: making a
+backup copy needed to use the Software; observing, studying and testing how the
+Software functions while You use it as permitted; decompiling or reverse
+engineering it to the extent permitted by law for interoperability with
+independently created software (for example under Article 6 of EU Directive
+2009/24/EC); or exercising rights granted by a third-party license to a
+third-party component.
+
+6. OWNERSHIP; THIRD-PARTY COMPONENTS; SOURCE CODE
+
+Subject to the rest of this section, the Licensor and its licensors own the
+Software. Portions of the Software are works of other authors that are licensed
+to the Licensor and to You under their own terms, including MIT-licensed code
+whose copyright holder is named in THIRD_PARTY_NOTICES.md; the Licensor does not
+claim to own those portions. This agreement grants a license, not a sale. The Licensor's source code for the Veystrix components that
+the Licensor owns is proprietary and is not licensed to You; no source code
+license is granted or implied.
+
+The Software contains or links to third-party components, including components
+published under open-source licenses (for example MIT, BSD, Apache-2.0 and
+MPL-2.0). Those components, and the portions of Veystrix derived from MIT-licensed
+code published earlier under the MIT license, remain under their
+own license terms, and the copyright notices and license texts in
+THIRD_PARTY_NOTICES.md must be preserved. This agreement does not reduce any right
+You have under those licenses, and does not claim that earlier open-source
+releases of that earlier code were withdrawn.
+
+7. MODEL CHECKPOINTS
+
+The Software does not include model weights and does not download them without
+Your explicit action. A Model Checkpoint is licensed by its publisher, not by
+the Licensor. You are responsible for reading and following the license of any
+checkpoint You use.
+
+8. PRIVACY
+
+The Software does not require an account and does not send Your prompts,
+files, repositories, sessions or model data to the Licensor or any third party.
+The only network access the Software makes by itself is the optional update
+check, which You can turn off in Settings; it requests the public update feed
+from github.com and sends no information about Your prompts or files. Your
+Internet provider and GitHub can see ordinary connection metadata (such as Your
+IP address) when You check for updates, as with any web request. Network
+features of tools You connect to the local server (for example coding agents)
+are controlled by those tools, not by the Software.
+
+9. SAFETY, HARDWARE AND NO WARRANTY
+
+The Software streams very large model files from Your SSD and can use most of
+the memory of Your computer. This reads many gigabytes per request, can increase
+SSD wear, and can slow or interrupt other applications. The Software includes
+memory and swap protections, but they are estimates and cannot guarantee that
+Your computer will not become slow or unresponsive. Keep Your computer on AC
+power during long sessions and keep backups of important data.
+
+Output generated by language models can be wrong, unsafe or offensive. You are
+responsible for checking it before You rely on it.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, NON-INFRINGEMENT, AVAILABILITY OR ACCURACY. TO THE MAXIMUM
+EXTENT PERMITTED BY LAW, THE LICENSOR IS NOT LIABLE FOR ANY INDIRECT, INCIDENTAL,
+SPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR FOR LOSS OF DATA, PROFITS OR
+HARDWARE LIFE, ARISING FROM USE OF OR INABILITY TO USE THE SOFTWARE, AND THE
+LICENSOR'S TOTAL LIABILITY FOR ANY CLAIM IS LIMITED TO THE AMOUNT YOU PAID FOR THE
+SOFTWARE, WHICH IS ZERO. Some jurisdictions do not allow these limits; in that
+case they apply only as far as the law permits. Nothing here limits liability
+that cannot be limited by law (for example for death or personal injury caused by
+negligence, or for fraud).
+
+10. TERM AND TERMINATION
+
+This agreement lasts until terminated. It ends automatically if You materially
+breach it, and You must then stop using and delete the Software. Sections 4, 6, 9
+and 11 survive termination. Termination of this agreement does not affect any
+right You hold under a third-party license.
+
+11. GENERAL
+
+The Licensor may publish a new version of this agreement with a new release of the
+Software; a new version applies to that release and later releases, and does not
+change the terms of a release You already installed unless You choose to update.
+If a provision is unenforceable, the rest stays in force. This agreement is the
+whole agreement about the Software between You and the Licensor. It is governed by
+the laws of [JURISDICTION], except that mandatory consumer-protection rules of
+Your country of residence continue to apply to You. Contact: [SUPPORT CONTACT /
+GitHub Issues at https://github.com/joyboyreturns/Veystrix/issues].
+
+12. ATTRIBUTION
+
+Veystrix is built on, and includes work derived from, MIT-licensed code that was
+published earlier under the MIT license. See THIRD_PARTY_NOTICES.md for the copyright
+holder and the full MIT license text.

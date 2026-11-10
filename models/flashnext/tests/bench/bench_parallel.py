@@ -49,7 +49,7 @@ def run_instances(count: int, args) -> list[dict]:
     command = [
         os.path.expanduser("~/models/.venv-qwen4exp/bin/python"),
         "-u",
-        os.path.join(ROOT, "macqwen", "session.py"),
+        os.path.join(ROOT, "veystrix", "session.py"),
         "--model", "flashnext",
         "--profile", "plain",
         "--exact-quality",

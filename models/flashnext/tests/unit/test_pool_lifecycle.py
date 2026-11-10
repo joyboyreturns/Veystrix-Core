@@ -266,7 +266,7 @@ class BackendWiringTests(unittest.TestCase):
     def test_generate_keeps_its_signature_and_runs_inside_in_flight(self):
         import inspect
 
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         self.assertEqual(list(inspect.signature(FlashNextBackend.generate).parameters),
                          list(inspect.signature(FlashNextBackend._generate).parameters))
@@ -281,7 +281,7 @@ class BackendWiringTests(unittest.TestCase):
         self.assertEqual(seen[0][1][0], 5)
 
     def hooked(self, prompt, *, reusable=None, prefix_cache_runs=True, flag="1", report=None):
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         backend = object.__new__(FlashNextBackend)
         backend.language = object()
@@ -321,12 +321,12 @@ class BackendWiringTests(unittest.TestCase):
     def test_the_backend_hook_keeps_a_none_report(self):
         backend, _ = self.hooked(list(range(10)), reusable=0, report=None)
         self.assertEqual(backend.last_pool_release["reason"], "released")
-        self.assertIsNone(__import__("macqwen.backends.flashnext", fromlist=["x"]).FlashNextBackend.last_pool_release)
+        self.assertIsNone(__import__("veystrix.backends.flashnext", fromlist=["x"]).FlashNextBackend.last_pool_release)
 
     def test_it_runs_after_the_cancel_check_and_before_every_prefill_path(self):
         import inspect
 
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         source = inspect.getsource(FlashNextBackend._generate)
         decide = source.index("fresh_for_pool = ")
@@ -344,20 +344,20 @@ class BackendWiringTests(unittest.TestCase):
         import pathlib
 
         root = pathlib.Path(__file__).resolve().parents[4]
-        files = list((root / "models" / "flashnext").glob("*.py")) + list((root / "macqwen").rglob("*.py"))
+        files = list((root / "models" / "flashnext").glob("*.py")) + list((root / "veystrix").rglob("*.py"))
         users = sorted(str(p.relative_to(root)) for p in files
                        if p.name != "pool_lifecycle.py" and "pool_lifecycle" in p.read_text())
         self.assertEqual(users, [
-            "macqwen/backends/flashnext.py",
-            "macqwen/server.py",                  # /ready reports the recorded GPU lifecycle fault (read-only)
-            "macqwen/tests/test_server_runtime.py",
             "models/flashnext/auto_reclaim.py",
             "models/flashnext/gpu_sync.py",
             "models/flashnext/memory_manager.py",
             "models/flashnext/prefill.py",        # reads the store only to switch to uncached reads while the controller is ELEVATED
             "models/flashnext/prefill_ring.py",
+            "veystrix/backends/flashnext.py",
+            "veystrix/server.py",                  # /ready reports the recorded GPU lifecycle fault (read-only)
+            "veystrix/tests/test_server_runtime.py",
         ])
-        self.assertTrue((root / "macqwen" / "backends" / "flashnext.py").exists(), "the scan really looked at the repo")
+        self.assertTrue((root / "veystrix" / "backends" / "flashnext.py").exists(), "the scan really looked at the repo")
 
     def test_the_flag_is_a_registered_research_setting_and_off_by_default(self):
         from models.flashnext.settings.registry import get_registry

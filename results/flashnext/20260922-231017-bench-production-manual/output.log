@@ -26,5 +26,5 @@
   scatter-only vs baseline: -2.5% gen median
   matched paired two-SE band is 14.2%, too wide for a small-effect decision (mean +3.4%).
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-231017-bench-production-manual/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-231017-bench-production-manual/production.json
 exit=0

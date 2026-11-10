@@ -10,8 +10,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from macqwen.backends.base import GenerationCancelled
-from macqwen.conversation import IM_END, IM_START
+from veystrix.backends.base import GenerationCancelled
+from veystrix.conversation import IM_END, IM_START
 from models.qwen27b import frankenstein_engine as engine_module
 from models.qwen27b.frankenstein_engine import FrankensteinEngine
 

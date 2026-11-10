@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 import argparse
 import cProfile
 import hashlib
@@ -47,7 +47,7 @@ class ResourceAbort(RuntimeError):
 def resource_policy() -> dict[str, float | int]:
     policy = dict(RESOURCE_POLICY)
     for name, default in RESOURCE_POLICY.items():
-        value = os.environ.get(f"MACQWEN_BONSAI2_{name.upper()}")
+        value = os.environ.get(f"VEYSTRIX_BONSAI2_{name.upper()}")
         if value is None:
             continue
         try:
@@ -258,7 +258,7 @@ def checkpoint_info(requested: str) -> dict[str, Any]:
     except (OSError, TypeError, ValueError):
         path = Path(requested).expanduser()
         if not path.is_absolute():
-            path = Path(os.environ.get("MACQWEN_MODEL_ROOT", "~/models")) / path
+            path = Path(os.environ.get("VEYSTRIX_MODEL_ROOT", "~/models")) / path
         path = path.resolve()
     files = {}
     for name, required in _CHECKPOINT_FILES.items():
@@ -298,8 +298,8 @@ def source_fingerprints() -> dict[str, str | None]:
         "models/bonsai2/ternary_kernel.py", "models/bonsai2/q2_kernel.py",
         "models/bonsai2/q4_attention_kernel.py", "models/bonsai2/qmm_metadata.py",
         "models/bonsai2/gemv_kernel.py",
-        "macqwen/backends/base.py", "macqwen/conversation.py",
-        "macqwen/sampling.py", "macqwen/text.py", "macqwen/agent.py",
+        "veystrix/backends/base.py", "veystrix/conversation.py",
+        "veystrix/sampling.py", "veystrix/text.py", "veystrix/agent.py",
     )
     return {name: sha256(ROOT / name) for name in names}
 
@@ -810,7 +810,7 @@ def _progress_observations(output: str) -> list[dict[str, Any]]:
 
 _ARM_STOP_GRACE_SECONDS = 1.0
 _RESOURCE_SAMPLE_INTERVAL_SECONDS = 0.25
-_PARENT_TIMEOUT_ENV = "MACQWEN_BONSAI2_PARENT_TIMEOUT_SECONDS"
+_PARENT_TIMEOUT_ENV = "VEYSTRIX_BONSAI2_PARENT_TIMEOUT_SECONDS"
 
 
 def _parent_timeout_seconds(command: list[str]) -> float:
@@ -1070,7 +1070,7 @@ def child_arm(*, checkpoint: str, arm_id: str, condition: str, options: dict[str
             return 1
     _progress(arm_id, "loading")
     try:
-        from macqwen.sampling import Sampling
+        from veystrix.sampling import Sampling
         from models.bonsai2.backend import (
             BonsaiBackend, PRODUCTION_CANCELLABLE_PREFILL_STEP_SIZE,
         )
@@ -2345,9 +2345,9 @@ def run_comparison(*, checkpoint: str, comparison: str, record_path: str, fixtur
         before = read_jsonl(record_path)
         env = dict(os.environ)
         # Precision rides the constructor options, never the ambient
-        # environment: an inherited MACQWEN_BONSAI2_KV would silently turn
+        # environment: an inherited VEYSTRIX_BONSAI2_KV would silently turn
         # the full-precision control into a quantized arm.
-        env.pop("MACQWEN_BONSAI2_KV", None)
+        env.pop("VEYSTRIX_BONSAI2_KV", None)
         env["PYTHONPATH"] = os.pathsep.join(x for x in (str(ROOT), env.get("PYTHONPATH", "")) if x)
         cancelled = False
         cancellation = None
@@ -2677,7 +2677,7 @@ def main(argv: list[str] | None = None) -> int:
     if "--child" in argv:
         return child_main(argv)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", default=os.environ.get("MACQWEN_BONSAI2_MODEL", "b2"))
+    parser.add_argument("--checkpoint", default=os.environ.get("VEYSTRIX_BONSAI2_MODEL", "b2"))
     parser.add_argument("--compare", choices=sorted(COMPARISONS), default="allocator")
     parser.add_argument("--jsonl")
     parser.add_argument("--fixture", choices=FIXTURES, default=DEFAULT_FIXTURE)

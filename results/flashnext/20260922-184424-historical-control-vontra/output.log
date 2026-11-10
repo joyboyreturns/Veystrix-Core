@@ -30,4 +30,4 @@ Condition            | Gen med  | Range          | Tail med  | Phys MB/tok  | Ac
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 slabpack60_skew_8a_up |     2.28 | 2.02..2.77     |      2.36 |        402.1 |     3508.6 |       0.00 |   42.5% |    60 |    175.79 | ok    | ceff6fd656310be6
                        Frontier 5 median ms/tok: critical_pread=0.00, submit_start=0.00, critical_task_overhead=0.00, completion_overhead=0.00, layer_completion=0.00
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-184424-historical-control-vontra/slab-production.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-184424-historical-control-vontra/slab-production.json

@@ -90,8 +90,8 @@ Snapshots are keyed by `sha256(tokens)`. Because KV activations in autoregressiv
 - **Explicit CLI Inspection & Cleanup Tool**:
   ```bash
   # Inspect cache contents and statistics
-  .venv/bin/python -m macqwen.cache_tools --inspect
+  .venv/bin/python -m veystrix.cache_tools --inspect
 
   # Clean snapshots older than 7 days, maintaining a 20 GB disk target
-  .venv/bin/python -m macqwen.cache_tools --cleanup --target-disk-gb 20 --max-age-days 7
+  .venv/bin/python -m veystrix.cache_tools --cleanup --target-disk-gb 20 --max-age-days 7
   ```

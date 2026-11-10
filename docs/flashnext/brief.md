@@ -3,7 +3,7 @@
 ## Purpose
 
 Flash-Next runs a sparse Qwen MoE on a 16 GB Apple Silicon Mac. Large sparse tensor families stay on SSD. Flash-Next is the primary
-MACQWEN runtime.
+VEYSTRIX runtime.
 
 ## Model and checkpoint
 
@@ -171,7 +171,7 @@ oQ3-MTP has lost some recall of external APIs. Asked for a SketchUp extension, o
 files at both `low` and `xhigh`. At `xhigh` it called `Sketchup::Face#extrude`, which doesn't exist, and never mentioned the real method
 across 34,203 characters of reasoning. At `low` it used the right method with the wrong second argument.
 
-An external [oQ4-MTP report](https://huggingface.co/Vontra/Qwen3.8-Flash-Next-MLX-oQ4/discussions/2) describes a different failure on long tool-use and coding turns. The model entered a repetition loop, reached `max_tokens`, and cut off an open tool call. The report did not reproduce the failure with oQ3-MTP under matching settings. It used oMLX on an M5 Max, so it does not replace our local gate. The maintainer is investigating. MACQWEN keeps MTP disabled in production.
+An external [oQ4-MTP report](https://huggingface.co/Vontra/Qwen3.8-Flash-Next-MLX-oQ4/discussions/2) describes a different failure on long tool-use and coding turns. The model entered a repetition loop, reached `max_tokens`, and cut off an open tool call. The report did not reproduce the failure with oQ3-MTP under matching settings. It used oMLX on an M5 Max, so it does not replace our local gate. The maintainer is investigating. VEYSTRIX keeps MTP disabled in production.
 
 Prose did not expose this loss. Long Portuguese analysis stayed coherent on both checkpoints. A code task that requires a real API exposed
 it.

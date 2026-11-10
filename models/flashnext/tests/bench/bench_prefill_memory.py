@@ -33,7 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 from models.flashnext.tests.bench import prefill_memory_harness as H  # noqa: E402
 
 MODULE = "models.flashnext.tests.bench.bench_prefill_memory"
@@ -836,13 +836,13 @@ def child_main(args) -> int:
                                          compressor_stop_available_mib=stop_available_gib * 1024))
     tracer.start()          # before the model loads, so the load is traced too
 
-    from macqwen.backends.flashnext import FlashNextBackend
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.backends.flashnext import FlashNextBackend
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext import prefill, prefill_ring
     from models.flashnext.checkpoint_policy import resolve_resident_experts
     from models.flashnext.routing import checkpoint_identity_for_store
 
-    checkpoint = str(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+    checkpoint = str(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
     resident = resolve_resident_experts(None, checkpoint) or 32
     backend = FlashNextBackend(model_path=checkpoint, resident_experts=resident)
     store = find_store(backend.language)
@@ -949,7 +949,7 @@ def backend_contract() -> list[str]:
     """
     import inspect
 
-    from macqwen.backends.flashnext import FlashNextBackend, Stats
+    from veystrix.backends.flashnext import FlashNextBackend, Stats
     from models.flashnext import expert_pool, prefill, prefill_ring
 
     problems = []
@@ -970,7 +970,7 @@ def backend_contract() -> list[str]:
     params(FlashNextBackend.open_conversation, ("system", "user", "enable_thinking"),
            "FlashNextBackend.open_conversation")
     params(FlashNextBackend.append_user, ("text", "enable_thinking"), "FlashNextBackend.append_user")
-    from macqwen.conversation import Conversation
+    from veystrix.conversation import Conversation
 
     source = inspect.getsource(FlashNextBackend) + inspect.getsource(Conversation)
     problems.extend(f"backend does not set self.{n}" for n in ("tape", "pending", "cache")
@@ -994,7 +994,7 @@ def backend_contract() -> list[str]:
 
 def prompt_sizes(tokenizer, sizes: list[str], source: str) -> list[dict]:
     """Real first-turn and second-turn token counts per size, from the tokenizer alone."""
-    from macqwen.conversation import Conversation
+    from veystrix.conversation import Conversation
 
     rows = []
     for size in sizes:
@@ -1029,10 +1029,10 @@ def check_ready(args, *, sampler=None, preflight_module=None, tokenizer_loader=N
                + ("" if inner.verdict == pf.READY else "; run: python -m models.flashnext.preflight"))
     # the child resolves the checkpoint exactly like this
     try:
-        from macqwen.checkpoints import resolve_flashnext
+        from veystrix.checkpoints import resolve_flashnext
 
         resolved = str(resolve_flashnext(getattr(args, "checkpoint", None)
-                                         or environ.get("MACQWEN_FLASHNEXT_MODEL") or None))
+                                         or environ.get("VEYSTRIX_FLASHNEXT_MODEL") or None))
         report.add("child resolution", pf.PASS if Path(resolved) == Path(path).resolve() else pf.WARN,
                    f"resolve_flashnext -> {resolved}")
     except (ValueError, SystemExit) as error:
@@ -1115,7 +1115,7 @@ def check_ready(args, *, sampler=None, preflight_module=None, tokenizer_loader=N
 
 
 def _load_tokenizer(path):
-    from macqwen.backends.flashnext import _load_transformers_tokenizer
+    from veystrix.backends.flashnext import _load_transformers_tokenizer
 
     return _load_transformers_tokenizer().from_pretrained(path)
 
@@ -1221,7 +1221,7 @@ def describe_schedule(arms: list[H.Arm], decode: int, flags: dict | None = None)
 
 
 def fingerprints() -> dict:
-    from macqwen.measurement import source_hash
+    from veystrix.measurement import source_hash
 
     return {name: source_hash(ROOT / name) for name in FINGERPRINTED if (ROOT / name).is_file()}
 
@@ -1254,7 +1254,7 @@ def start_gate_reason(sample: dict, start_gb) -> str | None:
 
 
 def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) -> int:
-    from macqwen.measurement import MeasurementRun
+    from veystrix.measurement import MeasurementRun
 
     arms = H.build_schedule(args.sizes, args.conditions, args.rounds)
     sampler = sampler or H.Sampler(vm=_vm_counters, load=lambda: os.getloadavg()[0],
@@ -1433,8 +1433,8 @@ def main(argv=None) -> int:
     parser.add_argument("--settle", type=float, default=30.0, help="pause between arms")
     parser.add_argument("--final", action="store_true",
                         help="require AC power; otherwise records are marked preliminary")
-    parser.add_argument("--checkpoint", help="checkpoint directory or alias; sets MACQWEN_FLASHNEXT_MODEL "
-                        "for the children (default: $MACQWEN_FLASHNEXT_MODEL, else the single checkpoint in ~/models)")
+    parser.add_argument("--checkpoint", help="checkpoint directory or alias; sets VEYSTRIX_FLASHNEXT_MODEL "
+                        "for the children (default: $VEYSTRIX_FLASHNEXT_MODEL, else the single checkpoint in ~/models)")
     parser.add_argument("--check-ready", action="store_true",
                         help="check the checkpoint, backend API, prompt sizes and machine state; "
                              "starts nothing and writes nothing")
@@ -1492,7 +1492,7 @@ def main(argv=None) -> int:
         args.round -= 1
         return child_main(args)
     if args.checkpoint:
-        os.environ["MACQWEN_FLASHNEXT_MODEL"] = args.checkpoint
+        os.environ["VEYSTRIX_FLASHNEXT_MODEL"] = args.checkpoint
     if args.check_ready:
         report = check_ready(args)
         print(report.text())

@@ -30,13 +30,13 @@ bit-identical, as expected from a change that only moves when an evaluation runs
 | Eager conv-state evaluation | `linear_state.py` | `FLASHNEXT_EVAL_LINEAR_STATE=1` |
 | Chunked prefill with absolute chunk edges, boundary callbacks, per-chunk state evaluation | `prefill.py` | `FLASHNEXT_PREFILL_CHUNK_TOKENS=N` (0 = off, minimum 64) |
 | Exact two-tier prefix cache (RAM LRU, SSD, chained KV deltas) | `prefix_cache.py` | constructed by the session below |
-| Prefill glue: longest-prefix restore, boundary snapshots, report | `prefix_session.py`, hook in `macqwen/backends/flashnext.py` | `FLASHNEXT_PREFIX_CACHE=1`, `_DIR`, `_RAM_GB` (0.75), `_DISK_GB` (20), `_MIN_TOKENS` (512), `_BOUNDARIES` (`system` or `chunks`) |
+| Prefill glue: longest-prefix restore, boundary snapshots, report | `prefix_session.py`, hook in `veystrix/backends/flashnext.py` | `FLASHNEXT_PREFIX_CACHE=1`, `_DIR`, `_RAM_GB` (0.75), `_DISK_GB` (20), `_MIN_TOKENS` (512), `_BOUNDARIES` (`system` or `chunks`) |
 | Memory projection | `tests/bench/long_context_budget.py` | |
 | Synthetic restore benchmark | `tests/bench/bench_prefix_cache_synthetic.py` | |
 | Harness condition `F2L` | `prefill_memory_harness.py` | |
 
 Tests added: 11 (linear state), 32 (prefix cache), 17 (chunked prefill), 16 (prefix session), 11 (budget), 4 (F2L
-condition). Full flashnext suite 968 tests OK (5 skipped); macqwen 427 OK. Mutation checks were run on each module and
+condition). Full flashnext suite 968 tests OK (5 skipped); veystrix 427 OK. Mutation checks were run on each module and
 every surviving mutant got a test.
 
 ### Chunked prefill: what is and is not exact
@@ -124,7 +124,7 @@ system prompt and chunk edges, which are where exact recurrent state exists). If
 Apache-2.0 header and a NOTICE entry.
 
 ## 6. Server and API facts (DeepSeek-style clients)
-* `macqwen/server.py` serves OpenAI `/v1/chat/completions` and `/v1/responses`, and Anthropic `/v1/messages`. Each call
+* `veystrix/server.py` serves OpenAI `/v1/chat/completions` and `/v1/responses`, and Anthropic `/v1/messages`. Each call
   renders the whole conversation (system plus tools plus history) through the chat template, tokenizes it, and
   `_adopt` keeps the live cache only if the tape is a strict prefix; otherwise it resets. That reset is where the prefix
   cache now applies. Tools sit in the system block, so the system-boundary snapshot covers them.

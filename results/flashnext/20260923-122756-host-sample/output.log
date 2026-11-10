@@ -5,7 +5,7 @@
   16.41 ms    4.3%  models/flashnext/expert_cache.py:679 _keepwarm_spin
   13.75 ms    3.6%  models/flashnext/expert_cache.py:1588 __call__
    6.16 ms    1.6%  models/flashnext/store.py:77 _profiled_pread
-   5.86 ms    1.5%  macqwen/backends/flashnext.py:708 standard_tokens
+   5.86 ms    1.5%  veystrix/backends/flashnext.py:708 standard_tokens
    3.41 ms    0.9%  models/flashnext/adaptive_topk.py:109 _moe_call
    1.18 ms    0.3%  models/flashnext/adaptive_topk.py:127 _moe_call
    1.09 ms    0.3%  models/flashnext/store.py:330 pin_rows
@@ -46,9 +46,9 @@
    0.03 ms    0.0%  models/flashnext/compile_glue.py:53 _decoder_call
    0.03 ms    0.0%  mlx_vlm/models/qwen4_exp/language.py:445 __call__
 -- inclusive --
- 379.68 ms   99.7%  macqwen/backends/flashnext.py:717 generate
+ 379.68 ms   99.7%  veystrix/backends/flashnext.py:717 generate
  373.82 ms   98.2%  mlx_vlm/models/qwen3_5/language.py:2072 __call__
- 373.82 ms   98.2%  macqwen/backends/flashnext.py:706 standard_tokens
+ 373.82 ms   98.2%  veystrix/backends/flashnext.py:706 standard_tokens
  373.17 ms   98.0%  mlx_vlm/models/qwen4_exp/language.py:819 __call__
  364.94 ms   95.8%  models/flashnext/compile_glue.py:54 _decoder_call
  242.55 ms   63.7%  models/flashnext/adaptive_topk.py:262 _moe_call
@@ -75,5 +75,5 @@
    6.16 ms    1.6%  models/flashnext/store.py:436 _pread_into
    6.16 ms    1.6%  models/flashnext/store.py:310 rows_np
    6.16 ms    1.6%  models/flashnext/store.py:77 _profiled_pread
-   5.86 ms    1.5%  macqwen/backends/flashnext.py:708 standard_tokens
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260923-122756-host-sample/host-sample.json
+   5.86 ms    1.5%  veystrix/backends/flashnext.py:708 standard_tokens
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260923-122756-host-sample/host-sample.json

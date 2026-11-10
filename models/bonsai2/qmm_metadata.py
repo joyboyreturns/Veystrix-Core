@@ -230,12 +230,12 @@ def install(
         "preparation_peak_active_bytes": 0,
         "group_size": int(group_size),
         "deadline_seconds": (
-            _env_float("MACQWEN_BONSAI2_QMM_DEADLINE_S", PREPARATION_DEADLINE_SECONDS)
+            _env_float("VEYSTRIX_BONSAI2_QMM_DEADLINE_S", PREPARATION_DEADLINE_SECONDS)
             if max_seconds is None else float(max_seconds)
         ),
         "max_additional_bytes": (
             int(_env_float(
-                "MACQWEN_BONSAI2_QMM_MAX_ADDITIONAL_MB",
+                "VEYSTRIX_BONSAI2_QMM_MAX_ADDITIONAL_MB",
                 PREPARATION_MAX_ADDITIONAL_BYTES / (1024 * 1024),
             ) * 1024 * 1024)
             if max_additional_bytes is None else int(max_additional_bytes)

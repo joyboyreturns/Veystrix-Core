@@ -3,7 +3,7 @@
 # decode n-gram rows on the read pool (N, FLASHNEXT_NGRAM_PARALLEL_MIN=16)
 # against chat defaults (D). Fresh process per arm, 128 greedy tokens, 8 pins.
 # Order: D S N N S D D S N. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-123304-host-levers
 arm() {

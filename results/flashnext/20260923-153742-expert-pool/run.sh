@@ -2,7 +2,7 @@
 # Expert pool (FLASHNEXT_EXPERT_POOL_GB=6, pins off with it) against the chat
 # defaults. Fresh process per arm, 128 greedy tokens. Order: D P P D D P.
 # Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-153742-expert-pool
 arm() {

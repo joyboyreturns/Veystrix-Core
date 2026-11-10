@@ -108,7 +108,7 @@ Every optimization experiment must:
 Add new terminal tests as separate `models/flashnext/tests/cases/case_*.py`
 files. Put benchmark scripts in `models/flashnext/tests/bench/`, unit tests in
 `models/flashnext/tests/unit/`, and send every output through
-`macqwen.results`; see [docs/testing.md](../testing.md).
+`veystrix.results`; see [docs/testing.md](../testing.md).
 Do not add case-specific commands to the terminal. Each runnable file must
 provide its explanation, proposal reason, controls, metrics, source, and
 executable script through the test plugin API.

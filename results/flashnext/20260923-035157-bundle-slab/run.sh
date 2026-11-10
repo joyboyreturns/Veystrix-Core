@@ -2,7 +2,7 @@
 # Exact opt-in bundle (now the chat default) vs the pre-bundle settings,
 # slab on in both. Fresh process per arm, 128 greedy tokens, 8 pins.
 # Order: prior, bundle, bundle, prior, prior, bundle. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 PRIOR=(
   FLASHNEXT_STREAM_EMBED=0 FLASHNEXT_COMPILE_HC=0 FLASHNEXT_COMPILE_NORM=0

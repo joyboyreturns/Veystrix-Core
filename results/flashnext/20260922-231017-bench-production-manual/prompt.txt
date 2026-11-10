@@ -29,7 +29,7 @@ Every measured experiment, in the order it was run. Read [`handoff.md`](handoff.
 
 ## Historical prefill bottleneck
 
-This section records the first implementation state. Later sections supersede its rates and proposed next steps. Prefill runs at 0.77 tok/s. 93 tokens take about 120 seconds. A MoE prefill routes about 290 distinct experts per layer against decode's 10, so it reads 25.35 GB to process 93 tokens. Chunking the prompt is worse, not better: 16-token chunks would read 69 GB total. The GPU is idle throughout. `gather_qmm` is 3.2 s of a 121 s prefill. This is where the remaining work is. MACQWEN integration: `macqwen/session.py` now appends only the new turn to its live cache. Context images remain separate work.
+This section records the first implementation state. Later sections supersede its rates and proposed next steps. Prefill runs at 0.77 tok/s. 93 tokens take about 120 seconds. A MoE prefill routes about 290 distinct experts per layer against decode's 10, so it reads 25.35 GB to process 93 tokens. Chunking the prompt is worse, not better: 16-token chunks would read 69 GB total. The GPU is idle throughout. `gather_qmm` is 3.2 s of a 121 s prefill. This is where the remaining work is. VEYSTRIX integration: `veystrix/session.py` now appends only the new turn to its live cache. Context images remain separate work.
 
 ## Native MTP tests on 2026-08-27
 

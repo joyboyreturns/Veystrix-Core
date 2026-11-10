@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 import mlx.core as mx  # noqa: E402
 import numpy as np  # noqa: E402
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 from models.flashnext.diskio import disk_bytes_read  # noqa: E402
 
 PAGE = 16384
@@ -63,9 +63,9 @@ def main() -> int:
     if args.shard:
         shard = args.shard
     else:
-        from macqwen.checkpoints import resolve_flashnext
+        from veystrix.checkpoints import resolve_flashnext
 
-        directory = Path(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+        directory = Path(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
         shards = sorted(directory.glob("model-*.safetensors"))
         shard = str(shards[len(shards) // 2])
     size = os.path.getsize(shard)
