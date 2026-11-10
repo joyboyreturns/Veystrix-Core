@@ -60,8 +60,9 @@ Unit tests, per tree:
 .venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py'
 ```
 
-Replace `flashnext` with `bonsai2`, `k2_horizon` or `qwen27b` for the other
-models. Always pass `-t .`, so imports resolve from the repository root.
+Nemotron's model-free tests run as modules:
+`.venv/bin/python -m unittest models.nemotron35.test_synthetic models.nemotron35.test_real_layout models.nemotron35.test_backend models.nemotron35.test_full_size_structure models.nemotron35.test_template_parity`.
+Always pass `-t .` to `discover`, so imports resolve from the repository root.
 
 Live tests, through the one test terminal:
 

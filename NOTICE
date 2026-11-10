@@ -12,13 +12,11 @@ legal/LICENSE_PROVENANCE.md records what is known about authorship and what is o
 Model checkpoints
 -----------------
 The research checkpoint used in measurements is distributed by its publisher.
-Other checkpoints (Qwen3.8-Flash-Next variants, Qwen3.8-27B, K2-Horizon-7B,
-Ternary-Bonsai-2-27B) are also distributed separately by their publishers.
-K2-Horizon-7B-MLX-8bit is published by abenzerps and includes a checkpoint-supplied
-MLX model implementation. Ternary-Bonsai-2-27B-mlx-2bit is published by prism-ml
-under Apache-2.0 and includes a checkpoint-supplied runtime loader. Review each
-checkpoint's license before download, use, modification or redistribution. Veystrix
-does not bundle or redistribute any of them.
+Other checkpoints (Qwen3.8-Flash-Next variants, and the experimental NVIDIA Nemotron 3.5
+Lightning 4-bit MLX conversion published by mlx-community, licensed under OpenMDW-1.1) are
+also distributed separately by their publishers. Review each checkpoint's license before
+download, use, modification or redistribution. Veystrix does not bundle or redistribute
+any of them.
 
 Dependencies
 ------------

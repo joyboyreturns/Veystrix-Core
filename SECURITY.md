@@ -36,9 +36,7 @@ cache data. Keep these directories private:
 
 ```text
 ~/.cache/flashnext/sessions/
-~/.cache/k2-horizon/sessions/
-~/.cache/bonsai2/sessions/
-~/.frankenstein/sessions/
+~/.cache/veystrix/nemotron35/sessions/
 ```
 
 Do not publish session files.

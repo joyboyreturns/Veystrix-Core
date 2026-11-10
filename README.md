@@ -11,10 +11,10 @@ low-memory Apple Silicon Macs. The primary runtime keeps the dense model
 core in unified memory while streaming selected expert rows and n-gram
 rows from the checkpoint on demand.
 
-Three resident runtimes (K2-Horizon 7B, Bonsai-2 27B, Qwen3.8-27B, all
-smaller than the primary MoE) are
-supported for comparison and research, but they are not the project's
-focus. Everything below leads with the streamed MoE runtime.
+Two runtimes are supported: Flash-Next (the default) and the experimental
+NVIDIA Nemotron 3.5 Lightning streamed runtime (see `docs/nemotron35/`; real
+inference needs explicit authorization and has not been validated). The earlier
+K2-Horizon, Bonsai-2 and Qwen3.8-27B research runtimes were removed.
 
 ## Current status (evidence recorded 2026-11-08, one machine)
 
@@ -126,51 +126,6 @@ It asks which installed runtime and checkpoint to test, discovers that
 runtime's cases, and writes each run to its own folder under
 `results/<runtime>/`. See [docs/testing.md](docs/testing.md).
 
-## Secondary runtimes (supported, not the focus)
-
-They run resident checkpoints with no SSD streaming. Prefer them only
-for comparison or their own research questions.
-
-### K2-Horizon 7B
-
-Resident 7B MLX model (about 9.6 GB on disk).
-
-```bash
-hf download abenzerps/K2-Horizon-7B-MLX-8bit \
-  --local-dir "$HOME/models/K2-Horizon-7B-MLX-8bit"
-./chat.sh --model k2-horizon --checkpoint k2
-```
-
-The checkpoint supplies executable `model.py`; use a source we trust.
-See the [brief](docs/k2_horizon/brief.md) and
-[handoff](docs/k2_horizon/handoff.md).
-
-### Bonsai-2 27B
-
-Experimental ternary-weight 27B, text-only (Milestone 1), via the
-checkpoint's bundled `runtime/` loader.
-
-```bash
-hf download prism-ml/Ternary-Bonsai-2-27B-mlx-2bit \
-  --local-dir "$HOME/models/Ternary-Bonsai-2-27B-mlx-2bit"
-./chat.sh --model bonsai2 --checkpoint b2
-```
-
-See the [brief](docs/bonsai2/brief.md) and
-[handoff](docs/bonsai2/handoff.md).
-
-### Qwen3.8-27B
-
-Dense research runtime on a compatible local V4 build (must include
-`bf16-ends/` beside its weights). `BUILD` is the directory suffix:
-
-```bash
-./chat.sh BUILD --profile plain
-```
-
-See the [handoff](docs/qwen27b/handoff.md). No V4 checkpoint is
-currently installed.
-
 ## Daily use
 
 Inside the chat, use:
@@ -280,9 +235,7 @@ state; keep them private.
 | Preferences | `~/.veystrix/preferences.json` |
 | API keys | `~/Library/Application Support/Veystrix/api_keys.json` |
 | Flash-Next sessions | `~/.cache/flashnext/sessions/` |
-| K2-Horizon sessions | `~/.cache/k2-horizon/sessions/` |
-| Bonsai-2 sessions | `~/.cache/bonsai2/sessions/` |
-| Qwen3.8-27B sessions | `~/.frankenstein/sessions/` |
+| Nemotron sessions | `~/.cache/veystrix/nemotron35/sessions/` |
 
 The launcher uses `.venv` by default. Developers can provide a validated
 override with `VEYSTRIX_PYTHON` or a model-specific `VEYSTRIX_*_PYTHON` variable.
@@ -342,9 +295,7 @@ scripts/security/           secret scan and public-exposure audit
 veystrix/                    Shared chat, commands, settings, tools, and test engine
 tests/                      Project live-test terminal
 models/flashnext/           Flash-Next streaming runtime and benchmarks
-models/k2_horizon/          K2-Horizon runtime, adapter, settings, and tests
-models/bonsai2/             Bonsai-2 runtime, kernels, settings, and tests
-models/qwen27b/             Qwen3.8-27B runtime and research utilities
+models/nemotron35/         Experimental Nemotron 3.5 Lightning streamed runtime and model-free tests
 docs/                       Current guides, evidence, and historical records
 results/                    Per-run measurement records (one folder per run)
 ```
@@ -371,7 +322,7 @@ Veystrix uses and builds on these third-party projects and platform tools:
 - The Qwen team provides the Qwen model architecture, tokenizer, sampling
   guidance, and checkpoint family used by Veystrix.
 - Vontra provides the public Flash-Next MLX checkpoints used in this work.
-- IFM provides K2-Horizon, and abenzerps provides its public MLX checkpoint.
+- NVIDIA provides Nemotron 3.5 Lightning, and mlx-community its public MLX 4-bit conversion.
 - Tavily and Context7 provide optional search and documentation tools for the
   repository-tool chat profile.
 - Python provides the runtime and standard-library components.

@@ -32,8 +32,7 @@ complete. Keep historical measurements and raw records unchanged.
 - Put current instructions in handoffs, not in research history.
 - Date historical findings and label diagnostic, incomplete, rejected, and
   unverified results explicitly.
-- Use the same runtime names everywhere: Flash-Next, K2-Horizon, Bonsai-2,
-  and Qwen3.8-27B. Keep lowercase identifiers only in code and paths.
+- Use the same runtime names everywhere: Flash-Next and Nemotron. Keep lowercase identifiers only in code and paths.
 - Prefer one short paragraph or table over repeated explanations.
 
 ## Measurement rules

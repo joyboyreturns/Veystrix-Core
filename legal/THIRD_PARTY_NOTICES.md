@@ -247,5 +247,5 @@ The CPython interpreter is licensed under the PSF License Agreement.
 ## 4. Model checkpoints are not included
 
 Veystrix does not include or redistribute model weights. Each checkpoint (for example Qwen3.8
-Flash-Next variants, K2-Horizon, Ternary-Bonsai-2, Qwen3.8-27B) is distributed by its publisher
+Flash-Next variants, NVIDIA Nemotron 3.5 Lightning) is distributed by its publisher
 under that publisher's license. Read it before you download, use, modify or redistribute the checkpoint.

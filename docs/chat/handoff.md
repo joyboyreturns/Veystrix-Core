@@ -40,12 +40,7 @@ trust.
 | `veystrix/profiles/` | Define plain and repository-tool behavior |
 | `veystrix/tools/` | Provide repository, API, code, and search tools |
 | `veystrix/backends/` | Adapt each model runtime to the session loop |
-| `models/k2_horizon/` | Own K2 loading, settings, protocol adaptation, and tests |
-| `models/bonsai2/` | Own Bonsai-2 loading, settings, protocol adaptation, and tests |
 | `models/flashnext/` | Own Flash-Next loading, routing, streaming, and tests |
-| `models/qwen27b/` | Own Qwen3.8-27B loading, cache, and research utilities |
-| `docs/k2_horizon/` | Hold K2 status, research decisions, operation, and measurements |
-| `docs/bonsai2/` | Hold Bonsai-2 status, research decisions, operation, and measurements |
 
 ## Commands
 
@@ -146,10 +141,7 @@ Run the shared suite:
 ```bash
 .venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
 .venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s models/qwen27b/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s models/k2_horizon/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s models/bonsai2/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m compileall -q veystrix models/flashnext models/qwen27b models/k2_horizon models/bonsai2
+.venv/bin/python -m compileall -q veystrix models/flashnext models/nemotron35
 git diff --check
 ```
 

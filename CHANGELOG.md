@@ -4,7 +4,14 @@
 
 Not released. No hardware validation was done for these changes: no model was loaded.
 
+### Removed
+
+- The Bonsai-2, K2-Horizon and Qwen3.8-27B (Frankenstein) runtimes, their CLI/server/discovery branches, tests, CI steps and
+  research docs. A saved preference naming one now falls back to Flash-Next with a one-line message. Flash-Next is unchanged and
+  stays the default; the experimental Nemotron runtime is the only other supported model.
+
 ### Changed
+
 
 - Rebrand to **Veystrix**: the Python package is `veystrix`, the console script is `veystrix`, environment variables are `VEYSTRIX_*`, and `/v1/models` serves the id `veystrix-flashnext`. Clients configured with the previous model id must be updated.
 - Default locations: `~/.veystrix/preferences.json` and `~/Library/Application Support/Veystrix/api_keys.json`.

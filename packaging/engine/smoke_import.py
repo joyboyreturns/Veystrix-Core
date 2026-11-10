@@ -42,7 +42,7 @@ except ImportError:
 import mlx_vlm  # noqa: F401  (imports the package only; no model, no Metal session)
 print("imports ok")
 """
-for required in (python, lib / "models/flashnext/overnight.pyc", lib / "veystrix/cli.pyc", lib / "veystrix/session.pyc", lib / "models/flashnext/tests/bench/prefill_memory_harness.pyc", lib / "models/flashnext/tests/bench/bench_prefill_memory.pyc", lib / "models/flashnext/tests/bench/layer_gate_probe.pyc", lib / "models/bonsai2/settings.pyc", lib / "models/k2_horizon/settings.pyc"):
+for required in (python, lib / "models/flashnext/overnight.pyc", lib / "veystrix/cli.pyc", lib / "veystrix/session.pyc", lib / "models/flashnext/tests/bench/prefill_memory_harness.pyc", lib / "models/flashnext/tests/bench/bench_prefill_memory.pyc", lib / "models/flashnext/tests/bench/layer_gate_probe.pyc", lib / "models/nemotron35/inventory.pyc", lib / "veystrix/backends/nemotron35.pyc"):
     if not required.is_file():
         sys.exit(f"mandatory bundle resource missing: {required}")
 if not os.access(python, os.X_OK):

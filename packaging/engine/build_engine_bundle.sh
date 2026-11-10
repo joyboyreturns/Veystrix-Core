@@ -2,14 +2,14 @@
 # Build the self-contained engine runtime that Veystrix.app embeds in Contents/Resources/engine.
 #   packaging/engine/build_engine_bundle.sh [OUT_DIR]        (default: dist/engine)
 # Layout:  OUT/python/   pinned CPython (python-build-standalone) with the engine's pinned dependencies
-#          OUT/lib/      veystrix/, models/{flashnext,qwen27b}/ as compiled .pyc, plus data files
+#          OUT/lib/      veystrix/, models/{flashnext,nemotron35}/ as compiled .pyc, plus data files
 #          OUT/licenses/ license texts for everything inside
 #          OUT/BUNDLE-MANIFEST.txt
 # Honest limits: .pyc files are an anti-clutter and anti-accident measure, NOT protection. They decompile
 # easily; do not describe the bundle as obfuscated or protected. Dependencies are downloaded from PyPI with
 # pinned versions (network needed, no model weights). Nothing here loads or imports a model.
-# Excluded on purpose: opencv (LGPL FFmpeg build; see legal/COMMERCIALIZATION_READINESS.md), the K2-Horizon and
-# Bonsai-2 backends (they use trust_remote_code), tests, docs, benchmarks, and every checkpoint.
+# Excluded on purpose: opencv (LGPL FFmpeg build; see legal/COMMERCIALIZATION_READINESS.md), tests, docs,
+# benchmarks, and every checkpoint.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="${1:-$ROOT/dist/engine}"; WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
@@ -45,16 +45,12 @@ rm -rf "$OUT"/python/lib/python3.12/{test,idlelib,tkinter,turtledemo,turtle.py} 
        "$OUT"/python/lib/{tcl*,tk*,itcl*,thread*,Tix*,sqlite3*} "$OUT"/python/bin/{idle*,2to3*,pydoc*} 2>/dev/null || true
 
 echo "==> Engine sources -> compiled lib"
-for pkg in veystrix models/__init__.py models/flashnext models/qwen27b; do
+for pkg in veystrix models/__init__.py models/flashnext models/nemotron35; do
   mkdir -p "$OUT/lib/$(dirname "$pkg")" 2>/dev/null || true
   ditto "$ROOT/$pkg" "$OUT/lib/$pkg"
 done
-# The shared CLI and checkpoint registry import these lightweight settings even when
-# the optional model backends are excluded. Do not include their model code.
-for pkg in bonsai2 k2_horizon; do
-  mkdir -p "$OUT/lib/models/$pkg"
-  cp "$ROOT/models/$pkg/__init__.py" "$ROOT/models/$pkg/settings.py" "$OUT/lib/models/$pkg/"
-done
+# Nemotron ships its runtime, not its model-free tests.
+find "$OUT/lib/models/nemotron35" -name 'test_*.py' -delete
 find "$OUT/lib" \( -name tests -o -name bench -o -name __pycache__ -o -name '*.md' \) -prune -exec rm -rf {} +
 # The production safety guard and optional layer diagnostics currently share these
 # benchmark utilities. Ship only their exact import closure, not the test suite.
