@@ -457,7 +457,7 @@ class AcquireTests(RingCase):
     def test_requires_the_expert_pool(self):
         with mock.patch.dict(os.environ, {"FLASHNEXT_EXPERT_POOL_GB": "0"}):
             self.assertIsNone(prefill_ring.acquire(self.language, 1024))
-            self.assertEqual(self.reason(), "expert pool is off")
+            self.assertEqual(self.reason(), "expert pool and scratch ring are off")
 
     def test_refuses_when_the_working_set_does_not_fit(self):
         # Active memory is patched: reading the real value twice races with
