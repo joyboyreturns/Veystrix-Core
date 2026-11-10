@@ -6,6 +6,8 @@ Complete the user's runtime recovery mission: real Qwen3.8-Flash-Next 4-bit on M
 
 ## Confirmed evidence
 
+Latest live DeepSeek retry (PID 6817): 9427-token cold prompt with 32 tools produced its first streamed reply after 234.286 s and finished normally; three later turns extended live state with 17, 373 and 153 newly prefilled tokens and also finished. The scratch ring was active, the server stayed healthy, and eight SSD snapshots were present. See `~/.flashnext/logs/server-6817.jsonl`. The logs do not prove the coding task's output, SSD restoration after restart, Qwen Code integration, or 32K hardware operation.
+
 Previous DeepSeek request had 9427 prompt tokens and 32 tools; last reported progress 9230, then no first token before absolute guard stopped at 2963 MiB swap (2816 MiB margin, 3072 MiB ceiling). The progress was a layer-derived estimate, not verified token progress; do not infer a 197-token final chunk. Root cause remains unknown. Startup legacy tiers capped configured 32768 at 4096/14336. Failed SSD persistence could silently evict an unpersisted RAM leaf.
 
 Continuation real run details and guard defect are recorded in `CODEX_RUNTIME_RECOVERY_PROGRESS.md`. On AC, 469, 1974 and 3974 token cold requests returned real replies; 7974 was deliberately cancelled after 3984 evaluated tokens as pressure level 2 persisted and compressor growth approached 5 GiB. The server shut down cleanly. The default launcher initially had no absolute swap ceiling; agentic mode now configures 3072/256 and a memory watchdog, verified on `/health` after restart. Do not proceed to larger real tests until pressure behavior is understood and safe headroom is available.

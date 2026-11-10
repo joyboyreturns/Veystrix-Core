@@ -27,11 +27,13 @@ The full MacQwen suite passed 729 tests. The first FlashNext run (1817 tests) fa
 - Targeted Metal tests: 87 passed (phase 3 remediation, prefill chunks, prefix cache); readiness and phase 4: 42 passed.
 - Sandboxed MLX imports fail: no Metal device; outside sandbox the targeted tests passed. `pytest` is not installed; use unittest.
 - Full MacQwen suite: 725 tests passed in 69.195 seconds. Full FlashNext unit suite: 1809 tests passed in 169.589 seconds, 3 skipped.
-- Full-checkpoint synthetic runs are described above. No real Harness or Qwen Code workflow, real SSD restart restoration, or 32K hardware run has passed. No claim of stall resolution or overnight readiness.
+- The latest real Harness run completed its first reply and three live continuations, as noted below. Its full coding-task outcome, Qwen Code workflow, real SSD restart restoration, and 32K hardware run remain unverified. No overnight-readiness claim is made.
 - `qwen --version`: 0.27.0. `dsh` was not found on the current PATH. AC was connected for the real run; the server is now stopped. Avoid further heavy tests until the pressure behavior is understood and headroom is confirmed.
 - Reliable Codex five-hour usage telemetry is unavailable.
 
 ## Next
+
+Live DeepSeek Harness retry on PID 6817 succeeded at the previously blocked first reply: 9427 prompt tokens with 32 tools, scratch ring active, cold prefill 234.235 s, first token delivered over SSE at 234.286 s, and generation finished normally with 124 tokens. Three subsequent Harness requests extended the live state, requiring 17, 373, and 153 new prompt tokens respectively; all generated replies and finished normally. The server remained healthy and idle afterward with total swap about 1108 MiB and eight SSD snapshots. Flight log: `~/.flashnext/logs/server-6817.jsonl`. These observations demonstrate the first reply and live continuations, not a verified coding-task outcome, SSD restoration after restart, Qwen Code compatibility, or 32K hardware execution. Earlier failed runs and the unverified candidate history remain documented below.
 
 Harness retry on PID 2769 restored no old fingerprint, completed 7074 of 9427 tokens, saved compatible snapshots at 3538 and 5306, then independent watchdog killed it when system swap reached 3018.2 MiB (2816 MiB guard margin); no reply. Retry on PID 6007 restored 5306 tokens from SSD, but was stopped during the next chunk at 2863.4 MiB swap even with a 512 MiB MLX allocator-cache cap. The cap reduced allocator cache but did not alone prevent compressor/swap growth. Flight logs are `~/.flashnext/logs/server-2769.jsonl` and `server-6007.jsonl`.
 
@@ -41,4 +43,4 @@ DeepSeek-focused continuation: the original PID 81972 trace shows continuous pag
 
 Review the candidate changes and full test outcomes; implement bounded explicit cache invalidation and reporting. On AC, use the guarded `./serve.sh` launch, inspect `/health` and diagnostics, and capture real stage traces progressively (short, 2K, 4K, 8K, representative 9K), stopping on pressure or stall. Trace exact layer/expert/Metal stage and fix only with evidence. Then run real DeepSeek and Qwen tool workflows, restart and restore a verified SSD prefix, validate admission/error paths and all mandatory gates. Do not run a 32K full-model stress test automatically. See `HANDOFF_TO_CLAUDE_CODE.md` for commands and open work.
 
-Last verified launch command: `./serve.sh --pool-gb 0`, with `/health` confirming the absolute 3072/256 MiB guard before requests. The server was stopped cleanly after the pressure-triggered cancellation.
+Last verified launch command: `./serve.sh --pool-gb 0`, with `/health` confirming the absolute 3072/256 MiB guard before requests. PID 6817 completed the later Harness run described above and was healthy when last checked.
