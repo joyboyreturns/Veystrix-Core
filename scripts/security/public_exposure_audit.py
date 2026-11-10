@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse, re, subprocess, sys
 from pathlib import Path
 
-ALLOWED_SHARED = {"LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "LICENSES/MIT-1architect.txt", "LICENSES/Sparkle-2.10.1.txt"}
+ALLOWED_SHARED = {"LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "LICENSES/MIT-upstream.txt", "LICENSES/Sparkle-2.10.1.txt"}
 FORBIDDEN_SUFFIX = (".py", ".metal", ".swift", ".safetensors", ".gguf", ".npz", ".pt", ".bin", ".pkl", ".p12", ".p8", ".pem")
 FORBIDDEN_TEXT = (re.compile(rb"/Users/[A-Za-z0-9._-]+"), re.compile(rb"Veystrix-Core"), re.compile(rb"vkv2576"))
 HERE = Path(__file__).resolve().parent

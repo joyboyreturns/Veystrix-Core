@@ -6,11 +6,11 @@ import tempfile
 import unittest
 from unittest.mock import call, patch
 
-from macqwen.backends.base import (
+from veystrix.backends.base import (
     CANCELLABLE_PREFILL_STEP_SIZE,
     GenerationCancelled,
 )
-from macqwen.conversation import EXTRA_REASONING
+from veystrix.conversation import EXTRA_REASONING
 from mlx_lm.models.cache import KVCache, RotatingKVCache
 
 from models.k2_horizon.backend import K2HorizonBackend

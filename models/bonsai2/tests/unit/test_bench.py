@@ -78,7 +78,7 @@ class BenchTests(unittest.TestCase):
             self.assertIn("at least 300 words", prompt)
 
     def test_runnable_prefill_catalog_is_bounded(self):
-        from macqwen.testsuite.catalog import build_catalog
+        from veystrix.testsuite.catalog import build_catalog
 
         catalog = build_catalog("bonsai2")
         bounded = (
@@ -677,14 +677,14 @@ class BenchTests(unittest.TestCase):
             return SimpleNamespace(returncode=7, stderr="no model")
 
         with TemporaryDirectory() as directory:
-            with patch.dict("os.environ", {"MACQWEN_BONSAI2_KV": "8"}):
+            with patch.dict("os.environ", {"VEYSTRIX_BONSAI2_KV": "8"}):
                 bench.run_comparison(checkpoint=str(Path(directory) / "missing"),
                                      comparison="baseline",
                                      record_path=Path(directory) / "env.jsonl",
                                      rounds=2, runner=recording_runner)
         self.assertTrue(seen)
         for env in seen:
-            self.assertNotIn("MACQWEN_BONSAI2_KV", env)
+            self.assertNotIn("VEYSTRIX_BONSAI2_KV", env)
 
     def test_paired_stats_exclude_arms_that_did_not_run_clean(self):
         def mixed_runner(command, **_kwargs):
@@ -716,7 +716,7 @@ class BenchTests(unittest.TestCase):
         self.assertIsNone(summary["paired"]["allocator-256"]["mean_delta_pct"])
 
     def test_main_reports_failure_through_its_exit_code(self):
-        from macqwen import results
+        from veystrix import results
 
         directory = self.enterContext(tempfile.TemporaryDirectory())
         self.enterContext(patch.object(results, "RESULTS_ROOT", Path(directory)))

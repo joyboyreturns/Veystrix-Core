@@ -13,7 +13,7 @@ os.environ.setdefault("FLASHNEXT_RENORM", "0")
 import mlx.core as mx
 from transformers import AutoTokenizer
 
-from macqwen.checkpoints import resolve_flashnext
+from veystrix.checkpoints import resolve_flashnext
 from models.flashnext.adaptive_topk import (
     mean_keeps,
     reset_keep_stats,

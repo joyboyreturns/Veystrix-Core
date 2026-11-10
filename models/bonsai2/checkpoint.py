@@ -24,7 +24,7 @@ def _json(path: Path) -> dict:
 
 
 def model_root() -> Path:
-    return Path(os.environ.get("MACQWEN_MODEL_ROOT", "~/models")).expanduser()
+    return Path(os.environ.get("VEYSTRIX_MODEL_ROOT", "~/models")).expanduser()
 
 
 def runtime_available(path: Path) -> bool:

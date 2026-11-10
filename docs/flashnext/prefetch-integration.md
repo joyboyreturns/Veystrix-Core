@@ -172,7 +172,7 @@ Reuse the structure of `bench_native_dma_contention.py`.
 | `expert_pool.py` | `lease_ring`, `release_ring`, strided operand views, scatter `preadv` fill |
 | `prefetch.py` | An arena seam: heap arena (today) and pool-ring arena; ticket records slots, not buffers |
 | `expert_cache.py` | Pool branch in `_one_pass` for rows > 8; submit L+1 at the end of `_one_pass(L)`; claim at L+1; build views once, not per layer |
-| `macqwen/backends/flashnext.py` | Lease at prefill start, `cancel` plus release in `finally` and in the `layer_completed` cancel path |
+| `veystrix/backends/flashnext.py` | Lease at prefill start, `cancel` plus release in `finally` and in the `layer_completed` cancel path |
 | `loader.py` | Record the next layer's block for the later predictor (`next_prefix` exists and is unused) |
 | `settings/` | Redefine the flag as pool GB to lease; no launch default |
 
@@ -421,7 +421,7 @@ the `prefill_target` hook wiring.
 Full offline suites: flashnext 525 tests, one failing assertion in my own new
 test (a released lease handle reports `stale`, the half is `free`), fixed and
 re-run with `test_pool_ring`, `test_prefill_ring` and `test_settings_registry`
-(67 OK); macqwen 427 OK. The complete flashnext suite is re-run before commit.
+(67 OK); veystrix 427 OK. The complete flashnext suite is re-run before commit.
 
 ### 11.5 The memory compression question (first attempt; superseded by section 12)
 

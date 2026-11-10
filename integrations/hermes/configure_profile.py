@@ -27,7 +27,7 @@ import shutil
 import sys
 from pathlib import Path
 
-DEFAULT_MODEL_ID = "macqwen-flashnext"       # what the engine serves for the Flash-Next runtime (GET /v1/models .id)
+DEFAULT_MODEL_ID = "veystrix-flashnext"       # what the engine serves for the Flash-Next runtime (GET /v1/models .id)
 # Hermes Agent refuses a model whose window is below 64,000 tokens (agent_init._enforce_minimum_context, v0.23.1), and its
 # compression floor for windows under 512K is 75% of the window. 65,536 is the smallest value it accepts. The supervised launcher
 # (serve.sh) reports a 262,144-token window with --max-cold-prefill 32768, so Hermes will compress long before the window is

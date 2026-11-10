@@ -266,7 +266,7 @@ stay consistent; one extra close token enters the transcript.
 
 Tests: fakes now route candidates through the passed sampler (mirroring
 generate_step); new `_ForcingSampler` unit tests; answer-cap test asserts
-replay. Full bonsai2 suite 67 tests OK, macqwen 253 OK. Live two-turn
+replay. Full bonsai2 suite 67 tests OK, veystrix 253 OK. Live two-turn
 smoke (`7*8=56` correct, finish stop both turns) on M4.
 
 ## 2026-09-19 — Step 3: turn joins match the template
@@ -315,7 +315,7 @@ missing (`REQUIRED_PARAMS`), naming the missing keys so the model can
 retry; previously the tool ran with absent arguments. Sessions now persist
 `_interactive_budgets` with strict shape validation (bools rejected as
 token counts), so a restored conversation keeps its reasoning contract
-instead of inheriting a later chat's budgets. Macqwen suite 257 OK.
+instead of inheriting a later chat's budgets. Veystrix suite 257 OK.
 Live two-turn smoke after all steps: `17*23=391`, `7*8=56`, both stop.
 
 ## 2026-09-19 — Review reconciliation batch
@@ -344,7 +344,7 @@ remaining gaps were valid and are now closed:
 - Removed the dead `gemv` constructor switch and its no-op bench arm.
   `gemv_kernel.py` and its tests stay as research artifacts.
 
-Suites: bonsai2 90 OK, macqwen 261 OK, k2 41 OK. Live two-turn smoke:
+Suites: bonsai2 90 OK, veystrix 261 OK, k2 41 OK. Live two-turn smoke:
 `17*23=391`, `7*8=56`, both stop.
 
 ## Status: what stays and what does not

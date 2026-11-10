@@ -1,7 +1,7 @@
 """Screen prepared QMM metadata with paging counters retained."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def live_parser(line: str) -> dict | None:

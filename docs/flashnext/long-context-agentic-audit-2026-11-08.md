@@ -19,7 +19,7 @@ Antigravity's latest layer was mostly **not connected to the runtime**, and the 
 | `qsa_chunk` pooled-key reuse | exact `type()` check excluded the affine subclass. | `isinstance` (the flag is off by default). |
 | CHAT unchanged | CHAT still uses one-call prefill. New code is inert unless `--enable long-context` (AGENTIC only) or a KV mode is chosen. `quantized_kv.apply()` is a pass-through for `bf16`. | Offline-verified only; the real CHAT regression run has not been repeated (section 9). |
 
-Baseline before my changes: MACQWEN 524 OK, FlashNext unit 1439 OK (3 skipped). After: MACQWEN 537 OK, FlashNext unit 1461 OK (3 skipped) (section 10).
+Baseline before my changes: VEYSTRIX 524 OK, FlashNext unit 1439 OK (3 skipped). After: VEYSTRIX 537 OK, FlashNext unit 1461 OK (3 skipped) (section 10).
 
 ## 2. The central finding about memory
 
@@ -35,7 +35,7 @@ Expert streaming makes small chunks expensive: recorded prefill cost looks SSD-b
 * `PlanTrace` per-chunk telemetry (seconds, resident memory, MLX peak increment when the chunk set a new process peak, host headroom, pressure). It does not reset the MLX peak counter (the harness and guards read the process-wide peak).
 * `prefill_readiness`: a `long` tier (context 16,384, cold prefill 14,336) tried first only under the budgeted plan; its budget is the measured 5.40 GiB at 2,046 tokens plus KV growth plus 0.3 GiB, rounded up (ESTIMATE; 6.25 GiB at 14,336). Unchanged: the 9 GiB gate, pressure rule, 4 GiB headroom, all runtime guards.
 * `modes.py`: `--enable long-context` (AGENTIC only; default context limit 16,384, still lowered by admission), `--enable kv-affine8`, `--enable kv-affine4` (labelled). All flags owned by the mode.
-* `macqwen/context_budget.py` and server: separate advertised client window / server window / input / reserved output / continuation headroom. `/v1/models` publishes `suggested_client_context_window` (server window + the client's 4,096 safety margin). A tool request with `max_completion_tokens` under 64 is a 400 `max_tokens_too_small` before any prefill, with the fix in the message (the one-token failure cannot recur). Overflow errors give client-side compaction guidance and never truncate. `last_budget` and `last_divergence` (where a rebuild first differs from the live tape) appear in `/health` cache state.
+* `veystrix/context_budget.py` and server: separate advertised client window / server window / input / reserved output / continuation headroom. `/v1/models` publishes `suggested_client_context_window` (server window + the client's 4,096 safety margin). A tool request with `max_completion_tokens` under 64 is a 400 `max_tokens_too_small` before any prefill, with the fix in the message (the one-token failure cannot recur). Overflow errors give client-side compaction guidance and never truncate. `last_budget` and `last_divergence` (where a rebuild first differs from the live tape) appear in `/health` cache state.
 * Fixtures: `models/flashnext/tests/bench/fixtures/agentic_fixture.py` builds 4K/8K/12K requests with the real tokenizer and chat template (4,108 / 8,232 / 12,308 tokens), facts only in tool results, a decoy config with other numbers. `dsh_wire_probe.py` runs the **real installed DeepSeek Harness 0.2.2-rc.1** against the real server with a scripted model.
 
 ## 4. KV quantization: measurements (synthetic attention, real shapes; NOT real-model KV)
@@ -113,7 +113,7 @@ Final regression (Haiku subagent, unittest, repo venv; spot-checked):
 
 | Suite | Before my changes | After |
 |---|---|---|
-| `macqwen/tests` | 524 OK | **537 OK** |
+| `veystrix/tests` | 524 OK | **537 OK** |
 | `models/flashnext/tests/unit` | 1,439 OK, 3 skipped | **1,461 OK, 3 skipped** (the skips are the absent Vontra checkpoint) |
 | new: `test_budgeted_prefill`, `test_agentic_long_fixtures`, `test_context_budget` | n/a | 30 OK |
 

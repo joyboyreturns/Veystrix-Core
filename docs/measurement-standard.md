@@ -23,7 +23,7 @@ results/<runtime>/YYYYMMDD-HHMMSS-<experiment>/record.jsonl
 results/<runtime>/YYYYMMDD-HHMMSS-<experiment>/output.log
 ```
 
-[docs/testing.md](testing.md) describes the folder, the `macqwen.results` API
+[docs/testing.md](testing.md) describes the folder, the `veystrix.results` API
 and the policy test that enforces it.
 
 Scratch logs and output directories do not support published claims. Existing

@@ -29,7 +29,7 @@ interface now starts each runtime through its compatible launcher. The managed
 
 ## Package boundary
 
-`macqwen/` contains the shared interface. `models/` contains model-exclusive runtime code. Backends are the only shared modules that import
+`veystrix/` contains the shared interface. `models/` contains model-exclusive runtime code. Backends are the only shared modules that import
 model code.
 
 The current backend interface follows the operations used by `session.py`: conversation setup, append operations, generation, reset, status,

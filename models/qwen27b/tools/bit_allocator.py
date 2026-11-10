@@ -95,7 +95,7 @@ def calibrate(args):
     texts = []
     if not args.only_corpus:
         for p in (
-            REPO_ROOT / "macqwen" / "chat.py",
+            REPO_ROOT / "veystrix" / "chat.py",
             Path(__file__).with_name("paged_kv.py"),
             Path(__file__).with_name("frankenstein_engine.py"),
         ):

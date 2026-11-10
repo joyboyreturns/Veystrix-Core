@@ -274,8 +274,8 @@ def main():
     parser.add_argument("--bits", type=int, default=4)
     args = parser.parse_args()
 
-    from macqwen.profiles import SYSTEM_TOOLS
-    from macqwen.tools import TOOLS
+    from veystrix.profiles import SYSTEM_TOOLS
+    from veystrix.tools import TOOLS
 
     root = Path(args.repo).expanduser().resolve()
     source = Path(args.file).expanduser()

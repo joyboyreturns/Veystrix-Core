@@ -66,10 +66,20 @@ public enum MemoryProbe {
         return (ac, percent)
     }
 
+    /// Battery use is allowed; a charge below `minPercent` (default 25) refuses the start. AC power always passes.
+    /// Mirrors the engine's own gate (`models/flashnext/power_gate.py`), which stays the authority. 0 disables the floor.
+    public static let defaultMinBatteryPercent = 25
+    public static func powerRefusal(_ s: MemorySnapshot, minPercent: Int = defaultMinBatteryPercent) -> String? {
+        if s.onACPower == true || minPercent <= 0 { return nil }
+        if s.onACPower == nil { return "The power source could not be read, so the engine will not start. Plug in and try again." }
+        guard let percent = s.batteryPercent else { return "On battery and the charge level could not be read, so the engine will not start. Plug in and try again." }
+        return percent < minPercent ? "Battery is \(percent)%, below the \(minPercent)% minimum. Plug in or charge before starting the engine." : nil
+    }
+
     /// Cheap advice shown before Start. The engine's own admission guard remains the authority and is never bypassed.
     public static func advisories(_ s: MemorySnapshot, checkpointBytes: Int64?) -> [String] {
         var out: [String] = []
-        if s.onACPower == false { out.append("The Mac is on battery. Plug in for long sessions; results measured on battery are preliminary.") }
+        if s.onACPower == false { out.append("The Mac is on battery (\(s.batteryPercent.map { "\($0)%" } ?? "charge unknown")). The engine runs on battery above \(defaultMinBatteryPercent)% and stops below it; plug in for long sessions. Results measured on battery are preliminary.") }
         if s.lowPowerMode { out.append("Low Power Mode is on. Turn it off before a long session.") }
         if s.availableBytes < 6 * 1_073_741_824 {
             out.append("Only \(MemorySnapshot.gib(s.availableBytes)) of memory looks available. Close memory-heavy apps; the engine will refuse to start if it is not enough.")

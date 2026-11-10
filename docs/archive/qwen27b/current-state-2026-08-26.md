@@ -40,7 +40,7 @@ build by its directory suffix:
 ```
 
 The list is read from disk at every run, so a deleted build stops being offered instead of becoming a switch that fails
-at load. `MACQWEN_MODEL=<path>` still overrides everything, and the vocabulary guard still refuses any model that is not
+at load. `VEYSTRIX_MODEL=<path>` still overrides everything, and the vocabulary guard still refuses any model that is not
 Qwen3.8-27B.
 
 ## Resident-memory limit

@@ -69,7 +69,7 @@ or push was made during the work summarized here.
 - The worktree is dirty, with pre-existing changes from earlier agents as well as the later changes below. Preserve all of them.
   Run `git status --short --branch`, `git diff`, and inspect untracked files; `git diff --stat` alone does not include untracked
   code, documents, or result folders. The current state, not this list, is authoritative.
-- At handoff the modified tracked files included `macqwen/backends/flashnext.py`, `macqwen/cli.py`, `macqwen/server.py`,
+- At handoff the modified tracked files included `veystrix/backends/flashnext.py`, `veystrix/cli.py`, `veystrix/server.py`,
   corresponding tests, `models/flashnext/chat_guard.py`, `expert_cache.py`, `overnight.py`, `prefill.py`, `prefix_session.py`,
   settings and tests, and `serve.sh`. Untracked work included the architecture document, layer-major implementation, gate and
   replay harnesses, tests, terminal cases, and result directories. None should be assumed disposable.
@@ -99,7 +99,7 @@ checkpoint and loader when they affect an experiment.
 
 The current proposal and implementation separate compute, streamed expert data, persistent model state, and control/safety.
 Important existing components include `models/flashnext/store.py`, `expert_pool.py`, `prefill_ring.py`, `pool_ring.py`,
-`prefix_cache.py`, `prefix_session.py`, `memory_controller.py`, the server watchdog, and `macqwen/backends/flashnext.py`.
+`prefix_cache.py`, `prefix_session.py`, `memory_controller.py`, the server watchdog, and `veystrix/backends/flashnext.py`.
 The normal server path and its cache and reasoning behavior must remain usable.
 
 ### Layer-major prefill
@@ -256,7 +256,7 @@ Study algorithms and implementations where available, and assess compatibility r
 
 Observed checkpoint-free test results:
 
-- Complete `macqwen` discovery: **686 tests, OK** (`/private/tmp/veystrix-macqwen-final.log`).
+- Complete `veystrix` discovery: **686 tests, OK** (`/private/tmp/veystrix-veystrix-final.log`).
 - Complete FlashNext unit discovery: **1,687 tests, OK, 3 skipped** (`/private/tmp/veystrix-flashnext-final.log`). The full
   run preceded the final gate-record validation tightening and ring-abort cleanup. Focused tests passed after those changes;
   the latest focused layer-major run was **42 tests, OK**. Temporary logs may disappear; rerun after changes.
@@ -267,7 +267,7 @@ Observed checkpoint-free test results:
 Useful checkpoint-free commands from the repository root:
 
 ```bash
-.venv/bin/python -m unittest discover -s macqwen/tests -t .
+.venv/bin/python -m unittest discover -s veystrix/tests -t .
 .venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t .
 .venv/bin/python -m unittest models.flashnext.tests.unit.test_layer_major
 .venv/bin/python -m unittest models.flashnext.tests.unit.test_layer_gate_probe models.flashnext.tests.unit.test_cache_holdout
@@ -329,7 +329,7 @@ Finish the work rather than returning another proposal.
 
 The previous agent reported:
 
-- `macqwen`: 683 tests passed.
+- `veystrix`: 683 tests passed.
 - `flashnext`: 1,673 tests passed, 3 skipped.
 - The apparently failing output from `quality_compare.py` is an intentional negative-test fixture.
 - The battery-warning output is also a deliberate safety test.

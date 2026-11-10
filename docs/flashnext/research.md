@@ -102,7 +102,7 @@ for mixed-layout exports. Prewarm validates provenance, plans the complete
 request against its budget before pinning rows, and ignores stale slab history.
 
 We ran no checkpoint inference or performance benchmark during this repair.
-The non-model suites pass 251 `macqwen` tests and 323 FlashNext tests, including
+The non-model suites pass 251 `veystrix` tests and 323 FlashNext tests, including
 56 focused Metal/runtime and slab checks.
 
 A later manual G64 quality attempt was interrupted before either sampled arm
@@ -246,7 +246,7 @@ Every measured experiment, in the order it was run. Read [`handoff.md`](handoff.
 
 ## Historical prefill bottleneck
 
-This section records the first implementation state. Later sections supersede its rates and proposed next steps. Prefill runs at 0.77 tok/s. 93 tokens take about 120 seconds. A MoE prefill routes about 290 distinct experts per layer against decode's 10, so it reads 25.35 GB to process 93 tokens. Chunking the prompt is worse, not better: 16-token chunks would read 69 GB total. The GPU is idle throughout. `gather_qmm` is 3.2 s of a 121 s prefill. This is where the remaining work is. MACQWEN integration: `macqwen/session.py` now appends only the new turn to its live cache. Context images remain separate work.
+This section records the first implementation state. Later sections supersede its rates and proposed next steps. Prefill runs at 0.77 tok/s. 93 tokens take about 120 seconds. A MoE prefill routes about 290 distinct experts per layer against decode's 10, so it reads 25.35 GB to process 93 tokens. Chunking the prompt is worse, not better: 16-token chunks would read 69 GB total. The GPU is idle throughout. `gather_qmm` is 3.2 s of a 121 s prefill. This is where the remaining work is. VEYSTRIX integration: `veystrix/session.py` now appends only the new turn to its live cache. Context images remain separate work.
 
 ## Native MTP tests on 2026-08-27
 
@@ -730,7 +730,7 @@ Large-prefill decode remains cold because the full prompt touches most of the 70
 | Active experts | K=4 fixed | about 8 at threshold 0.85 |
 | Page-cache hit rate | about 71% | 57% |
 
-Both engines stream a similar volume per token, about 1.6 GB against MACQWEN's 1.475 GB. Their disk is about 7.6 times faster and their page cache is about three times larger. That gap alone covers the difference in tok/s.
+Both engines stream a similar volume per token, about 1.6 GB against VEYSTRIX's 1.475 GB. Their disk is about 7.6 times faster and their page cache is about three times larger. That gap alone covers the difference in tok/s.
 
 ### Measured cost split on this machine
 
@@ -752,16 +752,16 @@ All three passes produced identical token IDs. The page cache does not warm betw
 | Trust the OS page cache | +38% | already the foundation here |
 | GPU combine and norm fused | pipeline | fusion tests already lost end to end |
 | BLAS delta-net, Accelerate | +64% attention | they replaced scalar C; GDN already runs on Metal |
-| `F_NOCACHE` for 2-bit | +3% | 2-bit only; measured 8% slower on MACQWEN's 4-bit experts |
+| `F_NOCACHE` for 2-bit | +3% | 2-bit only; measured 8% slower on VEYSTRIX's 4-bit experts |
 | Fused RoPE attention | +2% | below the 20% acceptance threshold |
-| C BPE tokenizer | 20x startup | MACQWEN's complete load is 2.1 s |
+| C BPE tokenizer | 20x startup | VEYSTRIX's complete load is 2.1 s |
 | Deferred expert submit | pipeline | 48 host syncs cost 8 ms per token, see `expert_cache.py:80` |
 
 Their entire kept list targets compute. Compute is at most 14% of a token here. The same code meets the opposite bottleneck on this machine.
 
 ### Reusable repository components
 
-Two findings remain useful. First, independent confirmation. Their 58 discarded experiments reproduce eight MACQWEN rejections in a separate C and Metal implementation: LZ4 compression -13%, `F_RDADVISE` prefetch net 0%, temporal expert prediction -18%, an MLP routing predictor at 31% accuracy, `mmap` expert files -5x, expert file clustering 0%, spin-poll GPU wait -23%, and MTP speculative decoding at break-even. Second, the mechanism this document lacked. They measured it directly:
+Two findings remain useful. First, independent confirmation. Their 58 discarded experiments reproduce eight VEYSTRIX rejections in a separate C and Metal implementation: LZ4 compression -13%, `F_RDADVISE` prefetch net 0%, temporal expert prediction -18%, an MLP routing predictor at 31% accuracy, `mmap` expert files -5x, expert file clustering 0%, spin-poll GPU wait -23%, and MTP speculative decoding at break-even. Second, the mechanism this document lacked. They measured it directly:
 
 > SSD DMA and GPU compute share the same memory controller and cannot be
 > profitably overlapped. Even small background SSD DMA causes disproportionate
@@ -1779,11 +1779,11 @@ Keep effort constant in any quality comparison. The oQ4 run in the test PDF that
 
 Qwen's model card recommends thinking mode at `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, and `presence_penalty=0.0`. It recommends a presence penalty from 0 to 2 for repetition. Higher values can mix languages and reduce quality.
 
-The runtime used `mx.argmax` in `macqwen/backends/flashnext.py` and `models/flashnext/prefill.py`. This sets temperature 0 and omits the rest. Greedy breaks a tie the same way every time, so a model that lands in a state where two continuations are near-equal can stay there. Every observed SketchUp Ruby loops sat on such ties: `Sketchup::Length.new` against `String#to_l`, `require 'sketchup.rb'` against omitting it, `UI.menu("Plugins")` against `"Extensions"`. Both branches are correct in each case, so nothing separated them. The loops showed up on two routing profiles and two effort levels. Greedy isn't an oversight in the benchmarks. Every comparison here proves a change left the trajectory alone by matching token IDs across arms, and sampling makes that impossible. So it's greedy for measurement and Qwen's sampler for the chat.
+The runtime used `mx.argmax` in `veystrix/backends/flashnext.py` and `models/flashnext/prefill.py`. This sets temperature 0 and omits the rest. Greedy breaks a tie the same way every time, so a model that lands in a state where two continuations are near-equal can stay there. Every observed SketchUp Ruby loops sat on such ties: `Sketchup::Length.new` against `String#to_l`, `require 'sketchup.rb'` against omitting it, `UI.menu("Plugins")` against `"Extensions"`. Both branches are correct in each case, so nothing separated them. The loops showed up on two routing profiles and two effort levels. Greedy isn't an oversight in the benchmarks. Every comparison here proves a change left the trajectory alone by matching token IDs across arms, and sampling makes that impossible. So it's greedy for measurement and Qwen's sampler for the chat.
 
 ### What shipped
 
-`macqwen/sampling.py` holds `Sampling` and `Sampler`, with temperature, top-k, top-p, min-p, and presence penalty, defaulting to the card's thinking-mode values. The backend defaults to greedy so no benchmark can sample by accident; the chat sets it from preferences. `run_benchmark` forces greedy whatever the preferences say. `/config sampling` reads and writes it live, and `/config model` shows it alongside effort, thinking, and the token budget. Checked against the real model, same prompt, thinking off:
+`veystrix/sampling.py` holds `Sampling` and `Sampler`, with temperature, top-k, top-p, min-p, and presence penalty, defaulting to the card's thinking-mode values. The backend defaults to greedy so no benchmark can sample by accident; the chat sets it from preferences. `run_benchmark` forces greedy whatever the preferences say. `/config sampling` reads and writes it live, and `/config model` shows it alongside effort, thinking, and the token budget. Checked against the real model, same prompt, thinking off:
 
 ```text
 sampled  O mar sussurra segredos eternos à areia.
@@ -1825,7 +1825,7 @@ Decision: reject this variant for `exact-quality`. Keeping a route weight does n
 
 The retained production baseline is 2.713 tok/s, or 369 ms/token. Reaching 3 tok/s needs about 36 ms/token. The following paths remain open. Treat every number below as a projection until the production harness measures it.
 
-### Path 2: deschedule host work, not DMA ([#21](https://github.com/1architect/macqwen-releases/issues/21))
+### Path 2: deschedule host work, not DMA (#21)
 
 Every rejected overlap experiment moved SSD DMA into GPU work. That invokes the measured unified-memory contention. Moving small host bookkeeping can be different because it does not start storage traffic.
 
@@ -1843,7 +1843,7 @@ The early-submit control added `mx.eval(scores, inds)`, `tolist()`, and host lis
 
 First instrument each interval with three states: NVMe requests pending, GPU work pending, and host function active. Count only host intervals where both devices are idle. If that exclusive window holds 15 to 20 ms/token, move one dependency-safe bookkeeping block into an existing device wait. Do not move DMA. Token IDs must match. This path does not need a quality gate.
 
-### Path 4: measure `gather_qmm` in situ ([#22](https://github.com/1architect/macqwen-releases/issues/22))
+### Path 4: measure `gather_qmm` in situ (#22)
 
 The bandwidth record prices GDN at 67 GB/s and a small Q4 matvec at 105 GB/s. It does not isolate the routed-expert gather inside the complete model. The model gathers about 1,152 MB of expert data per token. At 105 GB/s this costs about 11 ms. At 20 GB/s it costs about 58 ms.
 
@@ -1851,13 +1851,13 @@ Use fixed resident expert sets and the real gate, up, and down projection shapes
 
 If the gather stays near 105 GB/s, close this GPU block. If it stays near 20 GB/s, about 30 to 45 ms of real GPU work becomes a focused optimization target. This benchmark changes no model behavior and needs no quality gate.
 
-### Exact compile sweep ([#23](https://github.com/1architect/macqwen-releases/issues/23))
+### Exact compile sweep (#23)
 
 `mx.compile` is bit-exact in the retained probes. It improved the PLE gate chain by 28%, the router chain by 2.6%, and `_normalize_qk` by 5.7%. The research estimate is 10 to 20 ms/token when applied to every suitable elementwise chain. That estimate has not been tested in the complete runtime.
 
 Add one experimental switch that compiles the router, QK normalization, PLE gate, and other suitable chains. Do not duplicate compilation already present inside upstream GDN. Exclude first-call compilation from steady-state timing, but report its interactive cost separately. Require `mx.array_equal` at each compiled boundary and identical greedy token IDs. Then use paired production arms. This path needs no quality gate.
 
-### Routed-expert Q4 group-size sweep ([#24](https://github.com/1architect/macqwen-releases/issues/24))
+### Routed-expert Q4 group-size sweep (#24)
 
 The oQ4 base uses four-bit affine quantization with group size 32. Its 228 protected modules are resident `shared_expert` and `linear_attn.out_proj` modules. The streamed routed experts use plain Q4/G32.
 
@@ -1899,7 +1899,7 @@ A shard-header scan found several MLX checkpoints with the Flash-Next text archi
 
 The header method reproduces oQ3-MTP at 92.5 GB, equal to the recorded 86.2 GiB. This cross-check supports the table's decimal sizes.
 
-### Primary candidate: REAP-288 ([#25](https://github.com/1architect/macqwen-releases/issues/25))
+### Primary candidate: REAP-288 (#25)
 
 REAP-288 cuts the routed-expert bank from 75.5 GB to 38.2 GB. The measured oQ4 cold tail is about 154 distinct experts per layer and 21.7 GB. Proportional scaling puts the 288-expert tail near 87 experts per layer and about 11 GB. That could fit in the available page cache, but the earlier coverage mistake shows that this remains a hypothesis until `mincore` and physical reads prove it.
 
@@ -1914,7 +1914,7 @@ The model card reports HumanEval pass@1 at 91.5% for REAP-288 against 93.9% for 
 
 ## Exact-quality performance sweep, 2026-09-01
 
-The three investigations opened from the 3 tok/s gap are now measured. Issues [#21](https://github.com/1architect/macqwen-releases/issues/21) and [#22](https://github.com/1architect/macqwen-releases/issues/22) are closed. Issue [#23](https://github.com/1architect/macqwen-releases/issues/23) was reopened after Session 4 found a better zero-drive compile gate.
+The three investigations opened from the 3 tok/s gap are now measured. Issues #21 and #22 are closed. Issue #23 was reopened after Session 4 found a better zero-drive compile gate.
 
 ### GPU, SSD, and dependency timing
 
@@ -1974,7 +1974,7 @@ plain      2.68 tok/s   559.1 MB/token
 compiled   2.66 tok/s   564.7 MB/token
 ```
 
-Token IDs matched in every arm. The compiled median was 0.6% lower, and the paired sign test gave p = 0.812. The three useful chain savings total about 1.0 ms/token, or 0.3%. Compilation stays available as a diagnostic and is not installed by default. Session 4 tested the RMSNorm chain with the zero-drive gate and reopened issue [#23](https://github.com/1architect/macqwen-releases/issues/23).
+Token IDs matched in every arm. The compiled median was 0.6% lower, and the paired sign test gave p = 0.812. The three useful chain savings total about 1.0 ms/token, or 0.3%. Compilation stays available as a diagnostic and is not installed by default. Session 4 tested the RMSNorm chain with the zero-drive gate and reopened issue #23.
 
 ### Layer attribution correction
 
@@ -1999,9 +1999,9 @@ concat-chunk1  2.67 tok/s   467.7 MB/token
 buffer-chunk2  2.83 tok/s   457.7 MB/token
 ```
 
-`buffer-chunk2` won 10 of 12 paired arms, used fewer physical bytes in 10 of 12, and improved the generation median by 6.3%. The result resolves above a 4.4% band. Token IDs matched in every arm. This is the first positive result from this sweep, and the 12-arm run started after a clean boot. Issue [#26](https://github.com/1architect/macqwen-releases/issues/26) tracks that change.
+`buffer-chunk2` won 10 of 12 paired arms, used fewer physical bytes in 10 of 12, and improved the generation median by 6.3%. The result resolves above a 4.4% band. Token IDs matched in every arm. This is the first positive result from this sweep, and the 12-arm run started after a clean boot. Issue #26 tracks that change.
 
-The current 36 ms gap remains open. The new split shows that the missing cost is not routed expert matmul or small host bookkeeping. Metal System Trace closed issue [#27](https://github.com/1architect/macqwen-releases/issues/27) for device-level attribution. Issue [#24](https://github.com/1architect/macqwen-releases/issues/24) remains open for Q4 group sizes, and issue [#25](https://github.com/1architect/macqwen-releases/issues/25) remains open for the REAP-288 gate.
+The current 36 ms gap remains open. The new split shows that the missing cost is not routed expert matmul or small host bookkeeping. Metal System Trace closed issue #27 for device-level attribution. Issue #24 remains open for Q4 group sizes, and issue #25 remains open for the REAP-288 gate.
 
 ## Quality warning from the REAP-288 discussion
 
@@ -2673,7 +2673,7 @@ Each `mx.eval` creates a shared event, forces an encoder break, commits the open
 
 `MLX_RESIDENCY_SET_MAX_PCT` sets a per-set cap. It does not set the total wired budget. The reported 750 MB default is a 5% per-set cap on a zero budget, not 750 MB of wired memory. The earlier null test was structurally guaranteed.
 
-`mx.set_wired_limit(2e9)` walks existing allocations and can add residency commits. If DLPack wraps fit inside the budget, the source predicts about 864 residency-set commits per token. Dense weights may fill the budget first, so a live test is required. Issue [#43](https://github.com/1architect/macqwen-releases/issues/43) tracks it.
+`mx.set_wired_limit(2e9)` walks existing allocations and can add residency commits. If DLPack wraps fit inside the budget, the source predicts about 864 residency-set commits per token. Dense weights may fill the budget first, so a live test is required. Issue #43 tracks it.
 
 #### Command-buffer splitting has two caps and a throttle
 
@@ -2781,7 +2781,7 @@ plain   430.9  373.2  370.7   median 373.2
 fused   406.6  433.8  390.2   median 406.6
 ```
 
-The fused path wins one of three pairs and is 9% slower by point estimate. Production noise hides the predicted 3.4 ms saving. Keep the switch off and use issue [#23](https://github.com/1architect/macqwen-releases/issues/23) for the corrected gate.
+The fused path wins one of three pairs and is 9% slower by point estimate. Production noise hides the predicted 3.4 ms saving. Keep the switch off and use issue #23 for the corrected gate.
 
 The calibration bounds broad fusion. Removing 5% of dispatches saves 3.9% of GPU work. Linear scaling gives about 4.4% of a production token for a 25% dispatch cut and 8.9% for a 50% cut. The controlled miss-0.5 comparison then measured 603.9 ms plain versus 603.6 ms fused, with GPU busy 176.4 versus 177.8 ms and identical 202-buffer counts. Removing 5% of dispatches changed nothing under this drive load. The earlier 10% to 22% production headroom claim is withdrawn. The broad glue-fusion program is closed for production.
 
@@ -2803,17 +2803,17 @@ The closed experiments remove the earlier Python and high-level MLX candidates. 
 
 The MLX source proves buffer-scope barriers and encoder fences. It does not measure their cost while SSD DMA and GPU work share the memory system. The miss sweep keeps physical bytes, dispatch count, and buffer count nearly fixed, but GPU span changes with the miss regime. Barrier and fence cost remains a hypothesis, not a result.
 
-The required test is custom MLX or Metal instrumentation. Compare equivalent dependency chains with and without the controlled barrier or fence path. Keep bytes, dispatches, shapes, command-buffer count, and output token IDs fixed. Record barrier count, fence waits, GPU span, command-buffer timing, and host submission timing. Issue [#45](https://github.com/1architect/macqwen-releases/issues/45) tracks this work.
+The required test is custom MLX or Metal instrumentation. Compare equivalent dependency chains with and without the controlled barrier or fence path. Keep bytes, dispatches, shapes, command-buffer count, and output token IDs fixed. Record barrier count, fence waits, GPU span, command-buffer timing, and host submission timing. Issue #45 tracks this work.
 
 ### 2. `wired_limit` before model load
 
-The standalone pre-load sweep gave a 13.5% lower 2 GB median than the default. The live harness applied 2 GB after model load and measured -0.4%, inside a 7.6% resolution band. These operations reach different MLX allocator and residency states. Issue [#43](https://github.com/1architect/macqwen-releases/issues/43) remains open.
+The standalone pre-load sweep gave a 13.5% lower 2 GB median than the default. The live harness applied 2 GB after model load and measured -0.4%, inside a 7.6% resolution band. These operations reach different MLX allocator and residency states. Issue #43 remains open.
 
 The standalone result is not a confirmed gain. It is the last runtime setting with a large unresolved signal. Repeat it with the limit applied before model load, paired order, load recording, physical MB/token, and residency evidence.
 
 ### 3. Physical bytes and expert working set
 
-REAP-288 and Q4/G64/G128 change the size of the streamed expert bank. They may move production from about 400 MB/token to another part of the miss curve. A smaller working set could change both SSD traffic and GPU span. The effect must be measured. Issues [#24](https://github.com/1architect/macqwen-releases/issues/24) and [#25](https://github.com/1architect/macqwen-releases/issues/25) track these tests.
+REAP-288 and Q4/G64/G128 change the size of the streamed expert bank. They may move production from about 400 MB/token to another part of the miss curve. A smaller working set could change both SSD traffic and GPU span. The effect must be measured. Issues #24 and #25 track these tests.
 
 ### Revised assessment
 
@@ -3611,12 +3611,12 @@ The 8-worker result does not justify a default change. The prompt comparison doe
 
 ### Open work
 
-1. Issue [#45](https://github.com/1architect/macqwen-releases/issues/45) remains open. Run the native DMA probe with a verified physical-DMA interval for every GPU measurement.
-2. Issue [#48](https://github.com/1architect/macqwen-releases/issues/48) tests an independent fixed Metal kernel beside controlled SSD `pread`. This separates SoC contention from MLX dependency behavior.
-3. Issue [#43](https://github.com/1architect/macqwen-releases/issues/43) keeps the corrected pre-load wired-limit comparison documented. The measured result shows no resolved benefit.
-4. Issues [#24](https://github.com/1architect/macqwen-releases/issues/24) and [#25](https://github.com/1architect/macqwen-releases/issues/25) cover Q4/G64, Q4/G128, and REAP working-set changes.
-5. Issue [#49](https://github.com/1architect/macqwen-releases/issues/49) covers FlashNext prefill when opening plain and agent profiles.
-6. Issue [#23](https://github.com/1architect/macqwen-releases/issues/23) remains the bit-exact RMSNorm compile gate.
+1. Issue #45 remains open. Run the native DMA probe with a verified physical-DMA interval for every GPU measurement.
+2. Issue #48 tests an independent fixed Metal kernel beside controlled SSD `pread`. This separates SoC contention from MLX dependency behavior.
+3. Issue #43 keeps the corrected pre-load wired-limit comparison documented. The measured result shows no resolved benefit.
+4. Issues #24 and #25 cover Q4/G64, Q4/G128, and REAP working-set changes.
+5. Issue #49 covers FlashNext prefill when opening plain and agent profiles.
+6. Issue #23 remains the bit-exact RMSNorm compile gate.
 
 ### Resume order
 
@@ -3866,7 +3866,7 @@ It records actual execution paths and MLX active memory separately from pinned b
 Use Apple Terminal after closing any model process:
 
 ```bash
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 ./models/flashnext/tests/run.sh
 ```
 
@@ -3893,7 +3893,7 @@ kernel-only result and checkpoint-specific reuse history are available.
 
 With our approval, we start the prepared six-pair kernel comparison in Apple
 Terminal. We use 32 tokens per arm, fresh backends, reversed round ordering,
-canonical launch settings, and no packed G64 residency. No other MACQWEN model
+canonical launch settings, and no packed G64 residency. No other VEYSTRIX model
 process is running when the comparison starts.
 
 The reference arm completes. The first G64 Metal arm produces different token
@@ -3970,8 +3970,8 @@ The captured failure also ran REAP at `xhigh` with a saved 32,768-token
 reasoning budget. The REAP quality record warns that hard reasoning turns can
 loop at this effort. We keep `xhigh`, but cap the effective REAP reasoning
 budget to 4,096 tokens by default. `/status` shows the requested effort and
-effective budget. Set `MACQWEN_REAP_XHIGH_THINK_BUDGET` to a positive value to
-tune the cap, or set `MACQWEN_ALLOW_REAP_XHIGH=1` for an explicit diagnostic
+effective budget. Set `VEYSTRIX_REAP_XHIGH_THINK_BUDGET` to a positive value to
+tune the cap, or set `VEYSTRIX_ALLOW_REAP_XHIGH=1` for an explicit diagnostic
 comparison without the cap. Lower budgets and non-REAP checkpoints remain
 unchanged.
 
@@ -4278,7 +4278,7 @@ layer-0 probes measured negligible, so no change was made there.
 
 This Vontra investigation/workstream is complete and handed off at
 this commit. No additional benchmark is being started by this
-agent. Future MACQWEN work may continue from this documented
+agent. Future VEYSTRIX work may continue from this documented
 state.
 
 ## Runtime review fixes, 2026-09-22
@@ -4286,7 +4286,7 @@ state.
 We reviewed the Flash-Next runtime code without loading a model. The review
 found no defect that changes model output. It found three defects in cache and
 policy handling, two minor defects, and three optimization candidates. The
-checkpoint-free suites pass: 399 Flash-Next tests and 413 `macqwen` tests.
+checkpoint-free suites pass: 399 Flash-Next tests and 413 `veystrix` tests.
 We ran no inference and no benchmark for this work.
 
 ### Defects fixed
@@ -4363,10 +4363,10 @@ and `docs/<model>/measurements/`.
 Every model now keeps its tests in `models/<model>/tests/`: `unit/` for
 checkpoint-free tests, `bench/` for harness scripts and their helpers, and
 `cases/` for terminal cards. The Flash-Next runtime folder holds runtime code
-only. `macqwen/testsuite` discovers cases for every model with one loader,
+only. `veystrix/testsuite` discovers cases for every model with one loader,
 and every run writes to `results/<model>/<stamp>-<test-id>/` with
 `record.jsonl` and `output.log`. `docs/testing.md` describes the layout and the
-`macqwen.results` API, and `macqwen/tests/test_results_policy.py` enforces both.
+`veystrix.results` API, and `veystrix/tests/test_results_policy.py` enforces both.
 
 Moving the benchmark helpers (`gpustat`, `metal_trace`, `system_state`,
 `draft_worker`, `capture_dispatches`, `session_roundtrip_real`,

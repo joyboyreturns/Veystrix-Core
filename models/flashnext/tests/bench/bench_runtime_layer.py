@@ -490,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import mlx.core as mx
         from mlx_vlm.models.switch_layers import SwiGLU
-        from macqwen.checkpoints import resolve_flashnext
+        from veystrix.checkpoints import resolve_flashnext
         from models.flashnext.store import SafeTensorStore
     except ImportError as exc:
         print(f"MLX benchmark unavailable: {exc}", file=sys.stderr)

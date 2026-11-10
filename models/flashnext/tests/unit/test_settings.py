@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from macqwen.backends.flashnext import FlashNextBackend
-from macqwen.model_settings import FLASHNEXT_DEFAULTS
+from veystrix.backends.flashnext import FlashNextBackend
+from veystrix.model_settings import FLASHNEXT_DEFAULTS
 
 
 class SettingsTests(unittest.TestCase):

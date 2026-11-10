@@ -573,9 +573,9 @@ def _verdict(report: Report, complete: bool) -> str:
 
 def resolve_target(target: str | None) -> str:
     """A path, an alias such as ``vontra-mtp``, or the default install location."""
-    from macqwen.checkpoints import FLASHNEXT_ALIASES, model_root
+    from veystrix.checkpoints import FLASHNEXT_ALIASES, model_root
 
-    value = str(target or os.environ.get("MACQWEN_FLASHNEXT_MODEL", "") or "auto").strip()
+    value = str(target or os.environ.get("VEYSTRIX_FLASHNEXT_MODEL", "") or "auto").strip()
     if value != "auto":
         candidate = FLASHNEXT_ALIASES.get(value.lower(), value)
         path = Path(candidate).expanduser()
@@ -588,7 +588,7 @@ DEFAULT_DIRECTORY = "Qwen3.8-Flash-Next-MLX-4bit-MTP"
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("checkpoint", nargs="?", help="directory or alias (default: $MACQWEN_FLASHNEXT_MODEL, "
+    parser.add_argument("checkpoint", nargs="?", help="directory or alias (default: $VEYSTRIX_FLASHNEXT_MODEL, "
                         f"else ~/models/{DEFAULT_DIRECTORY})")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     parser.add_argument("--headers", action="store_true",

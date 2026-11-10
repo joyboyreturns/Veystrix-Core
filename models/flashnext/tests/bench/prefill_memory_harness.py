@@ -331,7 +331,7 @@ def build_agent_prompts(tokenizer, path=AGENT_PROMPT_FILE) -> dict:
     The token counts are measured with the real chat template, and the system-message count is where the
     first ``<|im_end|>\\n`` ends, which is where the prefix cache snapshots.
     """
-    from macqwen.conversation import Conversation
+    from veystrix.conversation import Conversation
 
     system = Path(path).read_text().strip()
     marker = tokenizer.encode("<|im_end|>\n", add_special_tokens=False)
@@ -357,7 +357,7 @@ def build_long_prompts(tokenizer, source: str, tokens: int = 1025) -> dict:
     reference notes cut from the fixed source text, sized so that the first request is close to ``tokens``
     after the chat template. Token counts are measured with the real template, never assumed.
     """
-    from macqwen.conversation import Conversation
+    from veystrix.conversation import Conversation
 
     ids = tokenizer.encode(source)
     needed = max(LONG_QUESTION_OFFSETS.values()) + LONG_QUESTION_TOKENS

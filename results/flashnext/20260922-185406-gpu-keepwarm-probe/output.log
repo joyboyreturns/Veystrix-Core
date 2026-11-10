@@ -5,4 +5,4 @@ gap+spin    burst 7.56 ms (p90 8.87) | mean state 9.66 | {'P1': 0.013, 'P5': 0.0
 gap+spin    burst 8.81 ms (p90 9.37) | mean state 7.85 | {'P1': 0.031, 'P5': 0.078, 'P7': 0.301, 'P9': 0.577, 'P11': 0.012}
 gap         burst 13.61 ms (p90 21.53) | mean state 2.25 | {'P1': 0.359, 'P2': 0.33, 'P3': 0.167, 'P5': 0.141}
 continuous  burst 5.55 ms (p90 7.21) | mean state 13.56 | {'P1': 0.073, 'P5': 0.039, 'P15': 0.882}
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-185406-gpu-keepwarm-probe/keepwarm.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-185406-gpu-keepwarm-probe/keepwarm.json

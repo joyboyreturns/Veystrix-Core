@@ -357,7 +357,7 @@ class SessionStartupTests(unittest.TestCase):
         return RP.PrepReport(admitted, verdict, [], 1, 0.1, "test")
 
     def run_prepare(self, agentic, report):
-        from macqwen import session
+        from veystrix import session
 
         env = {"VEYSTRIX_MODE": "agentic", "FLASHNEXT_MEMORY_POLICY": "strict-staged"} if agentic else {"VEYSTRIX_MODE": "chat"}
         with mock.patch.dict(os.environ, env), mock.patch.object(RP.ResourcePreparer, "prepare", return_value=report), \
@@ -373,7 +373,7 @@ class SessionStartupTests(unittest.TestCase):
         self.assertEqual(err.getvalue().count("Nothing was loaded"), 1)
 
     def test_an_admitted_tier_sets_the_enforced_limits_and_never_raises_them(self):
-        from macqwen import session
+        from veystrix import session
 
         compact = R.TIERS[1]
         with mock.patch.dict(os.environ, {"VEYSTRIX_MODE": "agentic", "VEYSTRIX_CONTEXT_LIMIT": "4096"}):
@@ -392,7 +392,7 @@ class SessionStartupTests(unittest.TestCase):
         self.assertIsNone(verdict)
 
     def test_admission_with_a_prepared_verdict_does_not_read_the_machine_again(self):
-        from macqwen import session
+        from veystrix import session
 
         report = self.report(True, R.TIERS[2])
         verdict = report.verdict
@@ -405,7 +405,7 @@ class SessionStartupTests(unittest.TestCase):
             os.environ.pop("VEYSTRIX_CONTEXT_LIMIT", None)
 
     def test_the_cli_turns_the_preparation_purge_on_by_default_and_honours_an_opt_out(self):
-        from macqwen import cli
+        from veystrix import cli
 
         for argv, environ, expected in ((["--mode", "chat"], {}, "1"), (["--mode", "agentic"], {}, "1"),
                                         (["--mode", "chat", "--no-auto-purge"], {}, "0"),

@@ -39,4 +39,4 @@ The runtime used Sparse MLP only when the input contained multiple tokens. Decod
 Top-4 passed 2/3 established cases. It repeated the complexity answer until the 600-token limit.
 Top-6 passed 2/3 established cases. It repeated the lock-order answer and failed to close reasoning.
 Sparse prefill remains disabled in the default terminal chat.
-Calibration data lives outside the project: `~/Library/Caches/MACQWEN/v32_sparse_mlp`
+Calibration data lives outside the project: `~/Library/Caches/VEYSTRIX/v32_sparse_mlp`

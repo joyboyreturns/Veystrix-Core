@@ -4,7 +4,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from macqwen.backend_settings import Setting, SettingRegistry
+from veystrix.backend_settings import Setting, SettingRegistry
 
 
 FOLDER = Path(__file__).resolve().parent

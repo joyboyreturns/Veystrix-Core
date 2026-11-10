@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from macqwen.testsuite.api import TestSpec, bench_module
+from veystrix.testsuite.api import TestSpec, bench_module
 
 
 def command(config, result_path: Path) -> list[str]:
     output = str(config.output("g64-divergence"))
-    model = config.checkpoint or "${MACQWEN_FLASHNEXT_MODEL}"
+    model = config.checkpoint or "${VEYSTRIX_FLASHNEXT_MODEL}"
     return [
         str(config.python), "-m", bench_module("flashnext", "diagnose_g64_divergence"),
         "--model", model, "--output", output, "--tokens", "16",

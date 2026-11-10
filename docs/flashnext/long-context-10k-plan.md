@@ -12,7 +12,7 @@ weights or random tensors, no checkpoint), **estimate** (arithmetic). Nothing he
   token. **structural**
 * Persistent state per sequence: 36 x 3.15 MB recurrent state, plus 12 x 2 KB KV and 12 x 0.27 KB indexer keys
   per token. About 0.14 GB at 1K and 0.39 GB at 10K. **structural**
-* The recurrent state cannot be rewound or trimmed; only the KV part can. `macqwen/server.py` `_adopt` says so and
+* The recurrent state cannot be rewound or trimmed; only the KV part can. `veystrix/server.py` `_adopt` says so and
   keeps the cache only when the tape is a strict prefix of the new prompt. **structural**
 * The whole pending prompt goes through **one** model call (`flashnext.py` `prefill_language`, no chunking).
   Every MoE layer handles all `tokens x 10` routed pairs at once (`expert_cache._issue`). **structural**
@@ -110,7 +110,7 @@ the ring's 512-expert capacity is exactly full with no spare. No change proposed
   a check that the held bytes drop below 10% of `conv_input`. Mutation checks (never evaluates, wrong state,
   evaluates during decode) were each caught.
 * `tests/bench/long_context_budget.py` and `tests/unit/test_long_context_budget.py`: the projection above, with 9 tests.
-* Full unit suites: flashnext 890 (OK, 5 skipped) and macqwen 427 (OK). The 9 budget tests were run on their own.
+* Full unit suites: flashnext 890 (OK, 5 skipped) and veystrix 427 (OK). The 9 budget tests were run on their own.
 
 ## 6. Proposed real-model stages (each needs your approval; none has run)
 

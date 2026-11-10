@@ -13,14 +13,14 @@ import tempfile
 import threading
 import time
 
-from macqwen.backends.base import (
+from veystrix.backends.base import (
     CANCELLABLE_PREFILL_STEP_SIZE,
     DecodeTimer,
     GenerationCancelled,
 )
-from macqwen.conversation import Conversation, EXTRA_REASONING
-from macqwen.sampling import Sampler, Sampling
-from macqwen.text import stream_decode
+from veystrix.conversation import Conversation, EXTRA_REASONING
+from veystrix.sampling import Sampler, Sampling
+from veystrix.text import stream_decode
 
 from .checkpoint import resolve_bonsai2, runtime_available
 from .protocol import ProtocolTranslator
@@ -240,15 +240,15 @@ class Stats:
 def _quantized_kv_from_environment():
     """Read the chat-side KV toggle without touching chat code.
 
-    `MACQWEN_BONSAI2_KV=8` selects 8-bit groups of 64, `=4` selects 4-bit.
+    `VEYSTRIX_BONSAI2_KV=8` selects 8-bit groups of 64, `=4` selects 4-bit.
     Unset or empty means full-precision caches. Anything else raises
     instead of silently picking a precision.
     """
-    raw = (os.environ.get("MACQWEN_BONSAI2_KV") or "").strip()
+    raw = (os.environ.get("VEYSTRIX_BONSAI2_KV") or "").strip()
     if not raw:
         return None
     if raw not in ("4", "8"):
-        raise ValueError("MACQWEN_BONSAI2_KV must be 4 or 8")
+        raise ValueError("VEYSTRIX_BONSAI2_KV must be 4 or 8")
     return (int(raw), 64)
 
 
@@ -843,7 +843,7 @@ class BonsaiTokenizer:
     def _normalize_effort(self, messages, effort: str):
         messages = [dict(message) for message in messages]
         # No Bonsai-specific reinterpretation: the shared policy resolves
-        # MACQWEN levels before this point, and the template natively
+        # VEYSTRIX levels before this point, and the template natively
         # supports xhigh, medium, and low. Unknown levels fail closed.
         if effort not in THINK_TAGS:
             raise ValueError(f"unsupported Bonsai-2 reasoning effort: {effort}")

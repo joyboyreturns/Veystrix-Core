@@ -107,7 +107,7 @@ def main() -> int:
         return 2
 
     os.environ.setdefault("FLASHNEXT_TOPK_THRESHOLD", "0.85")
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from transformers import AutoTokenizer
 
     path = str(resolve_flashnext(args.model))

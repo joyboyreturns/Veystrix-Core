@@ -23,7 +23,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-MODEL_ID = "macqwen-flashnext"
+MODEL_ID = "veystrix-flashnext"
 CONTEXT_WINDOW = 32768
 
 

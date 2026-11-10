@@ -19,7 +19,6 @@ Veystrix stores managed API keys at:
 ~/Library/Application Support/Veystrix/api_keys.json
 ```
 
-(An existing `.../MACQWEN/api_keys.json` is copied there once and left in place.)
 
 The directory uses mode `0700`. The file uses mode `0600`.
 
@@ -65,7 +64,7 @@ port to the public internet.
 Server mode binds to `127.0.0.1` by default. Localhost mode does not require
 authentication. Any local process can send prompts to the loaded model.
 
-A non-local bind requires `VEYSTRIX_SERVER_API_KEY` (legacy `MACQWEN_SERVER_API_KEY`) or `--server-api-key`.
+A non-local bind requires `VEYSTRIX_SERVER_API_KEY` or `--server-api-key`.
 Prefer the environment variable because command arguments can appear in process
 lists and shell history. The API key is compared in constant time.
 

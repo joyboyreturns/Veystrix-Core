@@ -74,6 +74,9 @@ public struct LaunchPlan: Equatable, Sendable {
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         env["VEYSTRIX_PORT"] = String(settings.port)
         env["VEYSTRIX_CACHE_GB"] = String(settings.cacheQuotaGB)
+        // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;
+        // needs the narrow `sudo -n /usr/sbin/purge` permission, otherwise it records that and backs off).
+        env["FLASHNEXT_AUTO_PURGE"] = "1"
         env["VEYSTRIX_API_KEY"] = apiKey ?? "local"
         if settings.requireAPIKey, let apiKey { env["VEYSTRIX_SERVER_API_KEY"] = apiKey }
         if case .bundled(let root) = source { env["PYTHONPATH"] = root.appendingPathComponent("lib").path }

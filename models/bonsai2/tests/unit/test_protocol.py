@@ -4,10 +4,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from macqwen.agent import run_agent
+from veystrix.agent import run_agent
 
-from macqwen.text import ThinkingStreamFilter, ToolCallStreamFilter
-from macqwen.tools import parse_tool_calls
+from veystrix.text import ThinkingStreamFilter, ToolCallStreamFilter
+from veystrix.tools import parse_tool_calls
 
 from models.bonsai2.protocol import ProtocolTranslator
 

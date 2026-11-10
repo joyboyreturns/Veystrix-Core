@@ -569,11 +569,11 @@ class WatchdogWiringTests(unittest.TestCase):
         self.assertIn("BAD []", done.stdout, done.stderr)
 
     def test_the_server_marks_requests_and_responses_for_the_watchdog(self):
-        source = (ROOT / "macqwen/server.py").read_text()
+        source = (ROOT / "veystrix/server.py").read_text()
         self.assertIn("progress.PROGRESS.request_begin", source)
         self.assertIn("progress.PROGRESS.request_end()", source)
         self.assertIn("progress.PROGRESS.response_started()", source)
-        backend = (ROOT / "macqwen/backends/flashnext.py").read_text()
+        backend = (ROOT / "veystrix/backends/flashnext.py").read_text()
         self.assertIn("progress.PROGRESS.tick()", backend)
         self.assertIn("progress.PROGRESS.tick(len(produced) + 1)", backend)
 

@@ -145,7 +145,7 @@
   "health_before": {
     "status": "ok",
     "ready": true,
-    "model": "macqwen-flashnext",
+    "model": "veystrix-flashnext",
     "busy": false,
     "queue": {
       "active": null,

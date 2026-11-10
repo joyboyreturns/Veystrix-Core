@@ -1,7 +1,11 @@
 # Starting Veystrix manually (safe commands)
 
 Never launch the engine unsupervised; an unsupervised direct launch once exhausted memory and froze the Mac.
-Plug in AC power, switch Low Power Mode off, close heavy apps.
+AC power is recommended for long sessions, but the engine also starts on battery: it refuses to start (and the
+supervisor will not restart it) when the battery is below 25% (`VEYSTRIX_MIN_BATTERY_PERCENT`, `0` removes the floor), and the
+in-run watchdog still stops a run whose battery falls below the floor. Switch Low Power Mode off and close heavy apps.
+If memory is short the engine purges the macOS file cache by itself (conditional, never during a request; uses the
+narrow passwordless `sudo -n /usr/sbin/purge` rule; `--no-auto-purge` turns it off).
 
 ```sh
 cd ~/Documents/Veystrix

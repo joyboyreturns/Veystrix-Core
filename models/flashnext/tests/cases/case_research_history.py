@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from macqwen.testsuite.api import ROOT, TestSpec
+from veystrix.testsuite.api import ROOT, TestSpec
 
 
 RESEARCH = ROOT / "docs" / "flashnext" / "research.md"

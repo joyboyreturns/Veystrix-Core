@@ -2,16 +2,11 @@ VEYSTRIX
 
 This repository does not include model weights.
 
-Veystrix is the current name of the project previously published as MACQWEN
-(and, for the first runtime, FlashNext). The earlier name remains in historical
-documents, commit history, measurement records and a few internal module paths
-(`macqwen/`) that are kept for compatibility with existing scripts, caches and
-harness clients.
-
 Copyright and license provenance
 --------------------------------
-Code published earlier under the MIT license (copyright holder "1architect") keeps that
-license and notice: see LICENSES/MIT-1architect.txt. Do not remove or alter it.
+Parts of this software derive from code published under the MIT license. That license and its
+copyright notice are required to accompany the software: see LICENSES/MIT-upstream.txt.
+Do not remove or alter it.
 legal/LICENSE_PROVENANCE.md records what is known about authorship and what is open.
 
 Model checkpoints

@@ -39,7 +39,7 @@ class StateProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "probe.jsonl"
             path.write_text("preserve")
-            with mock.patch("macqwen.results.ensure_inside", return_value=path):
+            with mock.patch("veystrix.results.ensure_inside", return_value=path):
                 with self.assertRaises(FileExistsError):
                     probe.Probe(path)
             self.assertEqual(path.read_text(), "preserve")
@@ -47,7 +47,7 @@ class StateProbeTests(unittest.TestCase):
     def test_prefill_probe_captures_actual_final_logits_without_changing_token(self):
         import json
         import os
-        from macqwen.sampling import Sampler, Sampling
+        from veystrix.sampling import Sampler, Sampling
         from models.flashnext import prefill
 
         model = build_model()
@@ -59,7 +59,7 @@ class StateProbeTests(unittest.TestCase):
                 path = Path(directory) / "probe.jsonl"
                 path.touch()
                 with mock.patch.dict(os.environ, {probe.FLAG: str(path)}), \
-                        mock.patch("macqwen.results.ensure_inside", return_value=path):
+                        mock.patch("veystrix.results.ensure_inside", return_value=path):
                     _, _, observed = prefill.prefill_target(model, ids, model.make_cache(),
                                                            sampler=Sampler(Sampling.greedy_settings()))
                 records = [json.loads(line) for line in path.read_text().splitlines()]

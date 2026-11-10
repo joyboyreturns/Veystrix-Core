@@ -8,7 +8,7 @@ redistribute the source is granted by this file.
 IMPORTANT — retained open-source material
 -----------------------------------------
 Large parts of this code base descend from code that was published under the MIT
-license as MACQWEN / FlashNext. That license is reproduced in LICENSES/MIT-1architect.txt.
+license (earlier releases of this project). That license is reproduced in LICENSES/MIT-upstream.txt.
 It was granted when the code was published, it is not withdrawn by this file, and its
 notice must accompany every copy of that code. Copies already published remain available
 under it. This file does NOT claim that the MIT-licensed portions are exclusively owned

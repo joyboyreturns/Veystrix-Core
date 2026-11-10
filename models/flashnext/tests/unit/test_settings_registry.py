@@ -9,7 +9,7 @@ import sys
 import unittest
 from types import SimpleNamespace
 
-from macqwen.backend_settings import Setting, SettingRegistry
+from veystrix.backend_settings import Setting, SettingRegistry
 from models.flashnext.settings.registry import get_registry
 
 

@@ -17,7 +17,7 @@ public struct CheckpointReport: Equatable, Sendable {
     public var humanSize: String { ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file) }
 }
 
-/// Mirrors the engine's own rules (`macqwen/checkpoints.py: flashnext_compatible`) so the app and the engine agree.
+/// Mirrors the engine's own rules (`veystrix/checkpoints.py: flashnext_compatible`) so the app and the engine agree.
 public enum CheckpointValidator {
     static let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json"]
     static let supportedModelTypes: Set<String> = ["qwen4_exp", "qwen4_exp_text"]

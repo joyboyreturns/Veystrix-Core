@@ -25,8 +25,8 @@ from mlx_lm.models.cache import make_prompt_cache
 from mlx_lm.sample_utils import make_logits_processors, make_sampler
 from mlx_lm.utils import load_tokenizer
 
-from macqwen.backends.base import GenerationCancelled
-from macqwen.conversation import Conversation
+from veystrix.backends.base import GenerationCancelled
+from veystrix.conversation import Conversation
 
 def patch_lm_head_last_token():
     """Apply lm_head only to the final position.
@@ -89,7 +89,7 @@ except ImportError:
     PagedKVCache = None
 
 E2 = str(Path.home() / "models/Qwen3.8-27B-Apple-MLX-V3.1-Compact")
-MACBAT = os.environ.get("MACQWEN_WORKSPACE", str(Path.cwd()))
+MACBAT = os.environ.get("VEYSTRIX_WORKSPACE", str(Path.cwd()))
 
 IM_START = "<|im_start|>"
 IM_END = "<|im_end|>"
@@ -273,7 +273,7 @@ class Repo:
         pass through untouched, so this never blocks on ignorance.
         """
         try:
-            from macqwen.tools.code_check import check, report
+            from veystrix.tools.code_check import check, report
         except ImportError:
             return []
         errors, warnings = check(path, content, project_root=self.root)
@@ -751,7 +751,7 @@ class FrankensteinEngine(Conversation):
     # open_conversation, append_user, append_tool_results, _close,
     # _separator, _assistant_prefix, common_prefix, _codec, _content_ids.
     # That shared path handles sentinel render, split_content_slots, the safe
-    # encoder from macqwen.text, and fail-closed joint fallback.
+    # encoder from veystrix.text, and fail-closed joint fallback.
 
     # -- telemetry ----------------------------------------------------------
 

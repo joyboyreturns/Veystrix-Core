@@ -151,7 +151,7 @@ def write_sbom(rows: list[dict], out: Path, stamp: str, root_version: str) -> No
         "licenseConcluded": "NOASSERTION",
         "licenseDeclared": "LicenseRef-Veystrix-Freeware-Draft",
         "copyrightText": "NOASSERTION",
-        "comment": "Proprietary freeware (draft). Contains MIT-licensed code published earlier as MACQWEN/FlashNext; see LICENSES/MIT-1architect.txt.",
+        "comment": "Proprietary freeware (draft). Contains MIT-licensed code published earlier under the MIT license; see LICENSES/MIT-upstream.txt.",
     }]
     rels = []
     for i, r in enumerate(rows):
@@ -194,7 +194,7 @@ def write_sbom(rows: list[dict], out: Path, stamp: str, root_version: str) -> No
 
 
 def write_notices(rows: list[dict], out: Path, stamp: str, public_out: Path | None) -> None:
-    mit = (ROOT / "LICENSES" / "MIT-1architect.txt").read_text().rstrip()
+    mit = (ROOT / "LICENSES" / "MIT-upstream.txt").read_text().rstrip()
     sparkle = (ROOT / "LICENSES" / "Sparkle-2.10.1.txt").read_text().rstrip()
     body = [
         "# Third-party notices",
@@ -206,12 +206,12 @@ def write_notices(rows: list[dict], out: Path, stamp: str, public_out: Path | No
         f"_Generated {stamp}. Full license texts of the Python packages ship in the app bundle under_",
         "_`Contents/Resources/Licenses/`._",
         "",
-        "## 1. Earlier MIT-licensed work (MACQWEN / FlashNext)",
+        "## 1. Earlier MIT-licensed work",
         "",
-        "Large parts of the Veystrix engine descend from code published under the MIT license in the",
-        "repository then named MACQWEN (also FlashNext). That code was published and remains available",
+        "Large parts of the Veystrix engine descend from code published under the MIT license in",
+        "earlier releases of this project (including the FlashNext runtime). That code was published and remains available",
         "under the MIT license; the license of copies already distributed is not withdrawn. The copyright",
-        "holder named in that license is `1architect`. The license text, which must accompany the code, is:",
+        "holder is named in that license. The license text, which must accompany the code, is:",
         "",
         "```",
         mit,
@@ -264,7 +264,7 @@ def emit_texts(rows: list[dict], target: Path) -> None:
             d.mkdir(exist_ok=True)
             (d / "NO-LICENSE-FILE-IN-DISTRIBUTION.txt").write_text(
                 f"{r['name']} {r['version']} declares: {r['license']}\nNo license file was found in its metadata; review manually.\n")
-    for name in ("MIT-1architect.txt", "Sparkle-2.10.1.txt"):
+    for name in ("MIT-upstream.txt", "Sparkle-2.10.1.txt"):
         (target / name).write_text((ROOT / "LICENSES" / name).read_text())
 
 
@@ -273,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=ROOT / "legal")
     ap.add_argument("--public-out", type=Path, help="also write THIRD_PARTY_NOTICES.md into this directory")
     ap.add_argument("--emit-texts", type=Path, help="copy every package's license files into this directory (for the app bundle)")
-    ap.add_argument("--exclude", action="append", default=["pip", "setuptools", "wheel", "macqwen", "veystrix"],
+    ap.add_argument("--exclude", action="append", default=["pip", "setuptools", "wheel", "veystrix", "veystrix"],
                     help="distribution names to leave out (build tools and the project itself)")
     ap.add_argument("--version", default="0.0.0")
     ap.add_argument("--date", default=datetime.date.today().isoformat())

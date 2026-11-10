@@ -579,15 +579,15 @@ class KnowledgeTests(unittest.TestCase):
         self.assertIn("model.safetensors.index.json", files)
 
     def test_resolve_target_accepts_paths_aliases_and_the_default(self):
-        with mock.patch.dict(os.environ, {"MACQWEN_MODEL_ROOT": "/models", "MACQWEN_FLASHNEXT_MODEL": ""}):
+        with mock.patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": "/models", "VEYSTRIX_FLASHNEXT_MODEL": ""}):
             self.assertEqual(P.resolve_target("/x/y"), "/x/y")
             self.assertEqual(P.resolve_target("vontra-mtp"), "/models/Qwen3.8-Flash-Next-MLX-4bit-MTP")
             self.assertEqual(P.resolve_target(None), "/models/Qwen3.8-Flash-Next-MLX-4bit-MTP")
-        with mock.patch.dict(os.environ, {"MACQWEN_MODEL_ROOT": "/models", "MACQWEN_FLASHNEXT_MODEL": "/z"}):
+        with mock.patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": "/models", "VEYSTRIX_FLASHNEXT_MODEL": "/z"}):
             self.assertEqual(P.resolve_target(None), "/z")
 
     def test_the_alias_target_equals_the_download_directory(self):
-        from macqwen.checkpoints import FLASHNEXT_ALIASES
+        from veystrix.checkpoints import FLASHNEXT_ALIASES
 
         self.assertEqual(FLASHNEXT_ALIASES["vontra-mtp"], P.load_manifest()["directory_name"])
 

@@ -1932,7 +1932,7 @@ prompt ingestion efficiency
 Steps 1 to 5 of section 31 are done. File:
 
 ```text
-~/Developer/MACQWEN/frankenstein_engine.py
+~/Developer/VEYSTRIX/frankenstein_engine.py
 ```
 
 Modes:
@@ -2225,9 +2225,9 @@ One cheap experiment decides whether a Metal kernel is on the critical path. Run
 
 ```bash
 "$HOME/mlx-qwen38-apple/bin/python3" \
-~/Developer/MACQWEN/bench_decode.py --rungs 1024,2048,4096,8192
+~/Developer/VEYSTRIX/bench_decode.py --rungs 1024,2048,4096,8192
 "$HOME/mlx-qwen38-apple/bin/python3" \
-~/Developer/MACQWEN/bench_decode.py --kv-bits 4 --rungs 1024,2048,4096,8192
+~/Developer/VEYSTRIX/bench_decode.py --kv-bits 4 --rungs 1024,2048,4096,8192
 ```
 
 Interpretation:
@@ -2272,7 +2272,7 @@ alone.
 _2026-08-20._ File:
 
 ```text
-~/Developer/MACQWEN/paged_kv.py
+~/Developer/VEYSTRIX/paged_kv.py
 ```
 
 Contents:

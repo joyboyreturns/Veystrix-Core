@@ -151,7 +151,7 @@ def main(argv=None) -> int:
         parser.error("--tokens and --passes must be at least 1")
 
     configure_frozen_control()
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext.loader import load_streaming
     from transformers import AutoTokenizer
 

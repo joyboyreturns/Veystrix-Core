@@ -26,7 +26,7 @@ import mlx.core as mx
 import numpy as np
 from transformers import AutoTokenizer
 
-from macqwen.checkpoints import resolve_flashnext
+from veystrix.checkpoints import resolve_flashnext
 from models.flashnext.adaptive_topk import set_threshold
 from models.flashnext.expert_cache import profile_totals, reset_profile
 from models.flashnext.loader import load_streaming

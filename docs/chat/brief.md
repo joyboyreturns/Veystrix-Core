@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The shared chat provides one interface for each MACQWEN runtime. Model-specific MLX code stays outside the shared package. The reference
+The shared chat provides one interface for each VEYSTRIX runtime. Model-specific MLX code stays outside the shared package. The reference
 system has 16 GB of unified memory.
 
 ## Current scope
@@ -69,10 +69,10 @@ Answer allowance and reasoning capacity use separate settings. Request statistic
 
 | Data | Location |
 |---|---|
-| Preferences | `~/.macqwen/preferences.json` |
-| Plain system prompt | `~/.macqwen/system-prompt-plain.txt` |
-| Repository-tool system prompt | `~/.macqwen/system-prompt-agent.txt` |
-| API keys | `~/Library/Application Support/MACQWEN/api_keys.json` |
+| Preferences | `~/.veystrix/preferences.json` |
+| Plain system prompt | `~/.veystrix/system-prompt-plain.txt` |
+| Repository-tool system prompt | `~/.veystrix/system-prompt-agent.txt` |
+| API keys | `~/Library/Application Support/VEYSTRIX/api_keys.json` |
 | Flash-Next sessions | `~/.cache/flashnext/sessions/` |
 | Bonsai-2 sessions | `~/.cache/bonsai2/sessions/` |
 | K2-Horizon sessions | `~/.cache/k2-horizon/sessions/` |

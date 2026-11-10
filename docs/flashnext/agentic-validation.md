@@ -101,7 +101,7 @@ Progression: a successful short AGENTIC flow → 2K same-plan prefix check → 2
 
 ```bash
 .venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py' -q
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py' -q
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py' -q
 ```
 
 Every real checkpoint test should record fixture IDs, actual settings, power/thermal state, prefill and decode timings, cache behavior, guard outcomes, and a trace path. Distinguish observed real-model results, small-model results, and estimates.

@@ -51,7 +51,7 @@ def state_record(cache, tokens, language):
 
 def record_logits(array):
     """Append the actual final-row logits selected by the prefill sampler."""
-    from macqwen.results import ensure_inside
+    from veystrix.results import ensure_inside
 
     path = ensure_inside(Path(os.environ[FLAG]))
     with path.open("r+", encoding="utf-8") as handle:
@@ -63,7 +63,7 @@ def record_logits(array):
 
 class Probe:
     def __init__(self, path):
-        from macqwen.results import ensure_inside
+        from veystrix.results import ensure_inside
         from models.flashnext.diskio import disk_bytes_read
         import mlx.core as mx
 

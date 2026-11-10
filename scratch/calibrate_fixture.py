@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from transformers import AutoTokenizer
 from jinja2.sandbox import ImmutableSandboxedEnvironment
-from macqwen.server import _normalize_messages
+from veystrix.server import _normalize_messages
 
 # Load tokenizer and template
 tok_path = "/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"

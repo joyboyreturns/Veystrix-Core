@@ -28,11 +28,11 @@ was started, no real-checkpoint test was run.** A clean scan is evidence, not pr
 
 | Component | Finding |
 |---|---|
-| Engine HTTP server (`macqwen/server.py`, `models/flashnext/overnight.py`) | Defaults to `127.0.0.1`. The app always passes `--host 127.0.0.1` and has no setting to change it. Bearer/`x-api-key` compared with `hmac.compare_digest`. Foreign browser `Origin` headers are refused unless explicitly allowed with `--allow-origin`; requests without an Origin header (non-browser clients) are unaffected. |
-| `web_terminal.py` (repo root) | **Binds `0.0.0.0` and gives a shell** to anyone holding a token (token stored in `~/.frankenstein/web_token`). The token requirement mitigates but a LAN-reachable shell is high risk. It is **not** part of the app or the engine bundle (the bundle contains only `macqwen/`, `veystrix/`, `models/{flashnext,qwen27b}`) and is **not** published in the public repository. Recommendation: keep out of any release; consider removing or binding loopback by default. |
+| Engine HTTP server (`veystrix/server.py`, `models/flashnext/overnight.py`) | Defaults to `127.0.0.1`. The app always passes `--host 127.0.0.1` and has no setting to change it. Bearer/`x-api-key` compared with `hmac.compare_digest`. Foreign browser `Origin` headers are refused unless explicitly allowed with `--allow-origin`; requests without an Origin header (non-browser clients) are unaffected. |
+| `web_terminal.py` (repo root) | **Binds `0.0.0.0` and gives a shell** to anyone holding a token (token stored in `~/.frankenstein/web_token`). The token requirement mitigates but a LAN-reachable shell is high risk. It is **not** part of the app or the engine bundle (the bundle contains only `veystrix/`, `veystrix/`, `models/{flashnext,qwen27b}`) and is **not** published in the public repository. Recommendation: keep out of any release; consider removing or binding loopback by default. |
 | Hermes integration | Profile points only at `http://127.0.0.1:<port>/v1`. |
 | App | Talks to the engine on loopback and to the update feed on `github.com` (optional, user-switchable). No other network client code. |
-| Search/doc tools (`macqwen/tools/*`: Tavily, free search, Context7, api_guard) | Outbound HTTP **only when an agent tool is invoked by the user's workflow**; they are not started by the engine server path used by the app. Not part of the first public app's documented feature set. |
+| Search/doc tools (`veystrix/tools/*`: Tavily, free search, Context7, api_guard) | Outbound HTTP **only when an agent tool is invoked by the user's workflow**; they are not started by the engine server path used by the app. Not part of the first public app's documented feature set. |
 
 ## 4. Telemetry
 

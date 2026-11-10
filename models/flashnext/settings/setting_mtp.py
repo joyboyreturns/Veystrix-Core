@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from macqwen.backend_settings import Setting
+from veystrix.backend_settings import Setting
 
 from .setting_runtime import choice, env_reader
 

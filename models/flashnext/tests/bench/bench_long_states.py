@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 
 PROMPT = (
     "<|im_start|>user\nExplique a fotossintese em detalhes, em portugues, com "
@@ -145,16 +145,16 @@ def main() -> int:
         shutil.copy2(item, private / item.name)
     os.environ["FLASHNEXT_PIN_CACHE"] = str(private / "pins.json")
 
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext.checkpoint_policy import resolve_resident_experts
 
-    checkpoint = str(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+    checkpoint = str(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
     if args.resident_experts == "policy":
         resident = resolve_resident_experts(None, checkpoint) or 32
     else:
         resident = int(args.resident_experts)
 
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
     from models.flashnext.diskio import ReadMeter, free_memory_mb, vm_counters
 
     backend = FlashNextBackend(model_path=checkpoint, resident_experts=resident)

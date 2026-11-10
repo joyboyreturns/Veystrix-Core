@@ -7,12 +7,12 @@ Veystrix license reduces your rights under them.
 _Generated 2026-11-10. Full license texts of the Python packages ship in the app bundle under_
 _`Contents/Resources/Licenses/`._
 
-## 1. Earlier MIT-licensed work (MACQWEN / FlashNext)
+## 1. Earlier MIT-licensed work
 
-Large parts of the Veystrix engine descend from code published under the MIT license in the
-repository then named MACQWEN (also FlashNext). That code was published and remains available
+Large parts of the Veystrix engine descend from code published under the MIT license in
+earlier releases of this project (including the FlashNext runtime). That code was published and remains available
 under the MIT license; the license of copies already distributed is not withdrawn. The copyright
-holder named in that license is `1architect`. The license text, which must accompany the code, is:
+holder is named in that license. The license text, which must accompany the code, is:
 
 ```
 MIT License

@@ -39,8 +39,8 @@
             maxDelayMs: 60000
             jitterRatio: 0.1
         models:
-          - id: "macqwen-flashnext"
-            name: "MACQWEN Flash-Next 262K"
+          - id: "veystrix-flashnext"
+            name: "VEYSTRIX Flash-Next 262K"
             contextWindow: 262144
             maxTokens: 16128
             input:
@@ -59,4 +59,4 @@
 #   name: "@deepseek-ai/dsh-agent-default-model"
 #   config:
 #     provider: veystrix
-#     model: macqwen-flashnext
+#     model: veystrix-flashnext

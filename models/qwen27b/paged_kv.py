@@ -101,7 +101,7 @@ class PagedKVCache(_BaseCache):
         if self._spill_parent:
             self._spill_parent.mkdir(parents=True, exist_ok=True)
             self.spill_dir = Path(tempfile.mkdtemp(
-                prefix=f"macqwen-pages-{os.getpid()}-",
+                prefix=f"veystrix-pages-{os.getpid()}-",
                 dir=str(self._spill_parent),
             ))
             identity = self.spill_dir.stat()

@@ -22,4 +22,4 @@
   keepwarm-nooverlap tok   64  2.70 tok/s   427.0 MB/tok  gpu state 14.98  pcpu state 18.85
   keepwarm-nooverlap tok  128  2.67 tok/s   440.2 MB/tok  gpu state 14.99  pcpu state 18.83
   keepwarm-nooverlap: gen 2.665 tok/s, digest e19af44d5268e9d1
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260923-023827-refactor-gate/long-states.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260923-023827-refactor-gate/long-states.json

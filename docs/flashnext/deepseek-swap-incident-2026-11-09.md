@@ -24,8 +24,8 @@ evidence (system log, session file, cache directory) or from offline tests; noth
 ### Causes, ranked by evidence
 
 1. **The server ran unsupervised (strong, circumstantial).** Everything that makes the AGENTIC server safe is switched on by the
-   launcher (`./chat.sh --mode agentic` → `macqwen/cli.py` → `settings.modes.apply_mode` + `settings.launch.apply_chat_environment`),
-   not by `macqwen/session.py`: ChatGuard and its **+2.5 GiB swap stop**, 2,048-token chunked prefill, the prefix cache, the
+   launcher (`./chat.sh --mode agentic` → `veystrix/cli.py` → `settings.modes.apply_mode` + `settings.launch.apply_chat_environment`),
+   not by `veystrix/session.py`: ChatGuard and its **+2.5 GiB swap stop**, 2,048-token chunked prefill, the prefix cache, the
    out-of-process watchdog, the decode pool setting. The "candidate launch command" handed over in the previous session's report
    was a direct `session.py --server` call with a few `VEYSTRIX_*` variables. Without the mode environment
    `FLASHNEXT_PREFILL_CHUNK_TOKENS` is unset, and the code's own banner calls that "one call per prompt (reference numerics)".
@@ -40,7 +40,7 @@ evidence (system log, session file, cache directory) or from offline tests; noth
    `swap_growth = max(0, high_watermark − launch_baseline)` calculation **cannot be reproduced**. The 2.5 GiB threshold could not
    have been compared against anything because no baseline was captured by pid 46644.
 4. **Wasted snapshot write (measured).** A post-turn snapshot was written per turn *even with the prefix cache disabled*
-   (`macqwen/server.py`, `kind="turn_complete"`), 120–400 MB serialised each. Its state has no chunk-plan provenance, which the
+   (`veystrix/server.py`, `kind="turn_complete"`), 120–400 MB serialised each. Its state has no chunk-plan provenance, which the
    exact-prefix lookup treats as "unknown history" and never accepts. Pure cost, no benefit; contributed IO and memory pressure.
 
 ### Not proven / ruled out
@@ -60,14 +60,14 @@ compressor pressure. None of these is a protocol deadlock; all of them are now s
 
 | Area | File / function | Change |
 |---|---|---|
-| Launch supervision | `models/flashnext/supervision.py` (new) `check()`; `macqwen/session.py` `main()` | A flashnext `--server` launch **refuses to start** (exit 70, nothing loaded) unless `VEYSTRIX_MODE=agentic`, `FLASHNEXT_CHAT_GUARD=1` and non-zero `FLASHNEXT_PREFILL_CHUNK_TOKENS`. Prints the correct launcher command. |
+| Launch supervision | `models/flashnext/supervision.py` (new) `check()`; `veystrix/session.py` `main()` | A flashnext `--server` launch **refuses to start** (exit 70, nothing loaded) unless `VEYSTRIX_MODE=agentic`, `FLASHNEXT_CHAT_GUARD=1` and non-zero `FLASHNEXT_PREFILL_CHUNK_TOKENS`. Prints the correct launcher command. |
 | Swap stop | `models/flashnext/chat_guard.py` `ChatGuard._stop/_graceful_ok/_grace_then_exit/_hard_exit`, `cancel_grace_seconds()` | A **swap-growth** stop with a job in flight no longer kills the process instantly: admission is already closed, the job cancels at its next streamed-layer boundary and its client gets an actionable 503; the process exits as soon as the worker is idle (+1.5 s flush) or after `FLASHNEXT_GUARD_CANCEL_GRACE_S` (default 20 s, 0 = immediate), whichever is first. Every other stop (battery, thermal, Metal limit, missing probe, monitor failure) is **unchanged and immediate**. |
 | Controller | `models/flashnext/memory_controller.py` | `stopped_at`, `swap_increase_mb()`, `baseline_swap_used_mb`, `_peak_swap_growth_mb` (these were read by `/v1/cache/diagnostics` but did not exist, so diagnostics silently reported 0 growth), `register_worker_probe()/worker_busy()`. |
-| Server errors | `macqwen/server.py` `_safety_stop_error`, `ModelService.complete` | A safety stop now ends a request with `503 memory_critical_stop` ("…Do NOT retry automatically: restart deliberately with …") on stream and non-stream paths, instead of a silent cancel or an empty error. New requests are refused with the same code. |
-| Health | `macqwen/server.py` `health()`, `_worker_state()`; `models/flashnext/progress.py` `Progress.snapshot()` | `/health` and `/ready` report `status: stopped` after a safety stop and `status: stalled` (ready false) when a job is active and nothing (streamed layer or decoded token) advanced for `VEYSTRIX_STALL_SECONDS` (default 180 s). Adds `worker.{stage,progress_ticks,seconds_since_progress,stalled}`. |
+| Server errors | `veystrix/server.py` `_safety_stop_error`, `ModelService.complete` | A safety stop now ends a request with `503 memory_critical_stop` ("…Do NOT retry automatically: restart deliberately with …") on stream and non-stream paths, instead of a silent cancel or an empty error. New requests are refused with the same code. |
+| Health | `veystrix/server.py` `health()`, `_worker_state()`; `models/flashnext/progress.py` `Progress.snapshot()` | `/health` and `/ready` report `status: stopped` after a safety stop and `status: stalled` (ready false) when a job is active and nothing (streamed layer or decoded token) advanced for `VEYSTRIX_STALL_SECONDS` (default 180 s). Adds `worker.{stage,progress_ticks,seconds_since_progress,stalled}`. |
 | Flight recorder | `models/flashnext/flight_recorder.py` (new); hooks in `server.py` | Private (0600/0700) JSONL `~/.flashnext/logs/server-<pid>.jsonl`, flushed per line, rotating, never stores prompt text: `server_start, request_begin (client, tools, reasoning fields), adopt (prompt/matched/needed tokens, outcome), generate_begin, prefill_progress (≥10 s apart), first_token, generate_end, request_cancelled/error/end, guard_stop, guard_exit`. `FLASHNEXT_FLIGHT_LOG=0` disables. |
-| 32K ceilings | `macqwen/server.py` (`MAX_*_DEFAULT`, `_check_prefill`, `_adopt`, `_context_report`); `models/flashnext/settings/modes.py` (`DEFAULT_MAX_COLD_PREFILL`, `DEFAULT_MAX_INCREMENTAL_PREFILL`, `plan_mode`, `apply_mode`, `plan_from_environment`, banner); `macqwen/cli.py` (`--max-cold-prefill`, `--max-incremental-prefill`); `macqwen/session.py` `_apply_tier` | Cold and uncached-increment ceilings are **32,768** and are now enforced **separately** (previously the incremental value was only reported). A startup memory tier still bounds both. AGENTIC default context is now the native **262,144** and is a stated requirement. Defaults never exceed a smaller `--context-limit`; explicit values above it are refused. |
-| Post-turn snapshot | `macqwen/server.py` | Now **opt-in** (`FLASHNEXT_TURN_SNAPSHOTS=1` with the prefix cache on). Default writes nothing. |
+| 32K ceilings | `veystrix/server.py` (`MAX_*_DEFAULT`, `_check_prefill`, `_adopt`, `_context_report`); `models/flashnext/settings/modes.py` (`DEFAULT_MAX_COLD_PREFILL`, `DEFAULT_MAX_INCREMENTAL_PREFILL`, `plan_mode`, `apply_mode`, `plan_from_environment`, banner); `veystrix/cli.py` (`--max-cold-prefill`, `--max-incremental-prefill`); `veystrix/session.py` `_apply_tier` | Cold and uncached-increment ceilings are **32,768** and are now enforced **separately** (previously the incremental value was only reported). A startup memory tier still bounds both. AGENTIC default context is now the native **262,144** and is a stated requirement. Defaults never exceed a smaller `--context-limit`; explicit values above it are refused. |
+| Post-turn snapshot | `veystrix/server.py` | Now **opt-in** (`FLASHNEXT_TURN_SNAPSHOTS=1` with the prefix cache on). Default writes nothing. |
 | Client config | `~/.dsh/profiles/{headless,desktop}/cordis.patch.yml` (backups `cordis.patch.<ts>.pre-effort.bak`); `docs/flashnext/dsh/veystrix-262k.patch.yml` | `reasoningEfforts` for all six levels, `maxRetries: 0`, `session-title-llm` disabled. Remote DeepSeek routes untouched. |
 | Registry/tests fixes | `settings/setting_research.py` (`FLASHNEXT_DISK_RESERVE_GB` registered), `test_request_recovery.py` (stale 8K-tier expectation updated to the approved policy) | Fixed two failures that already existed in the working tree. |
 | Tests | see §7 | `test_swap_supervisor.py`, `test_cross_session_cache.py`, `test_swap_stop_server.py`, `test_effort_transitions.py`; existing tests updated for the deliberate default changes (262,144 / 32,768). |
@@ -189,7 +189,7 @@ Settings already in `~/.qwen/settings.json`: `contextWindowSize 262144`, `maxRet
 ### DeepSeek Harness
 | Item | Result |
 |---|---|
-| Provider/model selection | headless profile still defaults to remote `deepseek-official/deepseek-flash` (untouched); desktop selects `veystrix/macqwen-flashnext` |
+| Provider/model selection | headless profile still defaults to remote `deepseek-official/deepseek-flash` (untouched); desktop selects `veystrix/veystrix-flashnext` |
 | Effort levels offered and sent | all six, **real client verified on the wire** (stub server) |
 | Context window / token cap | 262,144 / `max_completion_tokens: 16128` observed on the wire |
 | Other request fields | `store:false`, `stream_options.include_usage`, `tools` (23 in headless, 32 in desktop); all accepted by the server's field check |
@@ -208,13 +208,13 @@ All offline; swap stayed 1.0 GiB / 2.0 GiB total throughout; no checkpoint loade
 
 | Command | Result |
 |---|---|
-| `.venv/bin/python -m unittest discover -s macqwen/tests -t .` (baseline, before changes) | 598 OK |
+| `.venv/bin/python -m unittest discover -s veystrix/tests -t .` (baseline, before changes) | 598 OK |
 | `.venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t .` (baseline) | 1561 run, 2 failures that already existed (fixed, §2) |
-| **after all changes**: MACQWEN suite | **633 run, OK** (was 598; +35 new/updated) |
+| **after all changes**: VEYSTRIX suite | **633 run, OK** (was 598; +35 new/updated) |
 | **after all changes**: FlashNext unit suite | **1593 run, OK, 3 skipped** (was 1561 with 2 pre-existing failures) |
 | `unittest models.flashnext.tests.unit.test_swap_supervisor` | 18 OK |
-| `unittest macqwen.tests.test_swap_stop_server` | 15 OK |
-| `unittest macqwen.tests.test_effort_transitions` | 18 OK |
+| `unittest veystrix.tests.test_swap_stop_server` | 15 OK |
+| `unittest veystrix.tests.test_effort_transitions` | 18 OK |
 | `unittest models.flashnext.tests.unit.test_cross_session_cache` | 14 OK |
 | `dsh --profile headless --dump-config` | composes; shows `reasoningEfforts`, `maxRetries: 0`, `session-title-llm disabled` |
 | real `dsh headless` × 6 efforts vs stub server (port 18081, isolated `DSH_HOME`) | `reasoning_effort` = none/low/medium/high/xhigh/max, all accepted and mapped |
@@ -254,7 +254,7 @@ ls -lt ~/.flashnext/logs/ | head -3; tail -f ~/.flashnext/logs/server-*.jsonl   
 ls -t "$TMPDIR"/veystrix-chat-*.jsonl | head -1                                      # guard trace (swap samples)
 
 # 3. SSD snapshots (stop the server first: the directory has a single-owner lock; while running use /v1/cache/diagnostics)
-.venv/bin/python -m macqwen.cache_tools --inspect
+.venv/bin/python -m veystrix.cache_tools --inspect
 
 # 4. Qwen Code (settings already point at the server)
 VEYSTRIX_API_KEY=local qwen

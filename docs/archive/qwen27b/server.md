@@ -464,7 +464,7 @@ name `default_model`. The MLX server accepts that name and serves the loaded mod
 Start the server:
 
 ```bash
-~/Developer/MACQWEN/start_server.sh
+~/Developer/VEYSTRIX/start_server.sh
 ```
 
 KV settings in that script apply the section 47/48 findings in PROJECT.md:

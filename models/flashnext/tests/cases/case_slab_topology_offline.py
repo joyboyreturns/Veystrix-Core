@@ -1,7 +1,7 @@
 """Offline physical-evidence topology gate."""
 from pathlib import Path
 
-from macqwen.testsuite.api import TestSpec, bench_module
+from veystrix.testsuite.api import TestSpec, bench_module
 
 
 def command(config, _result_path: Path) -> list[str]:

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from macqwen import cli
+from veystrix import cli
 
 
 class LauncherTests(unittest.TestCase):
@@ -16,9 +16,9 @@ class LauncherTests(unittest.TestCase):
             python.touch()
             with patch.dict(
                 os.environ,
-                {"MACQWEN_K2_HORIZON_PYTHON": str(python)},
+                {"VEYSTRIX_K2_HORIZON_PYTHON": str(python)},
                 clear=False,
-            ), patch("macqwen.cli._supports_python", return_value=True):
+            ), patch("veystrix.cli._supports_python", return_value=True):
                 command, _ = cli.command([
                     "--model", "k2-horizon", "--checkpoint", "k2",
                 ])

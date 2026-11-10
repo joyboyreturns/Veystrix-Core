@@ -13,7 +13,7 @@ Status: **not ready for F2Bm**. The full checkpoint was not loaded. Existing unc
 
 ## Results
 
-The final FlashNext unit suite: 1,247 run, 5 skipped, 1,242 passed. The 136 benchmark/power tests also passed after the power edit. MACQWEN: 427 passed. Focused prefix suite: 44 passed, including same-size corruption and original-path replacement during load. An earlier full suite reported failures in tests that still asserted the old continue-on-failure behavior; those tests were updated and the next full run passed.
+The final FlashNext unit suite: 1,247 run, 5 skipped, 1,242 passed. The 136 benchmark/power tests also passed after the power edit. VEYSTRIX: 427 passed. Focused prefix suite: 44 passed, including same-size corruption and original-path replacement during load. An earlier full suite reported failures in tests that still asserted the old continue-on-failure behavior; those tests were updated and the next full run passed.
 
 100-request small-model workload: PASS; sampled MLX active after warmup 24,923.3 KiB first, last and maximum; sampled cache maximum 2,275.7 KiB. 300 requests: PASS; active first 24,923.3 KiB, last 24,907.5 KiB, maximum 24,939.4 KiB; sampled cache maximum 2,277.9 KiB. Sampling was every ten requests after request 20, not a true peak. Pressure and pools are simulated. The workload checks its own in-process lease bookkeeping, cached same-plan output/state equality, and disk hashes; it does not prove cross-process safety or indefinite operation.
 

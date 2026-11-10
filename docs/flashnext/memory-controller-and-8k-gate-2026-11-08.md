@@ -50,7 +50,7 @@ The new controller replays all 214 recorded samples without stopping and ends EL
 Raw outputs are logged (`requests.jsonl` `raw_output`). The model's format was valid: step 1 two parallel `glob` calls with
 patterns `services/**/config/*` and `services/**/*.yaml`; step 2 two more globs; step 3 one more. Every `glob` returned the
 same two files (the real file and `gateway.example.yaml`), and the model kept widening the pattern instead of calling `grep`.
-The parser, ids, argument schema and SSE stream are correct for such output (`macqwen/tests/test_parallel_tool_calls.py` pins
+The parser, ids, argument schema and SSE stream are correct for such output (`veystrix/tests/test_parallel_tool_calls.py` pins
 the attempt-2 strings: two calls, distinct ids, indexed deltas, one `tool_calls` finish). `dsh` executed every call
 (`completed`). So this is model behaviour on an unguided task with an ambiguous listing, not a protocol fault.
 

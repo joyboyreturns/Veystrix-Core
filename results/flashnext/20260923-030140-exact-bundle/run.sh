@@ -2,7 +2,7 @@
 # Exact opt-in bundle vs chat defaults, fresh process per arm, 2026-09-23.
 # Order: baseline, bundle, bundle, baseline. 128 greedy tokens, 8 pins,
 # keep-warm on in both. Expected digest in every arm: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 BUNDLE=(
   FLASHNEXT_STREAM_EMBED=1

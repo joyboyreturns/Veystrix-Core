@@ -61,7 +61,7 @@ flowchart TD
 - Tool schema validation verified (`working_directory` preserved for agent tools).
 - Independent code audit by research subagent completed with **PASS** verdict.
 - Run complete test suites:
-  - `macqwen/tests`: **427 tests passed** (0 failures).
+  - `veystrix/tests`: **427 tests passed** (0 failures).
   - `models/flashnext/tests/unit`: **1,208 tests passed, 5 skipped** (0 failures).
   - Combined: **1,635 tests passing (100% pass rate)**.
 - Verify production defaults unchanged and ensure `main` is untouched.

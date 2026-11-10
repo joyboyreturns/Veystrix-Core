@@ -54,8 +54,8 @@ In accordance with explicit system direction, the default memory policy for AGEN
 ### Modified Files & Code Paths
 - `models/flashnext/memory_policy.py`: Defined `MemoryPolicy` enum (`SWAP_GROWTH`, `AVAILABLE_GATE`), `SwapGrowthTracker`, policy metadata, and system disclaimer.
 - `models/flashnext/memory_controller.py`: Integrated baseline swap capture, high-watermark checking, fail-closed validation, and `SWAP_GROWTH_EXCEEDED` stops.
-- `macqwen/session.py`: Exposed `--memory-policy {swap-growth,available-gate}` CLI flag, default `swap-growth` for agentic profile.
-- `macqwen/server.py`: Reported memory policy, baseline swap, growth, and telemetry status in `/health` and `/v1/models`.
+- `veystrix/session.py`: Exposed `--memory-policy {swap-growth,available-gate}` CLI flag, default `swap-growth` for agentic profile.
+- `veystrix/server.py`: Reported memory policy, baseline swap, growth, and telemetry status in `/health` and `/v1/models`.
 - `models/flashnext/chat_guard.py` & `models/flashnext/settings/modes.py`: Bypassed available-memory gates when `policy == SWAP_GROWTH`.
 
 ---
@@ -77,11 +77,11 @@ This mismatch produced a token-level cache divergence around token 10,715 of 10,
 ### The Solution: Server-Owned Reasoning Ledger
 We implemented a dual-action solution:
 
-1. **Protocol-Visible SSE Streaming (`macqwen/text.py`, `macqwen/server.py`):**
+1. **Protocol-Visible SSE Streaming (`veystrix/text.py`, `veystrix/server.py`):**
    - Implemented `ReasoningStreamFilter` to parse `<think>...</think>` tags in real time during token generation.
    - Streamed reasoning tokens as SSE chunks: `data: {"choices": [{"delta": {"reasoning_content": "..."}}]}`.
    - Streamed final answer tokens as `data: {"choices": [{"delta": {"content": "..."}}]}`.
-2. **Server-Owned `ReasoningLedger` (`macqwen/sessions.py`):**
+2. **Server-Owned `ReasoningLedger` (`veystrix/sessions.py`):**
    - Retains exact generated reasoning strings, token IDs, and tool call invocations indexed by deterministic transcript digest and session ID.
    - Implemented `_norm_tool_args` to normalize JSON whitespace and key ordering in tool arguments, ensuring robust matching regardless of client serialization.
    - When Qwen Code sends a subsequent turn missing reasoning content, `ModelService._adopt` matches the conversation history against the ledger.
@@ -99,15 +99,15 @@ We implemented a dual-action solution:
 In multi-turn conversations where state is restored or rebuilt, the client sends the entire cumulative conversation history (e.g., 10,800 tokens).
 In previous server logic:
 ```python
-# macqwen/server.py (former logic)
+# veystrix/server.py (former logic)
 self._check_prefill(len(ids))  # Evaluated 10,800 against tier prefill limit (e.g. 4,096 or 8,192)
 ```
 Even though the 8,000-token system prompt and previous turns were already cached in RAM or SSD, the server checked the entire prompt length against the cold prefill admission budget, raising a false `ContextLimitError: prefill_budget_exceeded`.
 
 ### The Resolution
-In `macqwen/server.py:ModelService._adopt`:
+In `veystrix/server.py:ModelService._adopt`:
 ```python
-# macqwen/server.py (repaired logic)
+# veystrix/server.py (repaired logic)
 reusable = 0
 prefix_session = getattr(backend, "_prefix_session", None)
 if prefix_session is not None:
@@ -199,7 +199,7 @@ Before executing any model computation:
 - **Constant-Size Recurrent State:** GDN recurrent hidden states ($113\text{ MB}$) are stored per snapshot to guarantee exact state continuation.
 - **Hot RAM & Cold SSD Tiers:** Snapshots are held in RAM up to the configured budget (0.75 GB), and automatically demoted to SSD with LRU eviction without discarding state.
 
-### Synthetic Long-Context Validation Suite (`macqwen/tests/test_incremental_262k_context.py`)
+### Synthetic Long-Context Validation Suite (`veystrix/tests/test_incremental_262k_context.py`)
 All offline synthetic tests passed 100%:
 1. `test_cold_oversized_prefill_rejected_at_ladder_steps`: Verified cold rejection across 32K, 64K, 128K, 200K, and 250K prompts without starting model execution.
 2. `test_incremental_accumulation_ladder_succeeds_up_to_262k`: Verified accumulation ladder (8K cold $\to$ 16K $\to$ 32K $\to$ 48K $\to$ 64K $\to$ 128K $\to$ 200K $\to$ 260K) where each incremental prefill is $\le 16,384$ tokens.
@@ -211,7 +211,7 @@ All offline synthetic tests passed 100%:
 When clients (such as Qwen Code) request large contexts, they may calculate `max_tokens` aggressively. Previously, if `len(ids) + max_tokens > context_limit`, the server threw HTTP 400.
 Under the repaired logic:
 ```python
-# macqwen/server.py
+# veystrix/server.py
 server_limit = self.context_limit or 262144
 max_tokens = min(requested_tokens, max(1, server_limit - prompt_tokens))
 ```

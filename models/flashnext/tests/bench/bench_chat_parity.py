@@ -9,7 +9,7 @@ formatted changes prompt tokens and measures a workload difference.
 """
 from __future__ import annotations
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 
 import argparse
 from collections import deque
@@ -56,7 +56,7 @@ def token_digest(ids) -> str:
 def source_fingerprint(root: Path = ROOT) -> str:
     """Hash repository runtime sources, excluding results and unrelated tests."""
     paths = {root / "chat.sh", root / "models/flashnext/tests/bench/bench_chat_parity.py"}
-    for folder in (root / "macqwen", root / "models/flashnext"):
+    for folder in (root / "veystrix", root / "models/flashnext"):
         for path in folder.rglob("*"):
             if path.suffix not in {".py", ".mm", ".metal", ".h", ".hpp"}:
                 continue
@@ -245,10 +245,10 @@ def _runtime_capability(records: list[dict], expected_runtime) -> dict[str, obje
 def run_chat_child(session, condition: str, prompt: str) -> None:
     """Measure the backend call inside the real plain-chat function."""
     import mlx.core as mx
-    from macqwen import preferences
-    from macqwen.sampling import Sampling
-    from macqwen.session import open_or_continue, run_turn_plain
-    from macqwen.ui import IngestGlow
+    from veystrix import preferences
+    from veystrix.sampling import Sampling
+    from veystrix.session import open_or_continue, run_turn_plain
+    from veystrix.ui import IngestGlow
     from models.flashnext.diskio import disk_bytes_read, vm_counters
     from models.flashnext.expert_cache import _POOL, profile_enabled
 
@@ -667,9 +667,9 @@ def main() -> int:
         capability = None
         checkpoint = None
         if args.mode == "pins":
-            from macqwen.checkpoints import resolve_flashnext
+            from veystrix.checkpoints import resolve_flashnext
 
-            checkpoint = resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL"))
+            checkpoint = resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL"))
             capability = checkpoint_runtime_capability(checkpoint)
             payload["checkpoint"] = str(checkpoint)
             payload["runtime_capability"] = capability
@@ -685,7 +685,7 @@ def main() -> int:
                     environment = dict(os.environ)
                     environment.update(condition_environment(name, capability))
                     if checkpoint is not None:
-                        environment["MACQWEN_FLASHNEXT_MODEL"] = str(checkpoint)
+                        environment["VEYSTRIX_FLASHNEXT_MODEL"] = str(checkpoint)
                     environment.update({
                         "FLASHNEXT_PIN_CACHE": str(pin_path),
                         "FLASHNEXT_PROFILE_BOUNDARIES": "0",

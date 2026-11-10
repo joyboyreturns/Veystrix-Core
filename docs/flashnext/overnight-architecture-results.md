@@ -75,7 +75,7 @@ software defect that is still on the table, unless a read-saving idea (e.g. exac
 
 ## 4. Tests
 
-* flashnext unit discovery: **1,754 tests, OK (3 skipped)** on the final tree; macqwen: **686 tests, OK** (run before the last two small flashnext-only edits, which do not touch macqwen).
+* flashnext unit discovery: **1,754 tests, OK (3 skipped)** on the final tree; veystrix: **686 tests, OK** (run before the last two small flashnext-only edits, which do not touch veystrix).
 * New offline tests: layer-major equivalence incl. inner snapshots (stored state equals chunk-major byte for byte, survives in-place KV updates,
   restore resumes exactly), staging/overlap (9), peel-tail, flag validation, restore-check validator.
 * Real-checkpoint, exact: 8K pairs x3, 16K pairs x3, 2.7K decode A/B, 8K decode A/B, restore from an inner snapshot in a new process (SSD_HIT).

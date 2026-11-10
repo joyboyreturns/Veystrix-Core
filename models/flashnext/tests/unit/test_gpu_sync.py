@@ -155,7 +155,7 @@ class DeadlockReproductionTests(unittest.TestCase):
             self.assertIn("BODY DONE", done[1])
 
     def test_the_backend_installs_the_exit_drain(self):
-        self.assertIn("gpu_sync.install_exit_drain()", (ROOT / "macqwen/backends/flashnext.py").read_text())
+        self.assertIn("gpu_sync.install_exit_drain()", (ROOT / "veystrix/backends/flashnext.py").read_text())
         from models.flashnext import gpu_sync
         self.assertTrue(callable(gpu_sync.install_exit_drain))
 
@@ -201,7 +201,7 @@ class DeadlockReproductionTests(unittest.TestCase):
 
 class ProductionCodeTests(unittest.TestCase):
     def production_files(self):
-        for base in ("macqwen", "models/flashnext"):
+        for base in ("veystrix", "models/flashnext"):
             for path in (ROOT / base).rglob("*.py"):
                 parts = path.relative_to(ROOT).parts
                 if "tests" in parts or any(part.startswith("test_") for part in parts[-1:]):
@@ -227,7 +227,7 @@ class ProductionCodeTests(unittest.TestCase):
         from models.flashnext import gpu_sync, pool_lifecycle, prefill_ring
 
         self.assertIs(pool_lifecycle._gpu_synchronize(), gpu_sync.synchronize)
-        backend = (ROOT / "macqwen/backends/flashnext.py").read_text()
+        backend = (ROOT / "veystrix/backends/flashnext.py").read_text()
         self.assertEqual(backend.count("gpu_sync.synchronize"), 4)        # request cleanup, after_request, before_prefill, _release_between_turns
         self.assertIn("from .gpu_sync import synchronize", (ROOT / "models/flashnext/prefill_ring.py").read_text())
         self.assertTrue(callable(prefill_ring.fence))

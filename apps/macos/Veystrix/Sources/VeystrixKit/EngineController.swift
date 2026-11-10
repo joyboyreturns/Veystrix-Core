@@ -23,13 +23,16 @@ public final class EngineController: ObservableObject {
     private var lastExitStatus: Int32?
 
     /// Longest allowed time from launch to the first healthy response. Loading a 113 GB checkpoint takes minutes.
+    private let snapshot: @Sendable () -> MemorySnapshot
     public var startupTimeout: TimeInterval = 30 * 60
     public var pollInterval: TimeInterval = 2
     public var gracefulStopSeconds: TimeInterval = 90
 
     public init(logs: LogStore,
                 launcher: EngineProcessLauncher = SystemEngineLauncher(),
+                snapshot: @escaping @Sendable () -> MemorySnapshot = { MemoryProbe.snapshot() },
                 healthFactory: @escaping @Sendable (Int, String?) -> HealthChecking = { RealHealth(client: HealthClient(port: $0, apiKey: $1)) }) {
+        self.snapshot = snapshot
         self.logs = logs
         self.launcher = launcher
         self.healthFactory = healthFactory
@@ -38,7 +41,7 @@ public final class EngineController: ObservableObject {
     // MARK: start
 
     public enum StartError: Error, Equatable, CustomStringConvertible {
-        case notUserInitiated, alreadyActive, portInUse(Int), plan(String), launch(String)
+        case notUserInitiated, alreadyActive, portInUse(Int), plan(String), launch(String), batteryTooLow(String)
         public var description: String {
             switch self {
             case .notUserInitiated: return "The engine only starts when you press Start."
@@ -46,6 +49,7 @@ public final class EngineController: ObservableObject {
             case .portInUse(let p): return "Port \(p) is already in use (possibly by another Veystrix engine). Stop it or choose another port in Settings."
             case .plan(let m): return m
             case .launch(let m): return "The engine could not be launched: \(m)"
+            case .batteryTooLow(let m): return m
             }
         }
     }
@@ -55,6 +59,8 @@ public final class EngineController: ObservableObject {
                       source: LaunchPlan.Source?) async throws {
         guard userInitiated else { throw StartError.notUserInitiated }
         guard state == .stopped || isErrorState else { throw StartError.alreadyActive }
+        // Battery use is allowed; a battery below the floor refuses the start before anything is launched.
+        if let refusal = MemoryProbe.powerRefusal(snapshot()) { throw StartError.batteryTooLow(refusal) }
         let source = source ?? .developer(repoRoot: URL(fileURLWithPath: "/nonexistent"))
         let plan: LaunchPlan
         do {
@@ -69,7 +75,7 @@ public final class EngineController: ObservableObject {
         state = .starting
         health = nil; models = nil; lastSafetyStop = nil; stopRequested = false; lastExitStatus = nil
         isExternallyManaged = false
-        memory = MemoryProbe.snapshot()
+        memory = snapshot()
         advisories = MemoryProbe.advisories(memory!, checkpointBytes: checkpoint?.totalBytes)
         logs.append("Starting: \(plan.description)", source: .app)
         do {
@@ -112,7 +118,7 @@ public final class EngineController: ObservableObject {
     }
 
     private func apply(outcome: HealthClient.Outcome, begun: Date, lost: inout Int) async {
-        memory = MemoryProbe.snapshot()
+        memory = snapshot()
         switch outcome {
         case .healthy(let report):
             lost = 0

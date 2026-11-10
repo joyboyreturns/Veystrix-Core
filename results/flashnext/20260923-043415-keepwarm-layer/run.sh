@@ -3,7 +3,7 @@
 # alone and with the two byte savers it may unlock. Quiet machine, fresh process
 # per arm, 128 greedy tokens, 8 pins, chat defaults otherwise.
 # Order: D L LK LS D LS LK L D. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 arm() {
   local n=$1 name=$2; shift 2

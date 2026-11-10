@@ -10,7 +10,7 @@ Categories (a case per category is in the "smoke" tier):
 * coding              the reply's function is executed against tests in a restricted interpreter
 * reasoning           an exact numeric or yes/no answer
 * instruction         verifiable formatting constraints (counts, case, JSON shape, forbidden words)
-* tool_call           the native tool-call format, with the production tool set (macqwen.tools) rendered by the chat template
+* tool_call           the native tool-call format, with the production tool set (veystrix.tools) rendered by the chat template
                        and read back by the production parser
 * multi_turn          facts carried across turns, including a tool result turn
 * retrieval_early / retrieval_middle / retrieval_late
@@ -81,9 +81,9 @@ def system_prompts() -> dict:
     return {"short": SHORT_SYSTEM, "tooling": TOOLING_SYSTEM, "agent": agent_text(), "needles": needle_system()}
 
 
-# -- the production tool set (macqwen.tools): the chat template renders it, its parser reads the reply ----
+# -- the production tool set (veystrix.tools): the chat template renders it, its parser reads the reply ----
 
-from macqwen.tools import PARAM_TYPES, REQUIRED_PARAMS, TOOLS, parse_tool_calls  # noqa: E402
+from veystrix.tools import PARAM_TYPES, REQUIRED_PARAMS, TOOLS, parse_tool_calls  # noqa: E402
 
 CALL_BLOCK = re.compile(r"<tool_call>")
 CALL_NAME = re.compile(r"<function=([^>\s]+)>")

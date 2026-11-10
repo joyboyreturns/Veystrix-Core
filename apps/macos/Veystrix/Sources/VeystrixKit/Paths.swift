@@ -19,8 +19,6 @@ public struct Paths: Sendable {
     public var supervisorStatusFile: URL { home.appendingPathComponent(".flashnext/logs/supervisor-status.json") }
     /// Engine default persistent prefix cache (unchanged so existing caches are reused).
     public var defaultCacheDirectory: URL { home.appendingPathComponent(".flashnext/prefix-cache", isDirectory: true) }
-    /// Legacy locations written by earlier MACQWEN builds. Read-only for migration.
-    public var legacyPreferences: URL { home.appendingPathComponent(".macqwen/preferences.json") }
 
     /// Create the app's own directories with owner-only permissions.
     public func ensureDirectories() throws {

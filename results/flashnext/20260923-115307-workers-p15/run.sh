@@ -2,7 +2,7 @@
 # 4 tok/s lever 1: read workers 8 (bundle default) vs 16 at P15, keep-warm on
 # stream-pack waits. Fresh process per arm, 128 greedy tokens, 8 pins.
 # Order: 8 16 16 8 8 16. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-115307-workers-p15
 arm() {

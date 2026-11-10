@@ -123,6 +123,7 @@ private func tempDir() -> URL {
         #expect(plan.environment["OPENAI_API_KEY"] == nil); #expect(plan.environment["ANTHROPIC_API_KEY"] == nil)
         #expect(plan.environment["HF_TOKEN"] == nil); #expect(plan.environment["HOME"] == "/Users/x")
         #expect(plan.environment["VEYSTRIX_PORT"] == "8080")
+        #expect(plan.environment["FLASHNEXT_AUTO_PURGE"] == "1")   // memory short -> the engine purges the file cache by itself
     }
     @Test func keepAwakeWrapsWithCaffeinateLikeServeSh() throws {
         var (s, c) = try good(tempDir()); s.keepMacAwake = true
@@ -209,19 +210,33 @@ struct ScriptedHealth: HealthChecking {
 
     @Test func creatingTheControllerStartsNothing() {
         let launcher = FakeLauncher()
-        let c = EngineController(logs: LogStore(), launcher: launcher)
+        let c = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot })
         #expect(c.state == .stopped); #expect(launcher.launched == 0)
+    }
+    @Test func lowBatteryRefusesTheStartBeforeAnythingLaunches() async throws {
+        let (s, c, _) = try ready(); let launcher = FakeLauncher()
+        let low = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 << 30, swapUsedBytes: 0, swapTotalBytes: 0,
+                                 onACPower: false, batteryPercent: 24, lowPowerMode: false, cacheVolumeFreeBytes: nil)
+        let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { low })
+        do {
+            try await ctl.start(settings: s, checkpoint: c, apiKey: nil, userInitiated: true, source: self.src())
+            Issue.record("the start should have been refused")
+        } catch let error as EngineController.StartError {
+            guard case .batteryTooLow(let message) = error else { Issue.record("wrong error \(error)"); return }
+            #expect(message.contains("24%"))
+        }
+        #expect(launcher.launched == 0); #expect(ctl.state == .stopped)
     }
     @Test func startRequiresUserInitiated() async throws {
         let (s, c, _) = try ready(); let launcher = FakeLauncher()
-        let ctl = EngineController(logs: LogStore(), launcher: launcher)
+        let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot })
         await #expect(throws: EngineController.StartError.notUserInitiated) {
             try await ctl.start(settings: s, checkpoint: c, apiKey: nil, userInitiated: false, source: self.src())
         }
         #expect(launcher.launched == 0); #expect(ctl.state == .stopped)
     }
     @Test func missingRuntimeOrCheckpointNeverLaunches() async throws {
-        let launcher = FakeLauncher(); let ctl = EngineController(logs: LogStore(), launcher: launcher)
+        let launcher = FakeLauncher(); let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot })
         await #expect(throws: EngineController.StartError.self) {
             try await ctl.start(settings: AppSettings(), checkpoint: nil, apiKey: nil, userInitiated: true, source: nil)
         }
@@ -229,7 +244,7 @@ struct ScriptedHealth: HealthChecking {
     }
     @Test func portInUseRefusesToStartASecondEngine() async throws {
         let (s, c, _) = try ready(); let launcher = FakeLauncher()
-        let ctl = EngineController(logs: LogStore(), launcher: launcher, healthFactory: { _, _ in ScriptedHealth { .healthy(HealthReport()) } })
+        let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth { .healthy(HealthReport()) } })
         // plan creation needs a runtime; point the developer source at a fake tree
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
@@ -241,7 +256,7 @@ struct ScriptedHealth: HealthChecking {
     @Test func startThenHealthyThenGracefulStop() async throws {
         let (s, c, _) = try ready(); let launcher = FakeLauncher()
         let calls = Counter()
-        let ctl = EngineController(logs: LogStore(), launcher: launcher, healthFactory: { _, _ in ScriptedHealth {
+        let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth {
             // first call is the pre-start probe (nothing listening); later calls report a ready engine
             calls.next() == 0 ? .unreachable : .healthy(HealthReport(status: "ok", ready: true))
         } })
@@ -257,7 +272,7 @@ struct ScriptedHealth: HealthChecking {
     }
     @Test func unexpectedExitIsAnErrorWithTheSafetyMessage() async throws {
         let (s, c, _) = try ready(); let launcher = FakeLauncher()
-        let ctl = EngineController(logs: LogStore(), launcher: launcher, healthFactory: { _, _ in ScriptedHealth { .unreachable } })
+        let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth { .unreachable } })
         ctl.pollInterval = 0.05
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
@@ -269,7 +284,7 @@ struct ScriptedHealth: HealthChecking {
     }
     @Test func stopEscalatesWhenTheEngineIgnoresInterrupt() async throws {
         let (s, c, _) = try ready(); let launcher = FakeLauncher(); launcher.ignoreInterrupt = true
-        let ctl = EngineController(logs: LogStore(), launcher: launcher, healthFactory: { _, _ in ScriptedHealth { .unreachable } })
+        let ctl = EngineController(logs: LogStore(), launcher: launcher, snapshot: { testACSnapshot }, healthFactory: { _, _ in ScriptedHealth { .unreachable } })
         ctl.gracefulStopSeconds = 0.2; ctl.pollInterval = 0.5
         let repo = tempDir(); try FileManager.default.createDirectory(at: repo.appendingPathComponent(".venv/bin"), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: repo.appendingPathComponent(".venv/bin/python").path, contents: Data())
@@ -363,6 +378,10 @@ final class Counter: @unchecked Sendable { private var n = 0; private let l = NS
     }
 }
 
+/// A fixed AC-power reading so controller tests do not depend on the battery state of the machine running them.
+let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 << 30, swapUsedBytes: 0, swapTotalBytes: 0,
+                                    onACPower: true, batteryPercent: 100, lowPowerMode: false, cacheVolumeFreeBytes: nil)
+
 @Suite struct MemoryProbeTests {
     @Test func snapshotIsPlausible() {
         let s = MemoryProbe.snapshot()
@@ -372,5 +391,22 @@ final class Counter: @unchecked Sendable { private var n = 0; private let l = NS
         let s = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 3 << 30, swapUsedBytes: 3 << 30, swapTotalBytes: 4 << 30,
                                onACPower: false, batteryPercent: 50, lowPowerMode: true, cacheVolumeFreeBytes: 5 << 30)
         #expect(MemoryProbe.advisories(s, checkpointBytes: nil).count == 5)
+    }
+    private func power(ac: Bool?, _ pct: Int?) -> MemorySnapshot {
+        MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 << 30, swapUsedBytes: 0, swapTotalBytes: 0,
+                       onACPower: ac, batteryPercent: pct, lowPowerMode: false, cacheVolumeFreeBytes: nil)
+    }
+    @Test func batteryAboveTheFloorMayStartAndBelowItMayNot() {
+        #expect(MemoryProbe.powerRefusal(power(ac: false, 25)) == nil)
+        #expect(MemoryProbe.powerRefusal(power(ac: false, 80)) == nil)
+        let low = MemoryProbe.powerRefusal(power(ac: false, 24))
+        #expect(low?.contains("24%") == true); #expect(low?.contains("25%") == true)
+    }
+    @Test func acPowerAlwaysPassesAndUnreadablePowerFailsClosed() {
+        #expect(MemoryProbe.powerRefusal(power(ac: true, 3)) == nil)
+        #expect(MemoryProbe.powerRefusal(power(ac: true, nil)) == nil)
+        #expect(MemoryProbe.powerRefusal(power(ac: false, nil)) != nil)
+        #expect(MemoryProbe.powerRefusal(power(ac: nil, nil)) != nil)
+        #expect(MemoryProbe.powerRefusal(power(ac: false, 1), minPercent: 0) == nil)
     }
 }

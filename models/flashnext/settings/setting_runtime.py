@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from macqwen.backend_settings import Setting
+from veystrix.backend_settings import Setting
 
 
 def env_reader(key, default, parser=str):

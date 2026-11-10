@@ -102,7 +102,7 @@ license is granted or implied.
 The Software contains or links to third-party components, including components
 published under open-source licenses (for example MIT, BSD, Apache-2.0 and
 MPL-2.0). Those components, and the portions of Veystrix derived from MIT-licensed
-code published earlier under the names MACQWEN and FlashNext, remain under their
+code published earlier under the MIT license, remain under their
 own license terms, and the copyright notices and license texts in
 THIRD_PARTY_NOTICES.md must be preserved. This agreement does not reduce any right
 You have under those licenses, and does not claim that earlier open-source
@@ -172,5 +172,5 @@ GitHub Issues at https://github.com/joyboyreturns/Veystrix/issues].
 12. ATTRIBUTION
 
 Veystrix is built on, and includes work derived from, MIT-licensed code that was
-published as MACQWEN and FlashNext. See THIRD_PARTY_NOTICES.md for the copyright
+published earlier under the MIT license. See THIRD_PARTY_NOTICES.md for the copyright
 holder and the full MIT license text.

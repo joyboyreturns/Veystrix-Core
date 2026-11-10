@@ -144,7 +144,7 @@ def main() -> None:
     args = parser.parse_args()
 
     os.environ.setdefault("FLASHNEXT_TOPK_THRESHOLD", "0.85")
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
 
     path = str(resolve_flashnext(args.model))
 

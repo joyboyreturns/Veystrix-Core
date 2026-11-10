@@ -51,9 +51,9 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
-from macqwen.results import output_path
+from veystrix.results import output_path
 
-from macqwen.measurement import MeasurementRun, validate_path
+from veystrix.measurement import MeasurementRun, validate_path
 
 PROMPT = ("<|im_start|>user\nExplique a fotossintese em duas frases."
           "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n")
@@ -1354,9 +1354,9 @@ def main() -> None:
     # Capture provenance for ordinary baseline runs too.  This metadata is
     # collected before a backend is constructed and checkpoint_identity only
     # reads metadata/stat information, so it does not run model inference.
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
 
-    checkpoint = resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL"))
+    checkpoint = resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL"))
     if args.resident_experts == "policy":
         from models.flashnext.checkpoint_policy import resolve_resident_experts
 
@@ -1519,7 +1519,7 @@ def main() -> None:
                     except ImportError:
                         pass
                     # Import after the first condition environment is active.
-                    from macqwen.backends.flashnext import FlashNextBackend
+                    from veystrix.backends.flashnext import FlashNextBackend
                     require_source_freeze(provenance)
                     backend = FlashNextBackend(resident_experts=resident_experts)
                     def preserve_raw(row, arm_name=name, arm_round=round_index):
@@ -1574,7 +1574,7 @@ def main() -> None:
                         break
     else:
         set_condition_environment(next(iter(conditions.values())))
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         require_source_freeze(provenance)
         backend = FlashNextBackend(resident_experts=resident_experts)

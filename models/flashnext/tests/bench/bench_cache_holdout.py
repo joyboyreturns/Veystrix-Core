@@ -12,7 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 from models.flashnext.tests.bench.bench_pool_policy_trace import Arc, Lru, load_trace
 
 

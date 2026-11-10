@@ -1,7 +1,7 @@
 """Screen the one-time FP32 affine-metadata preparation on the short question."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def live_parser(line: str) -> dict | None:

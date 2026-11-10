@@ -91,7 +91,7 @@ checkpoint-specific controls to another runtime.
 - Put tests in `models/<model>/tests/`: `unit/`, `bench/` and `cases/`. See
   [docs/testing.md](docs/testing.md).
 - Every test and benchmark run writes to `results/<model>/<run>/` through
-  `macqwen.results`. Keep records append-only.
+  `veystrix.results`. Keep records append-only.
 - Do not add generated `Co-Authored-By` trailers.
 - Use plain commit titles that start with a capital letter; do not use
   conventional-commit prefixes.

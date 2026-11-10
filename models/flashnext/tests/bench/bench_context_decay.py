@@ -51,7 +51,7 @@ def main() -> None:
     from models.flashnext.adaptive_topk import set_route_observer
     from models.flashnext.diskio import disk_bytes_read, free_memory_mb
     from models.flashnext.prefill import prefill_language
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
 
     backend = FlashNextBackend(model_path=args.model)
     language = backend.language

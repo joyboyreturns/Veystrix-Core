@@ -44,6 +44,7 @@ GUARD_EXIT = 75
 ADMISSION_EXIT = 69
 CONFIG_EXIT = 70
 PORT_BUSY_EXIT = 71
+from models.flashnext.power_gate import POWER_EXIT_CODE as POWER_EXIT   # 72: battery below the floor
 
 
 def server_command(args) -> list:
@@ -127,6 +128,8 @@ class Policy:
             return "stop", 0.0, "stopped by the owner" if owner_stop else "server exited cleanly"
         if exit_code == PORT_BUSY_EXIT:
             return "stop", 0.0, "the port is already served by another process: stop it first (./serve.sh --status shows this supervisor)"
+        if exit_code == POWER_EXIT:
+            return "stop", 0.0, "the battery is below the minimum (exit 72): plug in or charge, then start again; restarting cannot fix it"
         if exit_code == CONFIG_EXIT:
             return "stop", 0.0, "launch configuration refused (exit 70): restarting cannot fix it"
 
@@ -163,7 +166,7 @@ class AutoWarmer:
     """
 
     def __init__(self, args, log, *, power_fn, clock, warm_module=None, thread_factory=None):
-        from macqwen import warm as warm_module_default
+        from veystrix import warm as warm_module_default
         self.w = warm_module or warm_module_default
         self.args, self.log, self.power_fn, self.clock = args, log, power_fn, clock
         self.idle_seconds = float(getattr(args, "warm_idle_minutes", 15.0)) * 60.0

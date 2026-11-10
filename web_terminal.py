@@ -16,7 +16,7 @@ shell commands on the Mac, so an open port is not an option.
 import argparse, html, json, os, pty, re, secrets, select, signal, socket, subprocess, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from macqwen.commands import web_shortcuts
+from veystrix.commands import web_shortcuts
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 # A line buffer, not a byte stream. The chat redraws progress bars with a

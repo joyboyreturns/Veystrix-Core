@@ -18,7 +18,7 @@ The Veystrix `development3.8` branch has achieved a fully remediated, verified, 
 ### Key Milestones Achieved:
 1. **100% Finding Remediation**: 30 of 30 review findings resolved and verified.
 2. **Comprehensive Test Suite Passes**:
-   - `macqwen/tests`: **720 / 720 tests PASSED** (0 failures, 0 errors).
+   - `veystrix/tests`: **720 / 720 tests PASSED** (0 failures, 0 errors).
    - `models/flashnext/tests/unit`: **1807 / 1807 tests PASSED** (0 failures, 0 errors, 3 skipped).
    - Harness integration tests (`test_qwen_code_client`, `test_dual_harness_cache`, `test_effort_transitions`): **38 / 38 tests PASSED**.
    - Custom Phase 2–5 regression test suites: **34 / 34 tests PASSED**.
@@ -70,26 +70,26 @@ All 30 findings across the three Ultra Reviews are categorized, implemented, tes
 | **R1-08** | Phase 5 | `models/flashnext/expert_cache.py` | nit | Replaced hardcoded `4096` in `_read_weights_with_pool` with `expert_pool.HEADER` constant | `test_r1_08_expert_cache_uses_expert_pool_header_constant` | `9f7985c` | VERIFIED |
 | **R1-09** | Phase 5 | `models/flashnext/prefill.py` | nit | Added injectable `set_logits_hook` and protected test bench imports with exception isolation | `test_r1_09_prefill_injectable_logits_hook` | `9f7985c` | VERIFIED |
 | **R1-10** | Phase 5 | `models/flashnext/prefill_scheduler.py` | nit | Imported shared `CANDIDATE_CHUNKS` from `models.flashnext.prefill` | `test_r1_10_candidate_chunks_shared_definition` | `9f7985c` | VERIFIED |
-| **R2-01** | Phase 4 | `macqwen/server.py` | normal | Isolated `_log_request` in non-fatal try/except so logging errors never fail completed generations | `test_r2_01_log_request_failure_does_not_abort_generation` | `9cac8f5` | VERIFIED |
-| **R2-02** | Phase 2 | `macqwen/server.py` | normal | Permitted `"name"` in `MESSAGE_FIELDS` and `"index"` in tool call payloads per OpenAI spec | `test_r2_02_message_allows_name_field_and_tool_call_index` | `7f0da26` | VERIFIED |
-| **R2-03** | Phase 2 | `macqwen/server.py` | normal | Handled JSON Schema union types (e.g. `["string", "null"]`) and nullable properties | `test_r2_03_validate_call_handles_union_schema_types` | `7f0da26` | VERIFIED |
-| **R2-04** | Phase 4 | `macqwen/server.py` | normal | Drained `Content-Length` payload before returning HTTP 404 to prevent connection stream poisoning | `test_r2_04_do_post_drains_payload_on_404` | `9cac8f5` | VERIFIED |
-| **R2-05** | Phase 2 | `macqwen/server.py` | normal | Unescaped XML entities (`&lt;`, `&gt;`, `&amp;`) in JSON array/object tool arguments | `test_r2_05_unescape_xml_in_tool_call_arguments` | `7f0da26` | VERIFIED |
+| **R2-01** | Phase 4 | `veystrix/server.py` | normal | Isolated `_log_request` in non-fatal try/except so logging errors never fail completed generations | `test_r2_01_log_request_failure_does_not_abort_generation` | `9cac8f5` | VERIFIED |
+| **R2-02** | Phase 2 | `veystrix/server.py` | normal | Permitted `"name"` in `MESSAGE_FIELDS` and `"index"` in tool call payloads per OpenAI spec | `test_r2_02_message_allows_name_field_and_tool_call_index` | `7f0da26` | VERIFIED |
+| **R2-03** | Phase 2 | `veystrix/server.py` | normal | Handled JSON Schema union types (e.g. `["string", "null"]`) and nullable properties | `test_r2_03_validate_call_handles_union_schema_types` | `7f0da26` | VERIFIED |
+| **R2-04** | Phase 4 | `veystrix/server.py` | normal | Drained `Content-Length` payload before returning HTTP 404 to prevent connection stream poisoning | `test_r2_04_do_post_drains_payload_on_404` | `9cac8f5` | VERIFIED |
+| **R2-05** | Phase 2 | `veystrix/server.py` | normal | Unescaped XML entities (`&lt;`, `&gt;`, `&amp;`) in JSON array/object tool arguments | `test_r2_05_unescape_xml_in_tool_call_arguments` | `7f0da26` | VERIFIED |
 | **R2-06** | Phase 3 | `models/flashnext/prefix_cache.py` | normal | Persisted RAM entry before eviction; prevented eviction if resident children depend on entry | `test_r2_06_evict_ram_persists_and_preserves_resident_parents` | `fe4682a` | VERIFIED |
 | **R2-07** | Phase 3 | `models/flashnext/prefix_profiles.py` | normal | Tracked foreign manifests in `_scan` and evicted foreign leaves first before local snapshots | `test_r2_07_prefix_cache_evicts_foreign_leaves_first` | `fe4682a` | VERIFIED |
-| **R2-08** | Phase 2 | `macqwen/server.py` | normal | Inspected signatures upfront with `inspect.signature` instead of broad `except TypeError:` retries | `test_r2_08_signature_inspection_prevents_re_execution_on_type_error` | `7f0da26` | VERIFIED |
-| **R2-09** | Phase 2 | `macqwen/server.py` | normal | Verified `prefix_session.enabled()` and no active draft decoder before calculating reusable tokens | `test_r2_09_prefix_session_enabled_guard_before_cache_peek` | `7f0da26` | VERIFIED |
+| **R2-08** | Phase 2 | `veystrix/server.py` | normal | Inspected signatures upfront with `inspect.signature` instead of broad `except TypeError:` retries | `test_r2_08_signature_inspection_prevents_re_execution_on_type_error` | `7f0da26` | VERIFIED |
+| **R2-09** | Phase 2 | `veystrix/server.py` | normal | Verified `prefix_session.enabled()` and no active draft decoder before calculating reusable tokens | `test_r2_09_prefix_session_enabled_guard_before_cache_peek` | `7f0da26` | VERIFIED |
 | **R2-10** | Phase 2 | `models/flashnext/prefix_session.py` | normal | Re-evaluated required prefill after `store.lookup()`, raising `RecoveryRequiredError` if exceeded | `test_r2_10_post_lookup_prefill_limit_enforcement` | `7f0da26` | VERIFIED |
-| **R3-01** | Phase 4 | `macqwen/cli.py` | normal | Defaulted `./chat.sh --server` launches without `--mode` to `modes.AGENTIC` | `test_r3_01_cli_defaults_server_to_agentic_mode` | `9cac8f5` | VERIFIED |
+| **R3-01** | Phase 4 | `veystrix/cli.py` | normal | Defaulted `./chat.sh --server` launches without `--mode` to `modes.AGENTIC` | `test_r3_01_cli_defaults_server_to_agentic_mode` | `9cac8f5` | VERIFIED |
 | **R3-02** | Phase 4 | `models/flashnext/chat_guard.py` | normal | Supported AC-only desktop Macs with `battery_percent=None` without false missing-probe halts | `test_r3_02_chat_guard_allows_desktop_mac_without_battery` | `9cac8f5` | VERIFIED |
-| **R3-03** | Phase 4 | `macqwen/cli.py` | normal | Applied mode default profile ephemerally (`MACQWEN_PROFILE_EPHEMERAL`) without overwriting user prefs | `test_r3_03_cli_does_not_override_saved_profile_when_unspecified` | `9cac8f5` | VERIFIED |
+| **R3-03** | Phase 4 | `veystrix/cli.py` | normal | Applied mode default profile ephemerally (`VEYSTRIX_PROFILE_EPHEMERAL`) without overwriting user prefs | `test_r3_03_cli_does_not_override_saved_profile_when_unspecified` | `9cac8f5` | VERIFIED |
 | **R3-04** | Phase 4 | `models/flashnext/settings/modes.py` | normal | Prohibited `layer-major` in `CHAT` mode and gated `request_admission` to agentic mode | `test_r3_04_chat_mode_refuses_layer_major` | `9cac8f5` | VERIFIED |
-| **R3-05** | Phase 2 | `macqwen/sessions.py` | normal | Recorded all assistant turns in `ReasoningLedger` to maintain turn sequence alignment | `test_r3_05_reasoning_ledger_records_empty_thinking_turns` | `7f0da26` | VERIFIED |
-| **R3-06** | Phase 3 | `macqwen/cache_tools.py` | normal | Recomputed eligible leaves iteratively in `clean_cache` to prune full delta chains to budget | `test_clean_cache_iterative_leaf_pruning_on_delta_chains` | `fe4682a` | VERIFIED |
-| **R3-07** | Phase 4 | `macqwen/session.py` | normal | Enforced `min(tier.max_cold_prefill, env_cold)` in `_apply_tier()` | `test_r3_07_apply_tier_caps_cold_prefill` | `9cac8f5` | VERIFIED |
-| **R3-08** | Phase 3 | `macqwen/cache_tools.py` | nit | Claimed prefix-cache directory ownership lock (`_claim_directory`) during offline cache cleanup | `test_clean_cache_respects_directory_ownership_lock` | `fe4682a` | VERIFIED |
-| **R3-09** | Phase 3 | `macqwen/cache_tools.py` | nit | Added documented argument aliases `--cleanup` and `--target-disk-gb` in `argparse` | `test_cli_argument_aliases` | `fe4682a` | VERIFIED |
-| **R3-10** | Phase 4 | `macqwen/session.py` | pre_existing | Enforced `supervision.check` and bounded context/prefill limits on in-chat `/server` handler | `test_r3_10_server_requested_runs_supervision_check` | `9cac8f5` | VERIFIED |
+| **R3-05** | Phase 2 | `veystrix/sessions.py` | normal | Recorded all assistant turns in `ReasoningLedger` to maintain turn sequence alignment | `test_r3_05_reasoning_ledger_records_empty_thinking_turns` | `7f0da26` | VERIFIED |
+| **R3-06** | Phase 3 | `veystrix/cache_tools.py` | normal | Recomputed eligible leaves iteratively in `clean_cache` to prune full delta chains to budget | `test_clean_cache_iterative_leaf_pruning_on_delta_chains` | `fe4682a` | VERIFIED |
+| **R3-07** | Phase 4 | `veystrix/session.py` | normal | Enforced `min(tier.max_cold_prefill, env_cold)` in `_apply_tier()` | `test_r3_07_apply_tier_caps_cold_prefill` | `9cac8f5` | VERIFIED |
+| **R3-08** | Phase 3 | `veystrix/cache_tools.py` | nit | Claimed prefix-cache directory ownership lock (`_claim_directory`) during offline cache cleanup | `test_clean_cache_respects_directory_ownership_lock` | `fe4682a` | VERIFIED |
+| **R3-09** | Phase 3 | `veystrix/cache_tools.py` | nit | Added documented argument aliases `--cleanup` and `--target-disk-gb` in `argparse` | `test_cli_argument_aliases` | `fe4682a` | VERIFIED |
+| **R3-10** | Phase 4 | `veystrix/session.py` | pre_existing | Enforced `supervision.check` and bounded context/prefill limits on in-chat `/server` handler | `test_r3_10_server_requested_runs_supervision_check` | `9cac8f5` | VERIFIED |
 
 ---
 
@@ -133,14 +133,14 @@ All 30 findings across the three Ultra Reviews are categorized, implemented, tes
 
 | Test Suite | File Scope | Tests Executed | Passed | Failed | Errors |
 |---|---|---|---|---|---|
-| **MacQwen Protocol & Server** | `macqwen/tests` | 720 | 720 | 0 | 0 |
+| **Veystrix Protocol & Server** | `veystrix/tests` | 720 | 720 | 0 | 0 |
 | **FlashNext Core Unit** | `models/flashnext/tests/unit` | 1807 | 1804 (3 skipped) | 0 | 0 |
-| **Phase 2 Remediations** | `macqwen/tests/test_phase2_remediations.py` | 11 | 11 | 0 | 0 |
-| **Phase 3 Remediations** | `macqwen/tests/test_phase3_remediations.py` | 4 | 4 | 0 | 0 |
-| **Cache Tools Pruning** | `macqwen/tests/test_cache_tools.py` | 4 | 4 | 0 | 0 |
-| **Phase 4 Remediations** | `macqwen/tests/test_phase4_remediations.py` | 11 | 11 | 0 | 0 |
-| **Phase 5 Remediations** | `macqwen/tests/test_phase5_remediations.py` | 4 | 4 | 0 | 0 |
-| **Harness & Multi-Turn** | `macqwen/tests/test_qwen_code_client.py`, etc. | 38 | 38 | 0 | 0 |
+| **Phase 2 Remediations** | `veystrix/tests/test_phase2_remediations.py` | 11 | 11 | 0 | 0 |
+| **Phase 3 Remediations** | `veystrix/tests/test_phase3_remediations.py` | 4 | 4 | 0 | 0 |
+| **Cache Tools Pruning** | `veystrix/tests/test_cache_tools.py` | 4 | 4 | 0 | 0 |
+| **Phase 4 Remediations** | `veystrix/tests/test_phase4_remediations.py` | 11 | 11 | 0 | 0 |
+| **Phase 5 Remediations** | `veystrix/tests/test_phase5_remediations.py` | 4 | 4 | 0 | 0 |
+| **Harness & Multi-Turn** | `veystrix/tests/test_qwen_code_client.py`, etc. | 38 | 38 | 0 | 0 |
 | **Total** | | **2599** | **2596 (3 skipped)** | **0** | **0** |
 
 ---

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 import argparse
 import cProfile
 import hashlib
@@ -79,7 +79,7 @@ def checkpoint_info(requested: str) -> dict[str, Any]:
     except (OSError, TypeError, ValueError):
         path = Path(requested).expanduser()
         if not path.is_absolute():
-            path = Path(os.environ.get("MACQWEN_MODEL_ROOT", "~/models")) / path
+            path = Path(os.environ.get("VEYSTRIX_MODEL_ROOT", "~/models")) / path
         path = path.resolve()
     files = {}
     for name in ("config.json", "model.py", "model.safetensors.index.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja"):
@@ -323,7 +323,7 @@ def child_arm(*, checkpoint: str, arm_id: str, condition: str, options: dict[str
               "round": round_index, "status": "failed", "tokens": [],
               "token_digest": _digest([]), "error": None, "snapshots": {}, "windows": [], "seed": seed}
     try:
-        from macqwen.sampling import Sampling
+        from veystrix.sampling import Sampling
         from models.k2_horizon.backend import K2HorizonBackend
         system, user, tool_result, repeat_user = FIXTURES[fixture]
         constructor, effective_prefill_step = _constructor_options(options, prefill_step_size)
@@ -588,7 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     if "--child" in argv:
         return child_main(argv)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", default=os.environ.get("MACQWEN_K2_HORIZON_MODEL", "k2"))
+    parser.add_argument("--checkpoint", default=os.environ.get("VEYSTRIX_K2_HORIZON_MODEL", "k2"))
     parser.add_argument("--compare", choices=sorted(COMPARISONS), default="allocator")
     parser.add_argument("--jsonl")
     parser.add_argument("--fixture", choices=FIXTURES, default="context-2k")

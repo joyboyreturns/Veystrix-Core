@@ -7,11 +7,11 @@ import tempfile
 import unittest
 from unittest.mock import call, patch
 
-from macqwen.backends.base import (
+from veystrix.backends.base import (
     CANCELLABLE_PREFILL_STEP_SIZE,
     GenerationCancelled,
 )
-from macqwen.conversation import EXTRA_REASONING
+from veystrix.conversation import EXTRA_REASONING
 from mlx_lm.models.cache import KVCache, RotatingKVCache
 
 from models.bonsai2.backend import BonsaiBackend
@@ -1187,17 +1187,17 @@ class BackendTests(unittest.TestCase):
 
         backend, _tokenizer = self.backend()
         self.assertIsNone(backend.quantized_kv)
-        with patch.dict(os.environ, {"MACQWEN_BONSAI2_KV": "8"}):
+        with patch.dict(os.environ, {"VEYSTRIX_BONSAI2_KV": "8"}):
             backend, _tokenizer = self.backend()
             self.assertEqual(backend.quantized_kv, (8, 64))
-        with patch.dict(os.environ, {"MACQWEN_BONSAI2_KV": "4"}):
+        with patch.dict(os.environ, {"VEYSTRIX_BONSAI2_KV": "4"}):
             backend, _tokenizer = self.backend()
             self.assertEqual(backend.quantized_kv, (4, 64))
-        with patch.dict(os.environ, {"MACQWEN_BONSAI2_KV": "8"}):
+        with patch.dict(os.environ, {"VEYSTRIX_BONSAI2_KV": "8"}):
             backend, _tokenizer = self.backend(quantized_kv=(4, 64))
             self.assertEqual(backend.quantized_kv, (4, 64))
-        with patch.dict(os.environ, {"MACQWEN_BONSAI2_KV": "2"}):
-            with self.assertRaisesRegex(ValueError, "MACQWEN_BONSAI2_KV"):
+        with patch.dict(os.environ, {"VEYSTRIX_BONSAI2_KV": "2"}):
+            with self.assertRaisesRegex(ValueError, "VEYSTRIX_BONSAI2_KV"):
                 self.backend()
 
     def test_configure_reports_effective_runtime_and_kv_settings(self):
@@ -1452,7 +1452,7 @@ class BackendTests(unittest.TestCase):
 
 
 CHECKPOINT = Path(os.environ.get(
-    "MACQWEN_MODEL_ROOT", "~/models")).expanduser() / "Ternary-Bonsai-2-27B-mlx-2bit"
+    "VEYSTRIX_MODEL_ROOT", "~/models")).expanduser() / "Ternary-Bonsai-2-27B-mlx-2bit"
 
 
 def _needs_checkpoint(test):
@@ -1480,7 +1480,7 @@ class TemplateParityTests(unittest.TestCase):
 
     @_needs_checkpoint
     def test_second_user_turn_matches(self):
-        from macqwen.conversation import Conversation
+        from veystrix.conversation import Conversation
         from transformers import AutoTokenizer
 
         first = [
@@ -1501,7 +1501,7 @@ class TemplateParityTests(unittest.TestCase):
 
     @_needs_checkpoint
     def test_tool_results_match_in_each_count(self):
-        from macqwen.conversation import Conversation
+        from veystrix.conversation import Conversation
         from transformers import AutoTokenizer
 
         for count in (1, 3):
@@ -1530,7 +1530,7 @@ class TemplateParityTests(unittest.TestCase):
 
     @_needs_checkpoint
     def test_thinking_prefix_matches(self):
-        from macqwen.conversation import Conversation
+        from veystrix.conversation import Conversation
         from transformers import AutoTokenizer
 
         first = [

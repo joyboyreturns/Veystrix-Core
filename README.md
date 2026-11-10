@@ -3,10 +3,8 @@
 > **Private repository (`joyboyreturns/Veystrix-Core`).** Veystrix is proprietary freeware. This
 > repository holds the engine, the macOS app, internal documentation and the full development
 > history. The public home (README, releases, update feed, license) is
-> [`joyboyreturns/Veystrix`](https://github.com/joyboyreturns/Veystrix). Veystrix was formerly
-> named MACQWEN; historical documents and a few internal paths (`macqwen/`) keep the old name for
-> compatibility. See [docs/branding/MIGRATION.md](docs/branding/MIGRATION.md) and
-> [legal/LICENSE_PROVENANCE.md](legal/LICENSE_PROVENANCE.md).
+> [`joyboyreturns/Veystrix`](https://github.com/joyboyreturns/Veystrix). See
+> [legal/LICENSE_PROVENANCE.md](legal/LICENSE_PROVENANCE.md) for licensing status.
 
 Veystrix streams sparse Mixture-of-Experts language models from SSD on
 low-memory Apple Silicon Macs. The primary runtime keeps the dense model
@@ -114,7 +112,7 @@ hf download Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP \
 ```
 
 With exactly one compatible checkpoint installed, Veystrix selects it
-automatically. Set `VEYSTRIX_MODEL_ROOT` (legacy `MACQWEN_MODEL_ROOT` still works) when checkpoints live outside
+automatically. Set `VEYSTRIX_MODEL_ROOT` when checkpoints live outside
 `~/models`. A full path also works with `--checkpoint`, and the
 launcher validates the checkpoint before loading.
 
@@ -250,7 +248,7 @@ Localhost does not require authentication by default. A non-local bind
 requires a shared key:
 
 ```bash
-export VEYSTRIX_SERVER_API_KEY="PRIVATE_VALUE"   # legacy: MACQWEN_SERVER_API_KEY
+export VEYSTRIX_SERVER_API_KEY="PRIVATE_VALUE"
 ./chat.sh --server --host 0.0.0.0
 ```
 
@@ -279,15 +277,15 @@ state; keep them private.
 
 | Data | Default location |
 |---|---|
-| Preferences | `~/.veystrix/preferences.json` (copied once from `~/.macqwen/preferences.json`) |
-| API keys | `~/Library/Application Support/Veystrix/api_keys.json` (copied once from `.../MACQWEN/api_keys.json`) |
+| Preferences | `~/.veystrix/preferences.json` |
+| API keys | `~/Library/Application Support/Veystrix/api_keys.json` |
 | Flash-Next sessions | `~/.cache/flashnext/sessions/` |
 | K2-Horizon sessions | `~/.cache/k2-horizon/sessions/` |
 | Bonsai-2 sessions | `~/.cache/bonsai2/sessions/` |
 | Qwen3.8-27B sessions | `~/.frankenstein/sessions/` |
 
 The launcher uses `.venv` by default. Developers can provide a validated
-override with `VEYSTRIX_PYTHON` or a model-specific `VEYSTRIX_*_PYTHON` variable (the `MACQWEN_` names still work).
+override with `VEYSTRIX_PYTHON` or a model-specific `VEYSTRIX_*_PYTHON` variable.
 
 ## Troubleshooting
 
@@ -304,7 +302,7 @@ override with `VEYSTRIX_PYTHON` or a model-specific `VEYSTRIX_*_PYTHON` variable
 Run the shared unit tests:
 
 ```bash
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
 ```
 
 Run a runtime's unit tests with the same pattern, replacing `RUNTIME`:
@@ -341,8 +339,7 @@ packaging/                  engine bundle, macOS app/DMG/ZIP/appcast scripts, le
 integrations/hermes/        Hermes Agent profile configurator and offline mock server
 legal/, LICENSES/           freeware license draft, provenance, SBOM, third-party notices
 scripts/security/           secret scan and public-exposure audit
-veystrix/                   compatibility alias package for the legacy macqwen/ module
-macqwen/                    Shared chat, commands, settings, tools, and test engine
+veystrix/                    Shared chat, commands, settings, tools, and test engine
 tests/                      Project live-test terminal
 models/flashnext/           Flash-Next streaming runtime and benchmarks
 models/k2_horizon/          K2-Horizon runtime, adapter, settings, and tests
@@ -354,7 +351,7 @@ results/                    Per-run measurement records (one folder per run)
 
 ## License
 
-Veystrix is proprietary freeware; it is not open source as a whole. Code published earlier as MACQWEN under the MIT License keeps that license and notice (see LICENSE, LICENSES/, legal/). Models and dependencies use their
+Veystrix is proprietary freeware; it is not open source as a whole. Code published earlier as VEYSTRIX under the MIT License keeps that license and notice (see LICENSE, LICENSES/, legal/). Models and dependencies use their
 own licenses. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The Vontra
 checkpoint card carries the Qwen Community License 1.0; review it before
 use or redistribution.

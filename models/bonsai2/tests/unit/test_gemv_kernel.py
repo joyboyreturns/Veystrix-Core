@@ -33,7 +33,7 @@ class GemvKernelTests(unittest.TestCase):
 
     def test_matches_stock_on_production_shapes(self):
         checkpoint = Path(
-            os.environ.get("MACQWEN_MODEL_ROOT", "~/models")
+            os.environ.get("VEYSTRIX_MODEL_ROOT", "~/models")
         ).expanduser() / "Ternary-Bonsai-2-27B-mlx-2bit"
         if not (checkpoint / "model.safetensors").is_file():
             self.skipTest("needs the local Bonsai-2 checkpoint")
@@ -67,7 +67,7 @@ class GemvKernelTests(unittest.TestCase):
 
     def test_hook_routes_decode_calls_and_keeps_the_fallback(self):
         checkpoint = Path(
-            os.environ.get("MACQWEN_MODEL_ROOT", "~/models")
+            os.environ.get("VEYSTRIX_MODEL_ROOT", "~/models")
         ).expanduser() / "Ternary-Bonsai-2-27B-mlx-2bit"
         if not (checkpoint / "runtime" / "runtime.py").is_file():
             self.skipTest("needs the local Bonsai-2 checkpoint runtime")

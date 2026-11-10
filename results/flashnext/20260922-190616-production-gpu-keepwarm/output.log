@@ -15,4 +15,4 @@
   keepwarm vs baseline: +6.6% gen median
   matched paired two-SE band is 15.2%, too wide for a small-effect decision (mean +12.5%).
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-190616-production-gpu-keepwarm/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-190616-production-gpu-keepwarm/production.json

@@ -7,7 +7,7 @@ Audited 2026-11-10. Status key: **READY**, **PARTIAL**, **BLOCKED**, **OPEN** (n
 | Private core / public showcase split | READY | Core private (`Veystrix-Core`); public repo is a fresh history with no source. |
 | Freeware license text | PARTIAL | Draft v0.1 written (`legal/FREEWARE-LICENSE.txt`). Needs the owner's legal name, jurisdiction and a lawyer's review. |
 | MIT / third-party notices | PARTIAL | Generated and bundled (`THIRD_PARTY_NOTICES.md`, `Licenses/`). Upstream-copied passages need individual notices (provenance OPEN 4). |
-| Ownership of relicensed code | OPEN | **The first 204 commits appear to be by another person (`1architect` / `gioma`).** The owner can distribute the combined work as proprietary freeware only with the MIT notice kept, and must not describe that code as owner-authored (provenance OPEN 1, 2). Lawyer review recommended before announcing. |
+| Ownership of relicensed code | OPEN | **The first 204 commits appear to be by another person (the upstream author).** The owner can distribute the combined work as proprietary freeware only with the MIT notice kept, and must not describe that code as owner-authored (provenance OPEN 1, 2). Lawyer review recommended before announcing. |
 | AI-assisted authorship | OPEN | Provenance OPEN 3. |
 | Dependency licenses | PARTIAL | No GPL/AGPL found. MPL-2.0 (certifi, tqdm) needs notices; `opencv-python` bundles LGPL FFmpeg: **excluded from the engine bundle** (removed after install, asserted absent by `packaging/engine/smoke_import.py`, 2026-11-10); video-input features that need it are unavailable in the packaged app. |
 | SBOM | READY | SPDX 2.3 JSON generated (`legal/sbom.spdx.json`); regenerate at each release. |

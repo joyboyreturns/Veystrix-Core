@@ -18,7 +18,7 @@ the SSD cache was intact. That, not the server restart, was the slow first messa
 ## What changed (default `VEYSTRIX_EFFORT_PLACEMENT=late`)
 
 The server renders the template exactly as `medium` (no sentence, nothing prepended) and inserts the effort sentence as its own
-short **system turn right after the system message** (`macqwen/effort_slot.py`, `ModelService._with_effort_turn`):
+short **system turn right after the system message** (`veystrix/effort_slot.py`, `ModelService._with_effort_turn`):
 
 ```
 <|im_start|>system \n [tools block] [client system prompt] <|im_end|> \n          <- identical for every effort
@@ -64,7 +64,7 @@ nothing again). Two limits remain whatever the placement:
 
 ## Files
 
-`macqwen/effort_slot.py`, `macqwen/server.py` (`_with_effort_turn`, `_adopt`), tests `macqwen/tests/test_effort_slot.py` and
+`veystrix/effort_slot.py`, `veystrix/server.py` (`_with_effort_turn`, `_adopt`), tests `veystrix/tests/test_effort_slot.py` and
 `models/flashnext/tests/unit/test_prefix_session.py::EffortTurnSharingTests`. No change to the prefix cache itself.
 
 ## Real runs (live server, supervised, swap guard active, battery power 38-56%, Low Power Mode off)
@@ -102,7 +102,7 @@ Not done: a template-vs-late quality comparison on hard tasks; mid-conversation 
 
 DeepSeek Harness showed "Cache hit 0%, Uncached input 9,459 tok" even when the SSD cache restored almost the whole prompt: the
 server's `usage` carried no cache fields, and its `prompt_tokens` was only what the request had prefilled (e.g. 19 on a
-continued turn), not the prompt length. Every API now reports, from `macqwen/server.py` (`usage_counts`, `chat_usage`,
+continued turn), not the prompt length. Every API now reports, from `veystrix/server.py` (`usage_counts`, `chat_usage`,
 `responses_usage`, `anthropic_usage`):
 
 | API | fields |
@@ -112,5 +112,5 @@ continued turn), not the prompt length. Every API now reports, from `macqwen/ser
 | Anthropic Messages | `input_tokens` (uncached), `cache_read_input_tokens`, `cache_creation_input_tokens: 0` |
 
 `cached = prompt length - tokens prefilled by this request`, so it counts both the live conversation state and SSD snapshot
-restores. Tests: `macqwen/tests/test_usage_cache_fields.py`. A server started before this change keeps the old numbers until
+restores. Tests: `veystrix/tests/test_usage_cache_fields.py`. A server started before this change keeps the old numbers until
 restarted; the cache itself is unaffected by a restart.

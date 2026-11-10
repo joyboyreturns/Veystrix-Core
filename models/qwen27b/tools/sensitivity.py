@@ -37,7 +37,7 @@ WORK = Path.home() / ".frankenstein" / "v4"
 NOISE = 0.05            # relative Frobenius magnitude of the injected error
 BUCKETS = 4
 HELD_OUT = [
-    "macqwen/tools/repo_token_cache.py",
+    "veystrix/tools/repo_token_cache.py",
     "models/qwen27b/tools/speculative_prefill.py",
 ]
 

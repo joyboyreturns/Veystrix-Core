@@ -19,8 +19,8 @@ public struct HarnessSnippet: Equatable, Sendable {
 /// and nothing is sent anywhere. The model id and context numbers should come from the running engine's
 /// `GET /v1/models`; the defaults below match what the engine serves for the Flash-Next runtime.
 public enum HarnessProfiles {
-    /// The id the engine serves for the Flash-Next runtime (`macqwen-<model>`; the prefix is kept for client compatibility).
-    public static let defaultModelID = "macqwen-flashnext"
+    /// The id the engine serves for the Flash-Next runtime (`veystrix-<model>`).
+    public static let defaultModelID = "veystrix-flashnext"
     public static let defaultKeyEnv = "VEYSTRIX_API_KEY"
 
     public static func snippet(for harness: Harness, port: Int, modelID: String = defaultModelID,

@@ -7,19 +7,25 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[4] / "scripts" / "flashnext" / "safe_memory_preflight.sh"
 
+# The script's checkpoint gate only needs a directory holding config.json. A fixture keeps these tests independent of
+# whether a real checkpoint is installed on the machine that runs them (CI has none).
+_FIXTURE = tempfile.TemporaryDirectory()
+(Path(_FIXTURE.name) / "config.json").write_text("{}")
+CKPT = _FIXTURE.name
+
 
 class SafeMemoryPreflightTests(unittest.TestCase):
     def setUp(self):
         self.assertTrue(SCRIPT.exists(), f"Preflight script not found at {SCRIPT}")
 
     def test_help_option_returns_zero(self):
-        proc = subprocess.run([str(SCRIPT), "--help"], capture_output=True, text=True)
+        proc = subprocess.run([str(SCRIPT), "--checkpoint", CKPT, "--help"], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0)
         self.assertIn("safe_memory_preflight.sh", proc.stdout)
 
     def test_missing_checkpoint_fails_with_code_2(self):
         proc = subprocess.run(
-            [str(SCRIPT), "--checkpoint", "/nonexistent/checkpoint/path", "--json"],
+            [str(SCRIPT), "--checkpoint", CKPT, "--checkpoint", "/nonexistent/checkpoint/path", "--json"],
             capture_output=True, text=True
         )
         self.assertEqual(proc.returncode, 2)
@@ -31,7 +37,7 @@ class SafeMemoryPreflightTests(unittest.TestCase):
     def test_threshold_met_skips_purge_and_returns_ready(self):
         # Using a very low threshold (0.1 GB) should always pass on any functioning machine
         proc = subprocess.run(
-            [str(SCRIPT), "--threshold-gb", "0.1", "--json"],
+            [str(SCRIPT), "--checkpoint", CKPT, "--threshold-gb", "0.1", "--json"],
             capture_output=True, text=True
         )
         self.assertEqual(proc.returncode, 0)
@@ -45,7 +51,7 @@ class SafeMemoryPreflightTests(unittest.TestCase):
         # Using an impossibly high threshold (999.0 GB) in dry-run mode
         with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
             proc = subprocess.run(
-                [str(SCRIPT), "--threshold-gb", "999.0", "--force-purge", "--dry-run", "--json", "--state-file", tmp.name],
+                [str(SCRIPT), "--checkpoint", CKPT, "--threshold-gb", "999.0", "--force-purge", "--dry-run", "--json", "--state-file", tmp.name],
                 capture_output=True, text=True
             )
             self.assertEqual(proc.returncode, 1)
@@ -65,7 +71,7 @@ class SafeMemoryPreflightTests(unittest.TestCase):
 
         try:
             proc = subprocess.run(
-                [str(SCRIPT), "--threshold-gb", "999.0", "--force-purge", "--json", "--state-file", str(tmp_path)],
+                [str(SCRIPT), "--checkpoint", CKPT, "--threshold-gb", "999.0", "--force-purge", "--json", "--state-file", str(tmp_path)],
                 capture_output=True, text=True
             )
             self.assertEqual(proc.returncode, 1)
@@ -84,7 +90,7 @@ class SafeMemoryPreflightTests(unittest.TestCase):
 
         try:
             proc = subprocess.run(
-                [str(SCRIPT), "--threshold-gb", "999.0", "--force-purge", "--json", "--state-file", str(tmp_path)],
+                [str(SCRIPT), "--checkpoint", CKPT, "--threshold-gb", "999.0", "--force-purge", "--json", "--state-file", str(tmp_path)],
                 capture_output=True, text=True
             )
             self.assertEqual(proc.returncode, 1)
@@ -95,7 +101,7 @@ class SafeMemoryPreflightTests(unittest.TestCase):
             tmp_path.unlink(missing_ok=True)
 
     def test_json_structure_contains_all_diagnostic_fields(self):
-        proc = subprocess.run([str(SCRIPT), "--threshold-gb", "0.1", "--json"], capture_output=True, text=True)
+        proc = subprocess.run([str(SCRIPT), "--checkpoint", CKPT, "--threshold-gb", "0.1", "--json"], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0)
         data = json.loads(proc.stdout)
         for key in ("status", "gate_passed", "reason", "exit_code", "checkpoint",
@@ -109,7 +115,7 @@ class SafeMemoryPreflightTests(unittest.TestCase):
             self.assertIn(mem_key, init_mem)
 
     def test_low_memory_never_purges_without_explicit_request(self):
-        proc = subprocess.run([str(SCRIPT), "--threshold-gb", "999", "--json"],
+        proc = subprocess.run([str(SCRIPT), "--checkpoint", CKPT, "--threshold-gb", "999", "--json"],
                               capture_output=True, text=True)
         self.assertEqual(proc.returncode, 1)
         data = json.loads(proc.stdout)

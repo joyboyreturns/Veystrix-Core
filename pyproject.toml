@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "veystrix"
 version = "3.8.1.dev0"
-description = "Veystrix: local inference engine for Apple Silicon (formerly MACQWEN)"
+description = "Veystrix: local inference engine for Apple Silicon"
 readme = "README.md"
 requires-python = ">=3.12"
-# Proprietary freeware. The combined work still contains MIT-licensed code (copyright 1architect):
+# Proprietary freeware. The combined work still contains MIT-licensed code, whose notice must stay:
 # see LICENSE, LICENSES/ and legal/. Not open source as a whole.
 license = "LicenseRef-Veystrix-Freeware-Draft"
 license-files = ["LICENSE", "NOTICE", "LICENSES/*", "legal/FREEWARE-LICENSE.txt", "legal/THIRD_PARTY_NOTICES.md"]
-authors = [{ name = "Veystrix" }, { name = "1architect" }]
+authors = [{ name = "Veystrix" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: MacOS X",
@@ -31,12 +31,11 @@ dependencies = [
 ]
 
 [project.scripts]
-veystrix = "macqwen.cli:main"
-macqwen = "macqwen.cli:main"   # compatibility name; kept for existing scripts
+veystrix = "veystrix.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/joyboyreturns/Veystrix"
 Issues = "https://github.com/joyboyreturns/Veystrix/issues"
 
 [tool.setuptools.packages.find]
-include = ["macqwen*", "models*", "veystrix*"]
+include = ["veystrix*", "models*"]

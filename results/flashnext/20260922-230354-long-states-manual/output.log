@@ -22,4 +22,4 @@
   keepwarm     tok   64  3.03 tok/s   351.0 MB/tok  gpu state 14.98  pcpu state 18.88
   keepwarm     tok  128  2.88 tok/s   395.0 MB/tok  gpu state 14.99  pcpu state 18.95
   keepwarm: gen 2.926 tok/s, digest e19af44d5268e9d1
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-230354-long-states-manual/long-states.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-230354-long-states-manual/long-states.json

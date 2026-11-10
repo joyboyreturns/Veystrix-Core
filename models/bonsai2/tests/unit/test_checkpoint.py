@@ -38,8 +38,8 @@ class CheckpointTests(unittest.TestCase):
             root = Path(directory)
             expected = checkpoint(root)
             environment = {
-                "MACQWEN_MODEL_ROOT": str(root),
-                "MACQWEN_BONSAI2_MODEL": "",
+                "VEYSTRIX_MODEL_ROOT": str(root),
+                "VEYSTRIX_BONSAI2_MODEL": "",
             }
             with patch.dict(os.environ, environment, clear=False):
                 self.assertEqual(installed(), [expected])
@@ -52,7 +52,7 @@ class CheckpointTests(unittest.TestCase):
             root = Path(directory)
             expected = checkpoint(root)
             (expected / "runtime" / "codec.py").unlink()
-            with patch.dict(os.environ, {"MACQWEN_MODEL_ROOT": str(root)}, clear=False):
+            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
                 self.assertEqual(installed(), [])
                 with self.assertRaisesRegex(ValueError, "runtime/codec.py"):
                     resolve_bonsai2(expected)
@@ -123,8 +123,8 @@ class CheckpointTests(unittest.TestCase):
                 (runtime / filename).touch()
             (runtime / "runtime.py").write_text("class Packed:\n    pass\n")
             environment = {
-                "MACQWEN_MODEL_ROOT": str(root),
-                "MACQWEN_BONSAI2_MODEL": "",
+                "VEYSTRIX_MODEL_ROOT": str(root),
+                "VEYSTRIX_BONSAI2_MODEL": "",
             }
             with patch.dict(os.environ, environment, clear=False):
                 self.assertEqual(installed(), [path])

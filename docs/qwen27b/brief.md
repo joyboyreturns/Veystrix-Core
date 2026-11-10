@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runtime explores dense and hybrid Qwen inference on a 16 GB Apple Silicon Mac. It established the first MACQWEN memory and context
+This runtime explores dense and hybrid Qwen inference on a 16 GB Apple Silicon Mac. It established the first VEYSTRIX memory and context
 techniques.
 
 ## Model
@@ -25,7 +25,7 @@ resident memory.
 ## Limits
 
 The runtime uses the managed `.venv` by default. A validated
-`MACQWEN_QWEN27B_PYTHON` override is available for kernel-specific work.
+`VEYSTRIX_QWEN27B_PYTHON` override is available for kernel-specific work.
 Builds above about 12.6 GB resident memory caused swap and large generation
 losses on the tested machine.
 

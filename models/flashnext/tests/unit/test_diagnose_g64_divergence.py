@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 
 from models.flashnext.tests.bench.diagnose_g64_divergence import G64DivergenceProbe
-from macqwen.testsuite.catalog import build_catalog
+from veystrix.testsuite.catalog import build_catalog
 
 
 class G64DivergenceProbeTests(unittest.TestCase):

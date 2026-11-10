@@ -28,7 +28,7 @@ round 2 baseline           1007 tok   48.23 s   20.88 tok/s   50.36 GB  1.04 GB/
   ]
  }
 }
-wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-224917-prefill-io-manual/prefill-io.json
+wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-224917-prefill-io-manual/prefill-io.json
 exit=0
 === glue at P15 (inject only)
   system load average before: (3.9853515625, 5.80126953125, 5.86279296875)
@@ -49,7 +49,7 @@ exit=0
   compiled vs baseline: +1.1% gen median
   paired mean effect +0.9% is inside the matched paired two-SE band of 1.6 percent, so this remains unresolved.
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-225410-bench-production-manual/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-225410-bench-production-manual/production.json
 exit=0
 === keepwarm at 8 pins, 7 arms
   system load average before: (8.21728515625, 7.35107421875, 6.5732421875)
@@ -69,6 +69,6 @@ exit=0
   keepwarm vs baseline: -8.9% gen median
   matched paired two-SE band is 19.0%, too wide for a small-effect decision (mean -3.3%).
 
-  wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-225839-bench-production-manual/production.json
+  wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-225839-bench-production-manual/production.json
 exit=0
 === BATCH DONE

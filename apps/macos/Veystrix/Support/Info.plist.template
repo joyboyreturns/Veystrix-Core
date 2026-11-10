@@ -17,7 +17,7 @@
     <key>LSMinimumSystemVersion</key><string>@MIN_MACOS@</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSHumanReadableCopyright</key><string>Veystrix freeware. Contains MIT-licensed code (copyright 1architect) and third-party components; see Resources/THIRD_PARTY_NOTICES.md.</string>
+    <key>NSHumanReadableCopyright</key><string>Veystrix freeware. Contains MIT-licensed code and third-party components; see Resources/THIRD_PARTY_NOTICES.md.</string>
     <!-- The app talks only to 127.0.0.1 (the local engine). -->
     <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 

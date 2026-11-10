@@ -10,7 +10,7 @@ constant or the default runtime environment.
 """
 from __future__ import annotations
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 
 import argparse
 from contextlib import contextmanager
@@ -189,7 +189,7 @@ class G64DivergenceProbe:
 
 def run_diagnostic(checkpoint: str, output_dir: str, prompt: str, tokens: int) -> G64DivergenceProbe:
     """Run a short greedy decode with one loaded reference model."""
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
     from models.flashnext import metal_runtime
 
     # The readiness gate remains false in production. This local, scoped
