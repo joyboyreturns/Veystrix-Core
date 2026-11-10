@@ -73,6 +73,13 @@ def build_checkpoint(directory):
         json.dump({"weight_map": {key: shard for key in tensors}}, out)
 
 
+_REAL_METAL_LIMIT = prefill_ring.metal_working_set_limit
+# The ring is only granted when the machine's Metal working-set limit has room for it, so on a small
+# runner these tests got no ring at all. Tests that exercise the admission arithmetic patch the limit
+# themselves; everything else gets this fixed, generous one and no longer depends on the machine.
+TEST_WORKING_SET_LIMIT = 64 * 2**30
+
+
 class RingCase(unittest.TestCase):
     """Builds the store, pool and two streamed layers once per test."""
 
@@ -100,6 +107,10 @@ class RingCase(unittest.TestCase):
             {**ENV, "FLASHNEXT_EXPERT_POOL_GB": self.pool_gb, **self.extra_env})
         patcher.start()
         self.addCleanup(patcher.stop)
+        limit_patch = mock.patch.object(
+            prefill_ring, "metal_working_set_limit", return_value=TEST_WORKING_SET_LIMIT)
+        limit_patch.start()
+        self.addCleanup(limit_patch.stop)
         self.store = SafeTensorStore(self.directory.name)
         self.addCleanup(self.store.close)
         self.layers = [
@@ -547,7 +558,7 @@ class AcquireTests(RingCase):
         self.assertEqual(self.reason(), "no streamed layers")
 
     def test_real_device_reports_a_working_set_limit(self):
-        limit = prefill_ring.metal_working_set_limit()
+        limit = _REAL_METAL_LIMIT()
         self.assertTrue(limit is None or limit > 1_000_000_000)
 
     def test_bad_flag_values_raise(self):
