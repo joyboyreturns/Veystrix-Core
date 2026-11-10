@@ -47,6 +47,23 @@ def inspect_checkpoint(path: str | Path) -> dict:
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigurationError(f"cannot read checkpoint config: {exc}") from exc
     validate_config(config)
+    index_path = root / "model.safetensors.index.json"
+    missing = []
+    try:
+        if index_path.stat().st_size > 32 * 1024 * 1024:
+            raise ConfigurationError("checkpoint index is unexpectedly large")
+        index = json.loads(index_path.read_text())
+        weight_map = index.get("weight_map")
+        if not isinstance(weight_map, dict) or not weight_map:
+            raise ConfigurationError("checkpoint index has no weight map")
+        for name in set(weight_map.values()):
+            if not isinstance(name, str) or not name.endswith(".safetensors") or Path(name).name != name or name.startswith(".") or "\\" in name:
+                raise ConfigurationError("checkpoint index contains an unsafe shard name")
+            if not (root / name).is_file():
+                missing.append(name)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ConfigurationError(f"cannot read checkpoint index: {exc}") from exc
     return {"model": MODEL_ID, "layers": len(config["layers_block_type"]),
-            "architecture": config["model_type"], "inference_ready": False,
+            "architecture": config["model_type"], "quantization": config.get("quantization"),
+            "checkpoint_complete": not missing, "missing_shards": sorted(missing), "inference_ready": False,
             "reason": "SSD expert streaming and real-checkpoint loader are not implemented"}

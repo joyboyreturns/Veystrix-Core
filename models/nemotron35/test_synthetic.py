@@ -238,7 +238,21 @@ class StreamingExpertsTests(unittest.TestCase):
             hybrid = StreamingHybrid(model.args, lambda layer: streamed)
             # No upstream resident SwitchMLP or routed expert weight arrays are constructed.
             self.assertEqual([layer.kind for layer in hybrid.layers], ["M", "*", "E"])
-            hybrid.layers[2].mixer.gate.weight = mx.random.normal((4, 32)) * 0.1
+            # Share dense parameters with the upstream reference so this is an
+            # apples-to-apples check of the hybrid composition, not two random models.
+            hybrid.embeddings = model.backbone.embeddings
+            hybrid.norm_f = model.backbone.norm_f
+            hybrid.lm_head = model.lm_head
+            for i in range(3):
+                hybrid.layers[i].norm = model.backbone.layers[i].norm
+            for i in (0, 1):
+                hybrid.layers[i].mixer = model.backbone.layers[i].mixer
+            hybrid.layers[2].mixer.gate = model.backbone.layers[2].mixer.gate
+            hybrid.layers[2].mixer.shared = model.backbone.layers[2].mixer.shared_experts
+            baseline = model(tokens, cache=model.make_cache())
+            candidate = hybrid(tokens, cache=hybrid.make_cache())
+            mx.eval(baseline, candidate)
+            np.testing.assert_array_equal(np.asarray(baseline), np.asarray(candidate))
             first_cache, second_cache = hybrid.make_cache(), hybrid.make_cache()
             first = hybrid(tokens, cache=first_cache)
             second = mx.concatenate([hybrid(tokens[:, i:i+1], cache=second_cache) for i in range(4)], axis=1)
@@ -407,3 +421,57 @@ class AffineCheckpointIndexTests(unittest.TestCase):
                     self.assertEqual(tensor.dtype, got.dtype)
                     mx.eval(tensor, got)
                     np.testing.assert_array_equal(np.asarray(tensor.astype(mx.float32)), np.asarray(got.astype(mx.float32)))
+
+class StackedCheckpointTests(unittest.TestCase):
+    def test_selective_slice_and_streamed_compute(self):
+        import json, tempfile
+        from pathlib import Path
+        from .affine_index import StackedAffineExpertIndex
+        from .streaming_moe import IndexedAffineExperts
+        import mlx.nn as nn
+        rng = np.random.default_rng(42)
+        fields = {}
+        weights = {}
+        for projection in ('fc1', 'fc2'):
+            rows = [mx.array(rng.normal(size=(32, 32)).astype(np.float32) / 5).astype(mx.bfloat16) for _ in range(3)]
+            packed = [mx.quantize(row, group_size=32, bits=4) for row in rows]
+            for j, part in enumerate(('weight', 'scales', 'biases')):
+                value = mx.stack([q[j] for q in packed])
+                fields[f'backbone.layers.1.mixer.switch_mlp.{projection}.{part}'] = value
+                weights[projection, part] = value
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            mx.save_safetensors(str(root / 'shard.safetensors'), fields)
+            (root / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {key: 'shard.safetensors' for key in fields}}))
+            index = StackedAffineExpertIndex(root, hidden_dim=32, intermediate_dim=32, expert_count=3, group_size=32)
+            self.assertEqual(index.validate_inventory([1], 3)['experts'], 3)
+            for expert in range(3):
+                arrays = index.read(1, expert)
+                for proj, name in (('fc1','up_proj'), ('fc2','down_proj')):
+                    for part in ('weight', 'scales', 'biases'):
+                        got, expected = arrays[f'{name}.{part}'], weights[proj, part][expert]
+                        mx.eval(got, expected)
+                        np.testing.assert_array_equal(np.asarray(got.astype(mx.float32)), np.asarray(expected.astype(mx.float32)))
+            indexed = IndexedAffineExperts(index, layer=1, max_resident_bytes=100000)
+            x = mx.ones((1, 2, 32), dtype=mx.bfloat16)
+            actual = indexed(x, mx.array([[[1, 2], [2, 0]]]))
+            self.assertEqual(actual.shape, (1, 2, 2, 32))
+            mx.eval(actual)
+            self.assertEqual((indexed.misses, indexed.hits), (3, 1))
+
+class CheckpointCompletenessTests(unittest.TestCase):
+    def test_missing_shard_is_reported_without_loading_weights(self):
+        import json, tempfile
+        from pathlib import Path
+        from .config import EXPECTED, LAYER_ORDER, inspect_checkpoint, ConfigurationError
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root)
+            (path / 'config.json').write_text(json.dumps(dict(EXPECTED, layers_block_type=list(LAYER_ORDER))))
+            (path / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {'x': 'part.safetensors'}}))
+            report = inspect_checkpoint(path)
+            self.assertFalse(report['checkpoint_complete'])
+            self.assertEqual(report['missing_shards'], ['part.safetensors'])
+            self.assertFalse(report['inference_ready'])
+            (path / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {'x': '../outside.safetensors'}}))
+            with self.assertRaisesRegex(ConfigurationError, 'unsafe'):
+                inspect_checkpoint(path)
