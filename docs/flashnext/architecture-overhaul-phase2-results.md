@@ -16,6 +16,16 @@ On the settled offline tree, `.venv/bin/python -m unittest discover -s models/fl
 
 After the full-routing correction and watchdog review, the same commands ran 1,791 FlashNext tests (3 skipped) and 689 MacQwen tests, both exit 0. A subsequent test-only isolation change was followed by 78 focused prefix, routing, smoke-gate and one-sync tests, all passing. The full-routing unit test checks ten distinct expert IDs for synthetic one-row and multi-row inputs. It does not replace a real-checkpoint exactness gate.
 
+## Claude Code session, 2026-11-10: first real full-routing evidence
+
+Commit `0071fb2` (offline: 1,803 FlashNext tests with 3 skipped, 690 MacQwen, both exit 0). The owner allowed battery operation; every arm records source and charge.
+
+**Full top-10 routing is confirmed on the real checkpoint through the supervised launcher.** Command: `.venv/bin/python -m models.flashnext.tests.bench.bench_decode_profile --source-tokens 100 --tokens 24 --arms io --power-rules battery-ok --settle 30`, results in `results/flashnext/20261110-115952-decode-profile-manual/`. Chunk-major reference, pool 2 GB, threshold 1.0, 2,239-token prompt, battery 72% → 71% discharging, Low Power Mode off, swap flat at 853.5 MiB for all 21 safety samples. All 1,152 recorded layer calls (24 tokens × 48 layers) routed exactly 10 distinct experts; the old pruned trace had 4–9. This confirms the setting reaches the model. It does not by itself verify logits against an independent full-routing reference.
+
+Diagnostic (profiled arm; not a speed result, one arm, no resolution band): decode 2.08 tok/s, median 439 ms/token; host-measured `io_wait` 352 ms/token, `router_sync` 49.5 ms/token (overlapping host timers, not GPU time); about 1.09 GB/token of process physical reads over 23 later tokens (includes housekeeping; the pruned-routing figure was about 0.73 GB/token, a different run); 2,239-token prefill took 63.5 s (about 35 tok/s, profiled, chunk-major). The optional pool I/O counters were not instrumented on this path (`expert_io_available: false`), so cache hits are not reported.
+
+Uncommitted-work review outcomes: the oversized-pool fallback streams every routed expert in original order and leaves the pool untouched (the G32 cast is a no-op on bf16 executor output); `bench_phase2_after_turns.py` now has an explicit `--power-rules battery-ok` mode with a charge floor (default 40%, never below 25%), a pre-8K power recheck and recorded power rules. Its own headroom estimate refused the 8K request at 7.9 GB available versus about 11.5 GB required before any purge, which is a valid safe refusal. Synthetic tests only; the 8K-after-turns gate has not run.
+
 ## Performance
 
 These are prior recorded results on this checkpoint, not new Phase II measurements. Conditions and raw arms are in [overnight-architecture-results.md](overnight-architecture-results.md). The new code has no measured throughput claim.

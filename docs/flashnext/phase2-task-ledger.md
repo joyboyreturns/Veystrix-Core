@@ -17,3 +17,10 @@ The default threshold is now 1.0 and the supervised paired harness passes it exp
 Existing physical measurements are in `overnight-architecture-results.md` and `results/flashnext/`. They are historical evidence, not phase II measurements. No new throughput claim should be made without the prescribed exactness-gated paired measurements.
 
 Regression commands: `.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'` and the same command with `-s models/flashnext/tests/unit`. Use `-t .`: it loads the MacQwen test package's temporary warm-cache isolation. The unqualified initial run did not do so and failed the corresponding isolation assertion; an initial FlashNext run overlapped source edits and was invalid. On the settled tree MacQwen ran 686 successfully and FlashNext ran 1,779 successfully with 3 skipped (both exit 0).
+
+## 2026-11-10 Claude Code session
+
+- [x] Recover and review interrupted work; committed as `0071fb2`. Offline suites: 1,803 FlashNext (3 skipped), 690 MacQwen, exit 0.
+- [x] Battery-allowed mode for the after-turns harness (explicit flag, 40% default floor, recorded).
+- [x] Real-checkpoint full-routing confirmation: 1,152/1,152 layer calls routed 10 distinct experts (`results/flashnext/20261110-115952-decode-profile-manual/`). Prefix-profile invalidation against the real model is still synthetic-only.
+- [ ] Open: full-routing paired baseline with exactness gates, 8K-after-turns safety gate, decode timeline and optimization, speculation, 16K, API/client validation, final documentation.
