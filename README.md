@@ -18,6 +18,27 @@ smaller than the primary MoE) are
 supported for comparison and research, but they are not the project's
 focus. Everything below leads with the streamed MoE runtime.
 
+## Current status (evidence recorded 2026-11-08, one machine)
+
+Merged from the `docs/chat-agentic-guides-20261108` branch. The `--mode chat|agentic` launcher and the supervised
+`./serve.sh` are present in this tree; the 2026-11-08 "unpublished working tree" warning no longer applies to this
+repository (it applied to the old public MIT repository).
+
+| Capability | Evidence | Status |
+|---|---|---|
+| Q4 checkpoint loading and token generation | Real 113 GB checkpoint on M4 MacBook Air | Demonstrated |
+| Personal multi-turn CHAT with `--pool-gb 0` | Five completed responses; ~2.7-3.0 decode tokens/sec | Works on the development machine |
+| CHAT with a fixed 2 GB decode expert pool | Compressor/available-memory guard stopped the first answer | Not recommended as an initial setting |
+| CHAT auto-purge | Startup recovery executed; no OS purge during inference | Experimental |
+| Balanced 2,048-token prefill | Historical 2K full-model run ~61-64 prefill tokens/sec | Preliminary, specific workload |
+| Same-plan 2K prefix caching | 2,046-token RAM/SSD restores; identical 64-token continuation and 124 state tensors | Validated in isolated full-model experiments |
+| AGENTIC API server + harnesses | Protocol and mock-server tests pass offline (Hermes CLI, Qwen Code); real-model harness runs are not complete | End-to-end on the real checkpoint **unverified** |
+| 4K / 8K / 10K+ long-context operation | See [docs/flashnext/](docs/flashnext/) status files; layer-major runs are preliminary and opt-in | Not verified as a long-lived server |
+
+Data are from a single machine and selected runs; they do not establish general performance or guarantee no quality
+regression. Public performance claims live in the public repository's `docs/performance.md` and only include full
+top-10 routing results.
+
 ## Primary runtime: Flash-Next (SSD-streamed sparse MoE)
 
 | Item | Value |
@@ -34,7 +55,7 @@ needs. `exact-quality` is the normal routing profile; the other profiles
 (`standard`, `cache-aware`, `fast-quality`, `fused-quality`) are research
 controls — see the [Flash-Next brief](docs/flashnext/brief.md).
 
-Current chat defaults live in `models/flashnext/settings/launch.py`:
+Current chat defaults live in `models/flashnext/settings/launch.py` (`launch.py` still sets `FLASHNEXT_EXPERT_POOL_GB=6`, promoted 2026-09-23 from pool measurements; the 2026-11-08 real CHAT runs found a 2 GB pool tripping the memory guard on this 16 GB Mac, so pass `--pool-gb 0` explicitly and see the memory guidance under Quick start):
 Metal runtime, a 6 GB application-owned expert pool read in place by the
 Metal kernels (it replaces the static slab pack and the expert pins),
 GPU keep-warm on, one host sync per decode layer, compiled GatedDeltaNet
@@ -76,9 +97,12 @@ than longer answers. Evidence: [results/flashnext/](results/flashnext/)
 
 ## Quick start
 
-Requirements: Apple Silicon Mac, Python 3.12, a fast SSD, ~120 GB free
-for the checkpoint, and about 10 GB of free memory for the default
-Flash-Next chat (about 3.4 GB model core plus the 6 GB expert pool).
+Requirements: Apple Silicon Mac, Python 3.12, a fast SSD, ~120 GB free for the checkpoint. The startup memory
+check requires **9 GiB (9,663,676,416 bytes)** available; the runtime guards have separate, lower floors and a
+conditional compressor-growth stop. On a 16 GB Mac the optional decode expert pool is the main memory lever: pool-off
+(`--pool-gb 0`) completed real multi-turn chat, while a fixed 2 GB pool tripped the guard in one run. Do not enable a
+6 GB pool just because older text recommends it. Prefer the supervised launcher (`./serve.sh`, see
+[docs/MANUAL_LAUNCH.md](docs/MANUAL_LAUNCH.md)); an unsupervised direct launch once froze the Mac.
 
 ```bash
 git clone https://github.com/joyboyreturns/Veystrix-Core.git   # private; needs access
@@ -166,6 +190,43 @@ Use `/status` for model, profile, routing, context, and memory
 information. Flash-Next extras: `/config model gpu-keepwarm off`
 disables keep-warm and saves the choice. Use
 `/config display animate off` to disable output animation.
+
+## CHAT and AGENTIC modes, memory and cache safety
+
+```bash
+./chat.sh --mode chat --pool-gb 0 --auto-purge     # personal interactive use, one process keeps conversation state
+./chat.sh --mode agentic                           # local API for coding agents (127.0.0.1:8080); supervised: ./serve.sh
+```
+
+* `--auto-purge` enables conditional macOS file-cache recovery at startup/idle only, when authorized by a narrow
+  `sudo -n /usr/sbin/purge` permission; it never runs during inference (purging can hurt SSD-streaming speed).
+  "Cached Files" in Activity Monitor is reclaimable, not permanently unavailable RAM.
+* Interactive commands: `/help`, `/new` or `/reset`, `/session`, `/status`, `/quit`. Use only commands the running
+  version confirms with `/help`.
+* The server speaks OpenAI Chat Completions (`POST /v1/chat/completions`), OpenAI Responses (`/v1/responses`) and
+  Anthropic Messages (`/v1/messages`). An endpoint list is not proof a harness works: check its request protocol,
+  model name, tool-call encoding, streaming and cancellation. Never expose the server without authentication.
+* Acceptance gates before calling AGENTIC "ready": protocol compatibility, exact tool schema and arguments, same-plan
+  cached/uncached state equality, multi-turn tool results, no progressive memory growth, cancellation, error
+  handling, and guarded operation on the full checkpoint. See
+  [docs/flashnext/agentic-validation.md](docs/flashnext/agentic-validation.md).
+* Prefix-cache snapshots must match exact tokens, checkpoint/configuration identity and prefill chunk-plan history; a
+  cache miss is preferable to reused incorrect state. Keep protected active/ancestor snapshots, checksum/manifest
+  validation, GPU ownership and the resource guards intact. Never prune experts; routing, quantization and weights
+  stay unchanged by cache and scheduling work.
+
+## The Veystrix app and releases
+
+* `apps/macos/Veystrix`: native SwiftUI app (dashboard, explicit Start/Stop/Restart, model-folder validation without
+  reading weights, harness settings for Hermes / Qwen Code / DeepSeek Harness / OpenAI-compatible clients, logs and
+  sanitized diagnostics). It never loads a model on launch.
+* Build: `packaging/engine/build_engine_bundle.sh` then `packaging/macos/make_release.sh --engine dist/engine`.
+  Produces `Veystrix-<ver>-arm64.dmg` and `.zip`, `SHA256SUMS.txt` and `BUILD-INFO.txt`.
+* **Free channel (default, no Apple membership):** ad-hoc signed, not notarized; macOS Gatekeeper warns on first open.
+  **Developer ID channel (ready, not activated):** signing + notarization + the same Sparkle EdDSA update feed when
+  credentials exist. See [docs/release/FREE_CHANNEL.md](docs/release/FREE_CHANNEL.md) and
+  [docs/release/RELEASE_PROCESS.md](docs/release/RELEASE_PROCESS.md).
+* Public repository (README, releases, update feed): https://github.com/joyboyreturns/Veystrix. This repo is private.
 
 ## Local API server
 
@@ -261,7 +322,11 @@ running experiments. Do not run benchmarks without approval of the plan.
 ## Documentation and layout
 
 The [documentation index](docs/README.md) lists the current component
-documents. Each active runtime follows the same structure:
+documents. Release, packaging, security and
+launch guides: [release process](docs/release/RELEASE_PROCESS.md), [free channel](docs/release/FREE_CHANNEL.md),
+[validation status](docs/release/VALIDATION.md), [packaging](docs/packaging/PACKAGING.md),
+[security audit](docs/security/SECURITY_AUDIT_2026-11-10.md), [manual launch](docs/MANUAL_LAUNCH.md),
+[Hermes integration](integrations/hermes/README.md), [AGENTIC validation](docs/flashnext/agentic-validation.md). Each active runtime follows the same structure:
 
 - `brief.md`: purpose, scope, status, and main results;
 - `research.md`: dated measurements, decisions, and rejected approaches;
@@ -271,6 +336,12 @@ Historical records are in [docs/archive](docs/archive/README.md). They preserve
 provenance and may contain obsolete commands.
 
 ```text
+apps/macos/Veystrix/        Native SwiftUI app (VeystrixKit logic + UI + Sparkle)
+packaging/                  engine bundle, macOS app/DMG/ZIP/appcast scripts, legal generators
+integrations/hermes/        Hermes Agent profile configurator and offline mock server
+legal/, LICENSES/           freeware license draft, provenance, SBOM, third-party notices
+scripts/security/           secret scan and public-exposure audit
+veystrix/                   compatibility alias package for the legacy macqwen/ module
 macqwen/                    Shared chat, commands, settings, tools, and test engine
 tests/                      Project live-test terminal
 models/flashnext/           Flash-Next streaming runtime and benchmarks

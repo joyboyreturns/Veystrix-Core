@@ -21,9 +21,13 @@ Licensor as an "Official Build" at
 https://github.com/joyboyreturns/Veystrix/releases, including any update the
 Licensor publishes through the application's update feed.
 
-"Official Build" means a file published by the Licensor at the address above,
-whose SHA-256 checksum matches the checksum the Licensor published for it and
-whose code signature verifies against the Licensor's Developer ID.
+"Official Build" means a file published by the Licensor at the address above
+whose SHA-256 checksum matches the checksum the Licensor published for it. When
+the release notes state that a build is signed with the Licensor's Developer ID
+and notarized by Apple, its code signature must also verify. A build that the
+release notes describe as "free build, not notarized" is signed ad hoc and is an
+Official Build on the strength of its checksum alone; macOS will warn when you
+first open it.
 
 "Model Checkpoint" means a machine-learning model, weights or tokenizer that you
 obtain from anyone other than the Licensor. Model Checkpoints are not part of
@@ -45,8 +49,8 @@ Software. The Software is designed to run fully offline once installed.
 3. REDISTRIBUTION
 
 You may share an Official Build with others only if ALL of the following hold:
-(a) the file is unmodified, byte for byte, and its checksum and code signature
-still verify;
+(a) the file is unmodified, byte for byte, and its checksum (and, for builds
+described as Developer ID signed, its code signature) still verifies;
 (b) You provide it free of charge, with no fee, subscription, advertising,
 bundle, donation wall or other consideration tied to it; and
 (c) You keep this agreement and THIRD_PARTY_NOTICES.md with it, and tell the
@@ -68,8 +72,8 @@ or access to either, or include the Software in a paid product or paid
 collection;
 (d) remove or alter copyright, license, attribution or update-signature
 notices;
-(e) disable, bypass or forge the code-signature or update-signature checks in
-order to distribute or install an altered build; or
+(e) disable, bypass or forge the checksum, code-signature or update-signature
+checks in order to distribute or install an altered build; or
 (f) distribute the Software in a manner that violates export-control or other
 laws that apply to You.
 

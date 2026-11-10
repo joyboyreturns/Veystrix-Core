@@ -1,15 +1,17 @@
 # Release process (private repo -> public Releases)
 
-Status 2026-11-10: **no public release has been made.** Everything below that needs credentials is blocked until
-the owner provides them. Nothing here is simulated.
+Status 2026-11-10: **no public release has been made.** The owner decided Veystrix ships first as a **free app with no
+Apple Developer Program membership** (see [FREE_CHANNEL.md](FREE_CHANNEL.md)). Sections marked *Developer ID only*
+below are ready but not activated; the free channel needs only the Sparkle key (generated) and, to publish from CI,
+the public-repo token. Nothing here is simulated.
 
 ## One-time owner setup
 
-1. **Apple Developer Program** membership. Create a *Developer ID Application* certificate (Xcode > Settings >
+1. *(Developer ID only)* **Apple Developer Program** membership. Create a *Developer ID Application* certificate (Xcode > Settings >
    Accounts > Manage Certificates, or developer.apple.com). Export it as a `.p12` with a strong password.
-2. **Notarization credentials**: an app-specific password (appleid.apple.com) or an App Store Connect API key.
+2. *(Developer ID only)* **Notarization credentials**: an app-specific password (appleid.apple.com) or an App Store Connect API key.
    Locally: `xcrun notarytool store-credentials VEYSTRIX_NOTARY --apple-id <id> --team-id <TEAMID> --password <app-specific>`.
-3. **Sparkle EdDSA keys**: run Sparkle's `generate_keys` once on the owner's Mac (private key goes to the login
+3. **Sparkle EdDSA keys** (DONE 2026-11-10; public key tracked in `packaging/macos/sparkle_public_key.txt`): run Sparkle's `generate_keys` once on the owner's Mac (private key goes to the login
    keychain). `generate_keys -p` prints the public key: set it as `VEYSTRIX_SPARKLE_PUBLIC_KEY` (it is compiled into
    `Info.plist`). Export the private key with `generate_keys -x file` into a password manager; never into Git.
    **Losing it means existing installs can never be updated.**
@@ -39,4 +41,4 @@ the owner provides them. Nothing here is simulated.
 
 `packaging/engine/build_engine_bundle.sh dist/engine`, then
 `VEYSTRIX_SIGN_IDENTITY="Developer ID Application: …" VEYSTRIX_SPARKLE_PUBLIC_KEY=… packaging/macos/make_release.sh --engine dist/engine --notarize`.
-Without the identity the output is named `*-DEV-UNSIGNED*` and the script says public distribution is blocked.
+Without the identity you get the free channel (same file names, `BUILD-INFO.txt` says ad-hoc / not notarized).

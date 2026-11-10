@@ -104,16 +104,42 @@ class AppcastTests(unittest.TestCase):
             self.assertEqual(va.validate(feed, {"github.com"}), [])
 
 
-class DevelopmentBuildGuardTests(unittest.TestCase):
-    def run_script(self, *args):
+class FreeChannelTests(unittest.TestCase):
+    """No Apple Developer membership is required: the default is the free (ad-hoc, not notarized) channel."""
+
+    def run_script(self, *args, extra_env=None):
         env = {k: v for k, v in os.environ.items() if not k.startswith("VEYSTRIX_")}
+        env.update(extra_env or {})
         return subprocess.run(["bash", *args], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
 
-    def test_notarize_and_appcast_refuse_development_builds(self):
-        for script, extra in (("packaging/macos/notarize.sh", ["x.dmg"]), ("packaging/macos/make_appcast.sh", [tempfile.gettempdir(), "v0.0.0"])):
+    def test_default_channel_is_free_and_names_do_not_depend_on_signing(self):
+        r = self.run_script("-c", 'source packaging/macos/common.sh; echo "$(channel)|$(artifact_suffix)|$SHORT_VERSION"')
+        channel, suffix, version = r.stdout.strip().splitlines()[-1].split("|")
+        self.assertEqual((channel, suffix), ("free", ""), r.stderr)
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        r = self.run_script("-c", 'source packaging/macos/common.sh; channel', extra_env={"VEYSTRIX_SIGN_IDENTITY": "Developer ID Application: X (T)"})
+        self.assertEqual(r.stdout.strip().splitlines()[-1], "developer-id")
+
+    def test_notarization_is_refused_without_an_identity_with_a_clear_message(self):
+        for script, extra in (("packaging/macos/notarize.sh", ["x.dmg"]), ("packaging/macos/make_release.sh", ["--notarize"])):
             r = self.run_script(script, *extra)
             self.assertNotEqual(r.returncode, 0, script)
-            self.assertIn("BLOCKED", r.stderr, script)
+            self.assertTrue("free channel" in r.stderr or "without --notarize" in r.stderr, r.stderr)
+
+    def test_sparkle_public_key_is_a_valid_ed25519_key_and_tracked(self):
+        key = (ROOT / "packaging" / "macos" / "sparkle_public_key.txt").read_text().strip()
+        self.assertEqual(len(base64.b64decode(key, validate=True)), 32)
+
+    def test_info_plist_template_has_update_keys_and_no_hard_coded_secret(self):
+        text = (ROOT / "apps" / "macos" / "Veystrix" / "Support" / "Info.plist.template").read_text()
+        for needle in ("SUPublicEDKey", "@SPARKLE_PUBLIC_ED_KEY@", "SUFeedURL", "@MIN_MACOS@", "SUVerifyUpdateBeforeExtraction"):
+            self.assertIn(needle, text)
+        self.assertIn("https://", text)
+
+    def test_the_license_does_not_require_a_developer_id_for_official_builds(self):
+        lic = (ROOT / "legal" / "FREEWARE-LICENSE.txt").read_text()
+        self.assertIn("not notarized", lic)
+        self.assertEqual(lic, (ROOT.parent / "Veystrix-Public" / "LICENSE").read_text()) if (ROOT.parent / "Veystrix-Public" / "LICENSE").exists() else None
 
 
 class ScannerTests(unittest.TestCase):

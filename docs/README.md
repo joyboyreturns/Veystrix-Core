@@ -1,5 +1,7 @@
 # Documentation
 
+> **Status (updated 2026-11-10):** the CHAT and AGENTIC modes (`--mode chat|agentic`, supervised `./serve.sh`) are in this repository (branch `development3.81`). See the [mode and agentic validation guide](flashnext/agentic-validation.md) for tested CHAT behavior and the AGENTIC acceptance checks; real-checkpoint harness runs are still unverified. Release, packaging and security guides: [release process](release/RELEASE_PROCESS.md), [free channel](release/FREE_CHANNEL.md), [validation status](release/VALIDATION.md), [packaging](packaging/PACKAGING.md), [security audit](security/SECURITY_AUDIT_2026-11-10.md), [manual launch](MANUAL_LAUNCH.md).
+
 Use the component handoff before changing code or running a benchmark. Read
 the research record when you need prior measurements or rejected approaches.
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) defines the shared workflow.

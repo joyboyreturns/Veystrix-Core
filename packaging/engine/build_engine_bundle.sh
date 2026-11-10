@@ -13,6 +13,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="${1:-$ROOT/dist/engine}"; WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$(dirname "$OUT")"; OUT="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"   # absolute: later steps cd
 source "$HERE/runtime.pin"
 [[ "$(uname -m)" == "arm64" ]] || { echo "ERROR: Apple silicon build host required" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT/lib" "$OUT/licenses"

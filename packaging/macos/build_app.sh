@@ -6,7 +6,7 @@
 # Without a signing identity the app is ad-hoc signed: the FREE channel (not notarized; Gatekeeper warns on first open).
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 ENGINE_DIR=""
-while [[ $# -gt 0 ]]; do case "$1" in --engine) ENGINE_DIR="$2"; shift 2;; *) die "unknown option $1";; esac; done
+while [[ $# -gt 0 ]]; do case "$1" in --engine) ENGINE_DIR="$(cd "$2" 2>/dev/null && pwd)" || die "engine directory $2 not found"; shift 2;; *) die "unknown option $1";; esac; done
 
 APP="$DIST/$APP_NAME.app"
 log "Building $APP_NAME $SHORT_VERSION (build $BUILD_NUMBER) for $ARCH [channel: $(channel)]"
@@ -28,7 +28,7 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/Mac
 # (MLX 0.32.2 is built for macOS 26.2), so the bundle declares what the engine really needs.
 MIN_MACOS="14.0"
 if [[ -n "${ENGINE_DIR:-}" ]]; then
-  MLX_SO="$(ls "$ENGINE_DIR"/python/lib/python3.*/site-packages/mlx/core.*.so 2>/dev/null | head -1)"
+  MLX_SO="$(ls "$ENGINE_DIR"/python/lib/python3.*/site-packages/mlx/core.*.so 2>/dev/null | head -1 || true)"
   [[ -n "$MLX_SO" ]] && MIN_MACOS="$(otool -l "$MLX_SO" | awk '/minos/{print $2; exit}')"
 fi
 log "LSMinimumSystemVersion = $MIN_MACOS"
