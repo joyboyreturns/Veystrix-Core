@@ -215,6 +215,13 @@ _STREAM_RECORD_PARTS = (
 # thread blocks on expert reads, which no derived rate can tell you.
 _PROFILE = os.environ.get("FLASHNEXT_PROFILE_IO") == "1"
 _PREFILL_PROGRESS = None
+
+
+def _prefill_trace(event, **fields):
+    """Optional, content-free per-layer diagnostics; no extra Metal synchronization."""
+    if os.environ.get("FLASHNEXT_PREFILL_TRACE_LAYERS") == "1" and _PREFILL_PROGRESS is not None:
+        from models.flashnext import flight_recorder
+        flight_recorder.record(event, **fields)
 _TIMERS = {
     "io_wait": 0.0,
     "router_sync": 0.0,
@@ -1724,12 +1731,14 @@ class StreamingSwitchGLU(nn.Module):
                 routed = handed[0]
         if routed is None:
             flat = indices.reshape(-1)
+            _prefill_trace("prefill_router_eval_begin", layer=self.layer_id)
             if _PROFILE:
                 began = time.perf_counter()
                 mx.eval(flat)
                 _TIMERS["router_sync"] += time.perf_counter() - began
             else:
                 mx.eval(flat)
+            _prefill_trace("prefill_router_eval_end", layer=self.layer_id)
             with hostwindow.window("route_tolist"):
                 routed = flat.tolist()
         observer = _PREFILL_PROGRESS
@@ -1913,15 +1922,24 @@ class StreamingSwitchGLU(nn.Module):
             ).reshape(indices.shape)
         weights = None
         ring = _PREFILL_RING[0]
-        if ring is not None and flat_input.shape[0] > 8:
-            # Opt-in prefill ring: same experts, same order, read into the pool.
-            # None means this layer falls back to the existing read path.
-            weights = ring.stage(
-                self.gate_proj.cache.store,
-                self.gate_proj.cache.prefix.rsplit(".", 1)[0], wanted,
-            )
-        if weights is None:
-            weights = self._read_weights(projections, wanted)
+        trace_began = time.perf_counter()
+        _prefill_trace("prefill_expert_fetch_begin", layer=self.layer_id, experts=len(wanted))
+        try:
+            if ring is not None and flat_input.shape[0] > 8:
+                # Opt-in prefill ring: same experts, same order, read into the pool.
+                # None means this layer falls back to the existing read path.
+                weights = ring.stage(
+                    self.gate_proj.cache.store,
+                    self.gate_proj.cache.prefix.rsplit(".", 1)[0], wanted,
+                )
+            if weights is None:
+                weights = self._read_weights(projections, wanted)
+        except BaseException as exc:
+            _prefill_trace("prefill_expert_fetch_error", layer=self.layer_id, error=type(exc).__name__,
+                           seconds=round(time.perf_counter() - trace_began, 3))
+            raise
+        _prefill_trace("prefill_expert_fetch_end", layer=self.layer_id,
+                       seconds=round(time.perf_counter() - trace_began, 3))
 
         issue_began = time.perf_counter() if _PROFILE else 0.0
         with hostwindow.window("moe_issue_host"):

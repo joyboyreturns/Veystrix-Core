@@ -532,7 +532,7 @@ def _model_tokenizer(backend):
 
 DEFAULT_CONTEXT_WINDOW = 32768
 # Owner decision 2026-11-09: 32K ceilings (cold, and uncached increment per request). Internal chunks stay 2,048 tokens; the
-# 32K figure is an admission ceiling, never one tensor. Only 4K, 8K and 16K have real-checkpoint evidence; 32K does not yet.
+# 32K is an admission ceiling, not a single physical chunk or a hardware-validation claim.
 MAX_COLD_PREFILL_DEFAULT = 32768
 MAX_INCREMENTAL_PREFILL_DEFAULT = 32768
 ARCHITECTURAL_CONTEXT_MAXIMUM = 262144
@@ -817,7 +817,7 @@ def _context_report(service, limit, enforced) -> dict:
         "preferred_internal_chunk_size": 2048,
         "validated_on_this_machine": dict(context_budget.VALIDATION),
         "overflow": f"a prompt over the configured limit is refused with HTTP 400 context_length_exceeded; cold prefill > {cold} (or uncached increment > {incremental}) refused with oversized_prefill_rejected / recovery_required",
-        "validated_prefill_tokens_on_real_checkpoint": 16384,
+        "validated_prefill_tokens_on_real_checkpoint": context_budget.VALIDATION["largest_real_cold_prefill_tokens"],
     }
 
 
@@ -1071,7 +1071,9 @@ class ModelService:
             "reused_tokens": st.reused_tokens if st else 0,
             "ram_hits": st.ram_hits if st else 0,
             "ssd_hits": st.ssd_hits if st else 0,
-            "static_prefix_hits": sum(1 for m in store._disk.values() if m.get("n", 0) > 0) if store else 0,
+            # Stored entries are not hits. Static-prefix hits are not tracked
+            # independently, so expose unknown rather than fabricate a count.
+            "static_prefix_hits": None,
             "session_continuation_hits": self.reused,
             "reasoning_state_restoration_hits": getattr(self.reasoning_ledger, "restored_turns_total", 0),
             "prefix_mismatches": getattr(st, "prefix_mismatches", 0) if st else 0,
@@ -1085,6 +1087,8 @@ class ModelService:
             "ssd_bytes_written": getattr(st, "ssd_bytes_written", 0) if st else 0,
             "ssd_bytes_read": getattr(st, "ssd_bytes_read", 0) if st else 0,
             "writes_skipped": getattr(st, "writes_skipped", 0) if st else 0,
+            "pressure_invalidated_snapshots": getattr(st, "pressure_invalidated", 0) if st else 0,
+            "pressure_invalidated_bytes": getattr(st, "pressure_invalidated_bytes", 0) if st else 0,
             "restore_seconds": getattr(st, "restore_seconds", 0.0) if st else 0.0,
             "snapshot_seconds": getattr(last_prefix, "snapshot_seconds", 0.0) if last_prefix else 0.0,
             "newly_computed_prefill_tokens": last_prefill_tok,
@@ -1130,9 +1134,6 @@ class ModelService:
         if incremental:
             limit = self.max_incremental_prefill
             effective_limit = limit if limit is not None else MAX_INCREMENTAL_PREFILL_DEFAULT
-            # A memory tier admitted at startup (max_cold_prefill) bounds every prefill, incremental ones included.
-            effective_limit = min(effective_limit,
-                                  self.max_cold_prefill if self.max_cold_prefill is not None else MAX_COLD_PREFILL_DEFAULT)
         else:
             limit = self.max_cold_prefill
             effective_limit = limit if limit is not None else MAX_COLD_PREFILL_DEFAULT
@@ -1800,12 +1801,27 @@ class MacqwenHandler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
         self._sse_open = True
+        self._first_model_delta_sent = False
 
     def _sse(self, value, event=None):
         prefix = f"event: {event}\n" if event else ""
         with self._write_lock():
             self.wfile.write((prefix + "data: " + json.dumps(value) + "\n\n").encode())
             self.wfile.flush()
+            if not getattr(self, "_first_model_delta_sent", False):
+                choices = value.get("choices") or []
+                delta = choices[0].get("delta", {}) if choices else {}
+                meaningful = any(delta.get(k) for k in ("content", "reasoning_content", "tool_calls"))
+                event_type = value.get("type")
+                if event_type == "content_block_delta":
+                    part = value.get("delta") or {}
+                    meaningful = meaningful or bool(part.get("text") or part.get("partial_json"))
+                elif event_type in ("response.output_text.delta", "response.reasoning_text.delta",
+                                    "response.function_call_arguments.delta"):
+                    meaningful = meaningful or bool(value.get("delta"))
+                if meaningful:
+                    self._first_model_delta_sent = True
+                    flight_recorder.record("first_model_delta_forwarded", transport="sse")
 
     def _heartbeat(self):
         with self._write_lock():

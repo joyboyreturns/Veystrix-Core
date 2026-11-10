@@ -260,7 +260,13 @@ class PrefillCeilingTests(unittest.TestCase):
         self.assertEqual((report["max_cold_prefill"], report["max_incremental_prefill"]), (32768, 32768))
         self.assertEqual(report["architectural_context_maximum"], 262144)
         self.assertEqual(report["preferred_internal_chunk_size"], 2048)
-        self.assertEqual(report["validated_prefill_tokens_on_real_checkpoint"], 16384)
+        self.assertEqual(report["validated_prefill_tokens_on_real_checkpoint"], 3974)
+
+    def test_incremental_and_cold_limits_are_independent(self):
+        _, service = self.service(max_cold_prefill=100, max_incremental_prefill=128)
+        service._check_prefill(120, total_tokens=184, matched_prefix=64, incremental=True)
+        with self.assertRaises(S.ContextLimitError):
+            service._check_prefill(120, total_tokens=120, matched_prefix=0, incremental=False)
 
     def test_a_cold_prompt_of_exactly_32768_tokens_is_admitted_and_one_more_is_refused(self):
         backend, service = self.service(context_limit=262144, max_cold_prefill=32768, max_incremental_prefill=32768)

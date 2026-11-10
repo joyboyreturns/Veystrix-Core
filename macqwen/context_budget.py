@@ -82,11 +82,10 @@ def overflow_guidance(input_tokens: int, server_window: int) -> str:
 # What has really been executed on the 16 GB MacBook Air M4 with the real 113 GB checkpoint, kept apart from what the
 # checkpoint could do (native) and what the server is configured to accept (limit). Update only from preserved evidence.
 VALIDATION = {
-    "largest_real_cold_prefill_tokens": 3935,
-    "evidence": "results/flashnext/20261108-224316-gate-a-attempt2 (cold prefill 158 s, 24.9 tok/s, then a guard stop on level-2 pressure)",
-    "real_8k": "not passed: the 2026-11-08 run did not finish its cold prefill in 900 s "
-               "(results/flashnext/20261108-232323-gate-8k-attempt1)",
-    "above_validated": "experimental: processed incrementally in bounded chunks but never executed on this machine",
+    "largest_real_cold_prefill_tokens": 3974,
+    "evidence": "Current recovery: streamed reply after 3974-token cold prefill; see docs/flashnext/CODEX_RUNTIME_RECOVERY_PROGRESS.md",
+    "real_8k": "Current recovery: 7974-token cold prefill cancelled after 3984 tokens under sustained memory pressure",
+    "above_validated": "Unverified in current recovery; larger historical reports require independent evidence review",
 }
 
 

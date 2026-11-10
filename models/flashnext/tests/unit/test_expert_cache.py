@@ -32,6 +32,16 @@ class FakeStore:
 
 
 class ExpertReaderTests(unittest.TestCase):
+    def test_layer_trace_is_opt_in_and_requires_active_prefill(self):
+        with patch("models.flashnext.flight_recorder.record") as record, \
+                patch.dict("os.environ", {"FLASHNEXT_PREFILL_TRACE_LAYERS": "1"}), \
+                patch.object(expert_cache, "_PREFILL_PROGRESS", None):
+            expert_cache._prefill_trace("prefill_expert_fetch_begin", layer=3, experts=4)
+            record.assert_not_called()
+            with patch.object(expert_cache, "_PREFILL_PROGRESS", lambda _: None):
+                expert_cache._prefill_trace("prefill_expert_fetch_begin", layer=3, experts=4)
+            record.assert_called_once_with("prefill_expert_fetch_begin", layer=3, experts=4)
+
     def test_unprofiled_read_submits_without_slab_state(self):
         function = lambda value: value
         with patch.object(expert_cache, "_POOL") as pool, \

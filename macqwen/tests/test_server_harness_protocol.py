@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import unittest
+from unittest import mock
 
 from macqwen.server import (
     RequestError,
@@ -225,6 +226,16 @@ class ChatRouteTests(unittest.TestCase):
                                   "function": {"name": "glob", "arguments": '{"pattern": "*"}'}}])
         finish = [c["choices"][0]["finish_reason"] for c in chunks if c["choices"] and c["choices"][0]["finish_reason"]]
         self.assertEqual(finish, ["tool_calls"])
+
+    def test_first_model_delta_is_recorded_only_after_a_nonempty_sse_chunk(self):
+        handler = _make_handler(lambda *a, **k: _stub_result("stop", []))
+        handler._sse_start()
+        with mock.patch("macqwen.server.flight_recorder.record") as record:
+            handler._sse({"choices": [{"delta": {"role": "assistant", "content": ""}}]})
+            record.assert_not_called()
+            handler._sse({"choices": [{"delta": {"content": "OK"}}]})
+            handler._sse({"choices": [{"delta": {"content": "again"}}]})
+            record.assert_called_once_with("first_model_delta_forwarded", transport="sse")
 
     def test_harness_fields_are_consumed(self):
         handler, seen, _ = self.run_chat(dict(self.BASE, stream_options={"include_usage": True}))

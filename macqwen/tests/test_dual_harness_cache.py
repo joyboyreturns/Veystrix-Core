@@ -146,6 +146,11 @@ class DualHarnessCacheTests(unittest.TestCase):
             self.assertIn("evictions_ssd", diag)
             self.assertEqual(diag["reused"], 0)
             self.assertEqual(diag["rebuilt"], 0)
+            cache._disk["stored-only"] = {"n": 1000, "bytes": 12, "parent": None, "atime": 0}
+            diag = service.cache_diagnostics()
+            self.assertEqual(diag["ssd_cache_entries"], 1)
+            self.assertIsNone(diag["static_prefix_hits"])
+            self.assertEqual(diag["ssd_hits"], 0)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

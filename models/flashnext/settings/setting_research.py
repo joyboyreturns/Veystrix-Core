@@ -75,6 +75,8 @@ SETTINGS = (
     research("wired-gb", "FLASHNEXT_WIRED_GB", "0", "startup", float),
     research("swap-max-rows", "FLASHNEXT_SWAP_MAX_ROWS", "4", "startup", integer),
     research("profile-io", "FLASHNEXT_PROFILE_IO"),
+    research("prefill-trace-layers", "FLASHNEXT_PREFILL_TRACE_LAYERS", "0", "startup",
+             choice(("0", "1"), "prefill-trace-layers"), unset="0"),
     research("profile-boundaries", "FLASHNEXT_PROFILE_BOUNDARIES"),
     research("profile-boundary", "FLASHNEXT_PROFILE_BOUNDARY", ""),
     research("stream-pack-chunk", "FLASHNEXT_STREAM_PACK_CHUNK", "2", "startup", integer, unset="0"),

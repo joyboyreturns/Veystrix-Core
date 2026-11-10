@@ -44,7 +44,7 @@ DISK_RESERVE_GB = 50.0
 MIN_PREFIX_DISK_GB = 1.0
 # The 2K path has real-model evidence; 4K is a budget estimate (about 7.1 GB peak, calibrated at 1K only).
 VALIDATED_PROMPT_TOKENS = 2048
-VALIDATED_PREFILL_TOKENS = 16384   # largest cold prefill run on the real checkpoint (2026-11-09: 15,819 tokens, 176 MB swap growth)
+VALIDATED_PREFILL_TOKENS = 3974    # largest completed cold prefill verified during the current recovery
 AGENTIC_CONTEXT_LIMIT = 262144    # native window of the checkpoint (owner decision 2026-11-09); prefill ceilings below are separate
 # Prefill ceilings (owner decision 2026-11-09). Admission ceilings only: prefill still runs in 2,048-token chunks. Real-checkpoint
 # evidence exists to 16K cold prefill (4K, 8K, 16K); 32K is implemented and unit-tested but NOT validated on the real checkpoint.
@@ -454,7 +454,7 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
     if plan.mode == AGENTIC:
         rows.append(f"  prefill limits cold {plan.max_cold_prefill or DEFAULT_MAX_COLD_PREFILL}, uncached increment "
                     f"{plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL} tokens per request (admission ceilings; "
-                    "internal chunks stay 2048; real-checkpoint evidence to 16384 only)")
+                    f"internal chunks stay 2048; current recovery verified to {VALIDATED_PREFILL_TOKENS} tokens)")
     for name, label in plan.labels.items():
         rows.append(f"  EXPERIMENTAL   {name}: {label}")
     for warning in plan.warnings:
