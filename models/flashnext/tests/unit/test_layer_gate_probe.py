@@ -109,6 +109,9 @@ class GateValidationTests(unittest.TestCase):
             sample = {**good, field: value}
             self.assertIsNotNone(gate.safety_reason(sample), field)
         self.assertIsNotNone(gate.safety_reason({**good, "available_mb": 4000, "compressor_mb": 2300}, good))
+        self.assertIsNone(gate.safety_reason({**good, "swap_used_mb": gate.STRICT_SWAP_STOP_MB - 1}))
+        self.assertIn("safety stop", gate.safety_reason({**good, "swap_used_mb": gate.STRICT_SWAP_STOP_MB}))
+        self.assertIn("safety stop", gate.safety_reason({**good, "swap_used_mb": gate.SWAP_CEILING_MB + 100}))
 
     def test_headroom_budget_is_a_stricter_start_condition_not_a_weaker_floor(self):
         # The stopped run began at 8,540.2 MiB and bottomed at 2,693.5 MiB: that start must now be postponed.

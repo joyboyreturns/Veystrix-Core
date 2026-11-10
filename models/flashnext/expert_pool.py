@@ -108,7 +108,9 @@ class ExpertPool:
         self.misses = 0
 
     def assign(self, layer: int, experts):
-        """Return ({expert: slot}, [(expert, slot) to fill]) for one layer."""
+        """Assign a distinct expert set that fits in the pool, or fail before mutation."""
+        if len(experts) > self.slots:
+            raise ValueError("requested experts exceed expert pool capacity")
         slot_of = self._slot_of
         slots, misses = {}, []
         for expert in experts:

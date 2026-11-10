@@ -59,6 +59,7 @@ def machine_sample():
 
 
 SWAP_CEILING_MB = 3 * 1024      # owner rule (2026-11-09): swap in use must not reach 3 GB
+STRICT_SWAP_STOP_MB = SWAP_CEILING_MB - 768  # proactive margin for the Phase II supervised safety gate
 
 
 def safety_reason(sample, baseline=None, memory_rules="strict", power_rules="ac"):
@@ -95,8 +96,11 @@ def safety_reason(sample, baseline=None, memory_rules="strict", power_rules="ac"
         if sample["pressure_level"] >= 4:
             return "macOS memory pressure is critical"
         return None
-    if sample.get("pressure_level") != 1 or sample.get("swap_used_mb") is None:
+    swap = sample.get("swap_used_mb")
+    if sample.get("pressure_level") != 1 or swap is None:
         return "memory pressure or swap telemetry is unsafe or unreadable"
+    if swap >= STRICT_SWAP_STOP_MB:
+        return f"swap {swap:.0f} MiB reached the strict safety stop {STRICT_SWAP_STOP_MB} MiB below the ceiling"
     available = sample.get("available_mb")
     if available is None or available < 3 * 1024:
         return "available memory is below 3 GiB or unreadable"
@@ -541,7 +545,10 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
                 worker = threading.Thread(target=request, daemon=True)
                 worker.start()
                 while worker.is_alive():
-                    worker.join(5)
+                    # Phase II strict safety checks need more than the old
+                    # five-second sample cadence. The independent watchdog
+                    # separately checks swap; this observes pressure/power.
+                    worker.join(1 if memory_rules == "strict" else 5)
                     if proc.poll() is not None or not alive(pid) or parent_pid(pid) != child_pid:
                         raise RuntimeError("server or independent watchdog exited during request")
                     reading = sample("request")

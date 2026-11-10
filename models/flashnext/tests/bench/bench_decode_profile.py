@@ -45,6 +45,7 @@ def split(profile: dict) -> dict:
     walls = [t["ms"] for t in tokens]
     steady = walls[1:] if len(walls) > 2 else walls
     timers = profile.get("timers", {})
+    expert_io = profile.get("expert_io", {})
     out = {
         "tokens_profiled": len(tokens),
         "token_ms_median": st.median(steady) if steady else None,
@@ -58,7 +59,10 @@ def split(profile: dict) -> dict:
             name: {"exclusive": slot[0] * 1000.0 / count, "shared": slot[1] * 1000.0 / count, "calls": slot[2] / count}
             for name, slot in profile.get("host_windows", {}).items()
         },
-        "expert_io": profile.get("expert_io", {}),
+        "expert_io": expert_io,
+        # Some execution paths do not feed this optional counter. An all-zero
+        # uninstrumented pool must not be presented as zero I/O or cache hits.
+        "expert_io_available": bool(expert_io.get("layers_evaluated", 0)),
     }
     # Layer gaps: time from one streamed layer's route to the next layer's route (includes that layer's expert read,
     # the previous layer's compute and the next router eval). Averaged by layer across the profiled tokens.
@@ -82,15 +86,35 @@ def decode_rate(rows) -> float | None:
     return finished["tail_tokens"] / seconds if seconds else None
 
 
+def decode_io(rows) -> dict:
+    """Physical read delta after prefill, divided by later output tokens, not just the timed tail.
+
+    The first output token was sampled during prefill. The delta can include
+    post-prefill housekeeping and is process I/O, not expert-only reads.
+    """
+    before = rows["prefilled"].get("physical_bytes")
+    after = rows["finished"].get("physical_bytes_total")
+    ids = rows["finished"].get("token_ids")
+    count = max(0, len(ids) - 1) if isinstance(ids, list) else None
+    if (not isinstance(before, int) or not isinstance(after, int) or after < before
+            or not isinstance(count, int) or count <= 0):
+        return {"decode_physical_bytes": None, "decode_physical_bytes_per_later_output": None,
+                "physical_io_later_output_tokens": count}
+    delta = after - before
+    return {"decode_physical_bytes": delta, "decode_physical_bytes_per_later_output": delta / count,
+            "physical_io_later_output_tokens": count}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, default=G.CHECKPOINT)
     parser.add_argument("--source-tokens", type=int, default=600, help="600 gives a 2.7K prompt, 6000 an 8K prompt")
     parser.add_argument("--tokens", type=int, default=96, help="decode tokens per arm")
     parser.add_argument("--pool-gb", default="2")
+    parser.add_argument("--buffered-fill", action="store_true", help="profile the opt-in buffered decode pool fill")
     parser.add_argument("--arms", default="plain,io,host,plain2")
     parser.add_argument("--settle", type=int, default=30)
-    parser.add_argument("--power-rules", choices=("battery-ok", "ac"), default="battery-ok")
+    parser.add_argument("--power-rules", choices=("battery-ok", "ac"), default="ac")
     args = parser.parse_args()
     names = args.arms.split(",")
     unknown = [n for n in names if n not in ARMS]
@@ -115,6 +139,7 @@ def main() -> int:
         "routing_threshold": 1.0,
         "memory_rules": "swap-only", "power_rules": args.power_rules, "initial_machine": initial, "initial_purge": purge,
         "reads": "prefill-only F_NOCACHE, chunk-major reference",
+        "pool_buffered_fill": args.buffered_fill,
         "purpose": "decode time distribution and current-checkpoint route trace; profiled arms are not speed results"})
     run.start()
     summary = {}
@@ -129,14 +154,15 @@ def main() -> int:
             try:
                 command, rows, machine = G.run_arm("chunk", arm_id, checkpoint, payload, path.parent, uncached=True,
                                                    memory_rules="swap-only", base_pool_gb=args.pool_gb, reads="prefill",
-                                                   power_rules=args.power_rules, extra_env=extra)
+                                                   power_rules=args.power_rules, extra_env=extra,
+                                                   extra_enables=("pool-buffered-fill",) if args.buffered_fill else ())
             except Exception as error:
                 run.arm(arm_id=arm_id, condition=name, round_index=number + 1, command=[], status="failed",
                         metrics={"error": str(error)})
                 raise
             run.arm(arm_id=arm_id, condition=name, round_index=number + 1, command=command, metrics=rows, **machine)
             row = {"decode_tok_s": decode_rate(rows), "prefill_seconds": rows["prefilled"]["prefill_seconds"],
-                   "decode_physical_bytes": rows["finished"]["physical_bytes_total"] - rows["prefilled"]["physical_bytes"]}
+                   **decode_io(rows)}
             profiles = sorted(profile_dir.glob("decode-*.json")) if profile_dir.exists() else []
             if profiles:
                 row["profile"] = split(json.loads(profiles[-1].read_text()))

@@ -127,6 +127,21 @@ class FlashNextBackendTests(unittest.TestCase):
         self.assertTrue(backend._replay_needed)
         self.assertEqual(backend.cache[0].offset, 0)
 
+    def test_routing_change_preserves_an_open_turn_boundary(self):
+        backend = self.backend()
+        backend.tape = [1, 2, 3]
+        backend.turn_closed = False
+        backend.store = SimpleNamespace(set_residency_tracking=lambda _: None)
+        backend.threshold, backend.resident_experts, backend.tail_experts = 1.0, 32, 6
+        backend.tail_warmup, backend.pin_budget_gb, backend.swap_epsilon = 8, 2.0, 0.02
+        backend.routing = SimpleNamespace(session_profile=lambda _: {"threshold": 0.85})
+        replacement = SimpleNamespace(session_profile=lambda _: {"threshold": 1.0})
+        with patch("models.flashnext.routing.RoutingProfile", return_value=replacement):
+            backend._rebuild_routing()
+        self.assertTrue(backend._replay_needed)
+        self.assertFalse(backend.turn_closed)
+        self.assertEqual(backend._close(), "<|im_end|>")
+
     def test_loaded_session_clears_pending_replay(self):
         backend = self.backend()
         backend.tape = [1, 2, 3]
@@ -179,6 +194,8 @@ class FlashNextBackendTests(unittest.TestCase):
         self.assertEqual(backend.pending, [4])
         self.assertTrue(backend._replay_needed)
         self.assertEqual(backend.cache[0].offset, 0)
+        self.assertTrue(backend.turn_closed)
+        self.assertEqual(backend._close(), "")
 
 
 class _ScriptedLanguage:

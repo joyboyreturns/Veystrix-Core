@@ -54,8 +54,31 @@ class AssignTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.make(4)
 
+    def test_oversized_assignment_fails_before_evicting_or_claiming_slots(self):
+        pool = self.make(16)
+        pool.assign(1, [1, 2, 3])
+        before = (list(pool._slot_of.items()), list(pool._free), pool.hits, pool.misses)
+        with self.assertRaisesRegex(ValueError, "exceed"):
+            pool.assign(1, list(range(17)))
+        self.assertEqual(before, (list(pool._slot_of.items()), list(pool._free), pool.hits, pool.misses))
+
 
 class FillTests(unittest.TestCase):
+    def test_oversized_batch_uses_streaming_path_without_changing_pool(self):
+        pool = AssignTests().make(16)
+        pool.assign(4, [30])
+        prior = list(pool._slot_of.items())
+        gate = SimpleNamespace(cache=SimpleNamespace(store=_Store(), prefix=PREFIX + ".gate_proj"), group_size=32)
+        fallback = mock.Mock(return_value=mx.array([1.0], dtype=mx.float32))
+        layer = SimpleNamespace(layer_id=4, gate_proj=gate, hits=0, misses=0, _one_pass=fallback)
+        routes = list(range(20))
+        with mock.patch.object(expert_pool, "for_store", return_value=pool):
+            result = expert_cache.StreamingSwitchGLU._pool_pass(layer, "indices", routes, "input", "scores", None, None, None)
+        self.assertEqual(result.dtype, mx.bfloat16)
+        self.assertEqual(result.tolist(), [1.0])
+        fallback.assert_called_once_with(None, "indices", routes, True, "input", "scores", None, None, None)
+        self.assertEqual(list(pool._slot_of.items()), prior)
+
     def test_parallel_descriptor_initialization_opens_once(self):
         pool = AssignTests().make(16)
         def open_slowly(*args):

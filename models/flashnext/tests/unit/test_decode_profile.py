@@ -49,6 +49,15 @@ class GroupingTests(unittest.TestCase):
             del token["layer_ids"]
         self.assertEqual(split(body)["layer_gap_ms_p95"], {"2": 20.0})
 
+    def test_decode_io_uses_all_post_prefill_output_not_tail_only(self):
+        from models.flashnext.tests.bench.bench_decode_profile import decode_io
+
+        rows = {"prefilled": {"physical_bytes": 100},
+                "finished": {"physical_bytes_total": 190, "token_ids": [1, 2, 3, 4], "tail_tokens": 1}}
+        self.assertEqual(decode_io(rows)["decode_physical_bytes_per_later_output"], 30)
+        rows["finished"]["physical_bytes_total"] = 99
+        self.assertIsNone(decode_io(rows)["decode_physical_bytes_per_later_output"])
+
 
 class LifecycleTests(unittest.TestCase):
     def setUp(self):

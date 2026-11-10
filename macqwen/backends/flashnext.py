@@ -283,7 +283,11 @@ class FlashNextBackend(Conversation):
         if old_profile is not None and old_profile != self.routing.session_profile(self.stops):
             # Existing recurrent/KV state contains the previous routing result.
             # Replay the transcript under the new settings instead of mixing states.
+            # Unlike an interrupted generation, a settings change does not alter
+            # whether the transcript's last assistant turn already ended.
+            turn_closed = self.turn_closed
             self._mark_replay_needed()
+            self.turn_closed = turn_closed
             if self._mtp_active:
                 self._mtp_blocked = True
 
