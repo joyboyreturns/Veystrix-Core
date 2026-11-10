@@ -273,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=ROOT / "legal")
     ap.add_argument("--public-out", type=Path, help="also write THIRD_PARTY_NOTICES.md into this directory")
     ap.add_argument("--emit-texts", type=Path, help="copy every package's license files into this directory (for the app bundle)")
-    ap.add_argument("--exclude", action="append", default=["pip", "setuptools", "wheel", "veystrix", "veystrix"],
+    ap.add_argument("--exclude", action="append", default=["pip", "setuptools", "wheel", "veystrix"],
                     help="distribution names to leave out (build tools and the project itself)")
     ap.add_argument("--version", default="0.0.0")
     ap.add_argument("--date", default=datetime.date.today().isoformat())

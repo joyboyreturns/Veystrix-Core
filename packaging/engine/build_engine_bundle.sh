@@ -2,7 +2,7 @@
 # Build the self-contained engine runtime that Veystrix.app embeds in Contents/Resources/engine.
 #   packaging/engine/build_engine_bundle.sh [OUT_DIR]        (default: dist/engine)
 # Layout:  OUT/python/   pinned CPython (python-build-standalone) with the engine's pinned dependencies
-#          OUT/lib/      veystrix/, veystrix/, models/{flashnext,qwen27b}/ as compiled .pyc, plus data files
+#          OUT/lib/      veystrix/, models/{flashnext,qwen27b}/ as compiled .pyc, plus data files
 #          OUT/licenses/ license texts for everything inside
 #          OUT/BUNDLE-MANIFEST.txt
 # Honest limits: .pyc files are an anti-clutter and anti-accident measure, NOT protection. They decompile
@@ -45,7 +45,7 @@ rm -rf "$OUT"/python/lib/python3.12/{test,idlelib,tkinter,turtledemo,turtle.py} 
        "$OUT"/python/lib/{tcl*,tk*,itcl*,thread*,Tix*,sqlite3*} "$OUT"/python/bin/{idle*,2to3*,pydoc*} 2>/dev/null || true
 
 echo "==> Engine sources -> compiled lib"
-for pkg in veystrix veystrix models/__init__.py models/flashnext models/qwen27b; do
+for pkg in veystrix models/__init__.py models/flashnext models/qwen27b; do
   mkdir -p "$OUT/lib/$(dirname "$pkg")" 2>/dev/null || true
   ditto "$ROOT/$pkg" "$OUT/lib/$pkg"
 done

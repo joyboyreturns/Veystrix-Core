@@ -18,7 +18,7 @@ import importlib, os, sys
 lib = os.environ["PYTHONPATH"]
 for std in ("sqlite3", "ssl", "zlib", "json", "plistlib", "ctypes", "hashlib", "http.server"):
     importlib.import_module(std)      # stdlib pieces the engine needs must survive the size trimming
-for name in ("veystrix", "veystrix", "veystrix.env_compat", "models.flashnext.settings.registry", "models.flashnext.memory_policy"):
+for name in ("veystrix", "veystrix.api_keys", "models.flashnext.settings.registry", "models.flashnext.memory_policy"):
     m = importlib.import_module(name)
     f = getattr(m, "__file__", None) or ""
     assert f.startswith(lib), f"{name} came from {f!r}, not the bundle"
