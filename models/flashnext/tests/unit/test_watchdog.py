@@ -235,7 +235,7 @@ class MemoryWatchTests(unittest.TestCase):
     def test_layer_major_defaults_and_explicit_rollback(self):
         config = W.Config.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer"})
         self.assertTrue(config.memory_watch)
-        self.assertEqual(config.memory_stop_mib, 2304)
+        self.assertEqual(config.memory_stop_mib, 3072)  # owner rule 2026-11-10: stop exactly at 3 GiB
         self.assertEqual(config.memory_poll, 0.25)
         self.assertFalse(W.Config.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_WATCHDOG_MEMORY": "0"}).memory_watch)
         self.assertFalse(W.Config.from_environment({}).memory_watch)
