@@ -8,6 +8,10 @@ Complete the user's runtime recovery mission: real Qwen3.8-Flash-Next 4-bit on M
 
 Previous DeepSeek request had 9427 prompt tokens and 32 tools; last reported progress 9230, then no first token before absolute guard stopped at 2963 MiB swap (2816 MiB margin, 3072 MiB ceiling). The progress was a layer-derived estimate, not verified token progress; do not infer a 197-token final chunk. Root cause remains unknown. Startup legacy tiers capped configured 32768 at 4096/14336. Failed SSD persistence could silently evict an unpersisted RAM leaf.
 
+Continuation real run details and guard defect are recorded in `CODEX_RUNTIME_RECOVERY_PROGRESS.md`. On AC, 469, 1974 and 3974 token cold requests returned real replies; 7974 was deliberately cancelled after 3984 evaluated tokens as pressure level 2 persisted and compressor growth approached 5 GiB. The server shut down cleanly. The default launcher initially had no absolute swap ceiling; agentic mode now configures 3072/256 and a memory watchdog, verified on `/health` after restart. Do not proceed to larger real tests until pressure behavior is understood and safe headroom is available.
+
+Critical discovery: automatic snapshot parent selection could link a new plan to an old incompatible prefix (observed 1992-token child of 1984-token earlier-plan snapshot). Fixed session root selection and plan conflict handling, and changed fingerprint with `snapshot_chain_semantics=2`. Existing cache files are preserved but intentionally incompatible pending validation. Original failed request has a 9024-token snapshot and ancestors, but its state cannot be assumed valid. Audit quota handling of foreign snapshots before running cache eviction.
+
 ## Candidate work and limitations
 
 - `models/flashnext/prefill.py`: chunk plan, chunk, final forward/projection/evaluation flight events. `prefix_session.py`: snapshot events. `macqwen/backends/flashnext.py`: backend return/decode events. MLX lazy execution means events mark host boundaries, not necessarily completion of GPU work. More detailed expert, layer-major, memory and transport instrumentation is needed.
@@ -15,7 +19,7 @@ Previous DeepSeek request had 9427 prompt tokens and 32 tools; last reported pro
 - `models/flashnext/prefill_readiness.py::active_tiers`: assess configured agentic workload with bounded <=2048 chunks and KV-growth estimate, rather than legacy tier. Tests in `test_prefill_readiness.py`. Audit actual per-request admission and diagnostics; a configured cap does not guarantee safe execution. Existing `prefix_session.py` uses `min(max_inc, max_cold)` for restored requests; investigate intended separate semantics and cache-miss checks.
 - `.github/workflows/ci.yml`: includes `development3.8` push. No CI run verified.
 
-Targeted tests: 87 and 42 passed under Metal outside sandbox; full MacQwen suite passed 725 tests in 69.195 seconds and FlashNext passed 1809 tests in 169.589 seconds (3 skipped). Sandboxed MLX import fails with `No Metal device available`; `.venv` has no pytest. Current machine was on battery (77%); no real model run this session. Swap was 1140.81 MiB when sampled, not the value at the incident. `qwen` version 0.27.0; `dsh` not found on PATH. Five-hour usage telemetry unavailable.
+Before continuation, full MacQwen suite passed 725 tests in 69.195 seconds and FlashNext passed 1809 tests in 169.589 seconds (3 skipped). After continuation changes, focused suites passed 145, 148, 74 and 72 tests, plus 35 mode/CLI tests. See progress document for real-model evidence and pressure stop. `.venv` has no pytest. `qwen` version 0.27.0; `dsh` not found on PATH. Five-hour usage telemetry unavailable. Candidate commits after starting SHA include `1f68e60`, `2dc5f09`, `8080ec7`, and `7a106fe`; inspect `git log` and status for later commits and uncommitted files.
 
 ## Next actions, in order
 
