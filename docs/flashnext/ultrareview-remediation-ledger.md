@@ -6,7 +6,7 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 |---|---|---|---|---|---|---|
 | R1-01 | Phase 4: Supervision & Failure Recovery | `models/flashnext/auto_reclaim.py` | L187-L209 | normal | open | pending |
 | R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | open | pending |
-| R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_session.py` | L213-L220 | normal | verified | pending |
+| R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_session.py` | L213-L220 | normal | verified | fe4682a |
 | R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | open | pending |
 | R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
 | R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
@@ -19,8 +19,8 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
 | R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | open | pending |
 | R2-05 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L355-L357 | normal | verified | 5a63d00 |
-| R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | verified | pending |
-| R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | verified | pending |
+| R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | verified | fe4682a |
+| R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | verified | fe4682a |
 | R2-08 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1459-L1469 | normal | verified | 5a63d00 |
 | R2-09 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1245-L1270 | normal | verified | 5a63d00 |
 | R2-10 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefix_session.py` | L251-L268 | normal | verified | 5a63d00 |
@@ -29,10 +29,10 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | open | pending |
 | R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | open | pending |
 | R3-05 | Phase 2: Correctness & Tool-Calling | `macqwen/sessions.py` | L154-L189 | normal | verified | 5a63d00 |
-| R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | verified | pending |
+| R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | verified | fe4682a |
 | R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | open | pending |
-| R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | verified | pending |
-| R3-09 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L156-L158 | nit | verified | pending |
+| R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | verified | fe4682a |
+| R3-09 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L156-L158 | nit | verified | fe4682a |
 | R3-10 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L1153-L1157 | pre_existing | open | pending |
 
 ## Detailed Finding Specifications
@@ -92,7 +92,7 @@ How it happens:
 - **Planned fix**: Explicitly check `if prefill_module.chunk_policy() == "budgeted"` in `boundaries()` and evaluate `prefill_module.budgeted_edges(len(prompt), chunk or max(prefill_module.CANDIDATE_CHUNKS), prefill_module.chunk_budget_bytes(), self.anchors(prompt))` to keep snapshot callbacks aligned with actual cuts.
 - **Regression test**: `macqwen/tests/test_phase3_remediations.py:test_r1_03_boundaries_budgeted_policy_aligns_with_budgeted_edges`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: fe4682a
 
 ### R1-04 — `models/flashnext/flight_recorder.py` (L43-L43)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -330,7 +330,7 @@ On a Mac with less than 50 GB free, every `_persist` returns early and only bump
 - **Planned fix**: Ensure `_persist(entry)` is attempted before popping from `_ram`. Only pop from `_ram` if the entry is confirmed present on SSD (`key in self._disk`) or if the entry has no resident children in RAM (`not self._has_resident_child(key)`).
 - **Regression test**: `macqwen/tests/test_phase3_remediations.py:test_r2_06_evict_ram_preserves_parent_with_resident_child_if_persist_fails`, `test_r2_06_shrink_ram_does_not_drop_unpersisted_entries`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: fe4682a
 
 ### R2-07 — `models/flashnext/prefix_profiles.py` (L382-L383)
 - **Phase**: Phase 3: Persistent Cache & Recovery
@@ -346,7 +346,7 @@ The fingerprint includes hashes of engine source files (sessions._ENGINE_FILES) 
 - **Planned fix**: In `ProfiledPrefixCache._evict_one()`, call `self._foreign_victim()` first and evict foreign entries oldest-first before local entries; in base `PrefixCache._scan()`, track foreign entries in `self._foreign` and evict them in `_evict_disk()`.
 - **Regression test**: `models/flashnext/tests/unit/test_prefix_profiles.py:SafetyTests.test_entries_of_another_fingerprint_are_not_loaded_or_evicted`, `macqwen/tests/test_phase3_remediations.py:test_r2_07_prefix_cache_evicts_foreign_leaves_first`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: fe4682a
 
 ### R2-08 — `macqwen/server.py` (L1459-L1469)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -518,7 +518,7 @@ How it fails, in macqwen/cache_tools.py:
 - **Planned fix**: Recompute eligible leaves iteratively inside a loop until `target_bytes` is reached or no unleased leaf remains; count `.json` manifest size in freed bytes.
 - **Regression test**: `macqwen/tests/test_cache_tools.py:test_clean_cache_iterative_leaf_pruning_on_delta_chains`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: fe4682a
 
 ### R3-07 — `macqwen/session.py` (L649-L661)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -554,7 +554,7 @@ The mechanism holds. `clean_cache` (macqwen/cache_tools.py:91-149, a new file in
 - **Planned fix**: Claim directory ownership using `P._claim_directory(target_dir)` before deleting files, releasing it in a `finally` block, and returning error gracefully on `P.CacheOwnershipError`.
 - **Regression test**: `macqwen/tests/test_cache_tools.py:test_clean_cache_respects_directory_ownership_lock`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: fe4682a
 
 ### R3-09 — `macqwen/cache_tools.py` (L156-L158)
 - **Phase**: Phase 3: Persistent Cache & Recovery
@@ -570,7 +570,7 @@ An operator whose SSD prefix cache has grown follows persistent_cache_design.md:
 - **Planned fix**: Add `--cleanup` as an alias to `--clean`, and `--target-disk-gb` as an alias to `--target-gb` in `argparse`.
 - **Regression test**: `macqwen/tests/test_cache_tools.py:test_cli_argument_aliases`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: fe4682a
 
 ### R3-10 — `macqwen/session.py` (L1153-L1157)
 - **Phase**: Phase 4: Supervision & Failure Recovery
