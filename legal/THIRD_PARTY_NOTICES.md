@@ -192,8 +192,8 @@ POSSIBILITY OF SUCH DAMAGE.
 | cffi | 2.1.1 | MIT-0 |
 | charset-normalizer | 3.5.2 | MIT |
 | click | 8.5.1 | BSD-3-Clause |
-| fastapi | 0.162.2 | MIT |
-| filelock | 4.2.9 | MIT |
+| fastapi | 0.162.3 | MIT |
+| filelock | 4.2.10 | MIT |
 | fsspec | 2026.9.0 | BSD-3-Clause |
 | h11 | 0.16.0 | MIT |
 | hf-xet | 1.8.0 | Apache-2.0 |
@@ -203,7 +203,7 @@ POSSIBILITY OF SUCH DAMAGE.
 | idna | 3.20 | BSD-3-Clause |
 | Jinja2 | 3.1.6 | BSD License |
 | llguidance | 1.9.1 | MIT |
-| markdown-it-py | 4.2.0 | MIT License |
+| markdown-it-py | 4.3.0 | MIT License |
 | MarkupSafe | 3.0.4 | BSD-3-Clause |
 | mdurl | 0.1.2 | MIT License |
 | miniaudio | 1.72 | MIT |
@@ -213,7 +213,6 @@ POSSIBILITY OF SUCH DAMAGE.
 | mlx-metal | 0.32.2 | MIT |
 | mlx-vlm | 0.6.17 | MIT |
 | numpy | 2.5.2 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
-| opencv-python | 5.0.0.93 | Apache 2.0 |
 | opentelemetry-api | 1.45.2 | Apache-2.0 |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | pillow | 13.0.0 | MIT-CMU |
@@ -224,7 +223,7 @@ POSSIBILITY OF SUCH DAMAGE.
 | Pygments | 2.21.0 | BSD-2-Clause |
 | python-multipart | 0.0.33 | Apache-2.0 |
 | PyYAML | 6.0.3 | MIT |
-| regex | 2026.11.7 | Apache-2.0 AND CNRI-Python |
+| regex | 2026.11.9 | Apache-2.0 AND CNRI-Python |
 | requests | 2.34.2 | Apache-2.0 |
 | rich | 15.0.0 | MIT |
 | safetensors | 0.8.0 | Apache Software License |
@@ -236,7 +235,7 @@ POSSIBILITY OF SUCH DAMAGE.
 | tokenizers | 0.23.3 | Apache Software License |
 | tqdm | 4.70.1 | MPL-2.0 AND MIT |
 | transformers | 5.16.1 | Apache 2.0 License |
-| typer | 0.28.0 | MIT |
+| typer | 0.29.0 | MIT |
 | typing-inspection | 0.4.5 | MIT |
 | typing_extensions | 4.16.0 | PSF-2.0 |
 | urllib3 | 2.8.0 | MIT |

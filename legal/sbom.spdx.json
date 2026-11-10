@@ -3,7 +3,7 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "Veystrix runtime SBOM",
-  "documentNamespace": "https://github.com/joyboyreturns/Veystrix/sbom/3.8.1-dev/2026-11-10",
+  "documentNamespace": "https://github.com/joyboyreturns/Veystrix/sbom/3.8.1/2026-11-10",
   "creationInfo": {
     "created": "2026-11-10T00:00:00Z",
     "creators": [
@@ -14,14 +14,14 @@
     {
       "licenseId": "LicenseRef-Veystrix-Freeware-Draft",
       "name": "Veystrix Freeware License (draft v0.1)",
-      "extractedText": "VEYSTRIX FREEWARE LICENSE AGREEMENT\nDraft v0.1 \u2014 2026-11-10\n\nDRAFT FOR LEGAL REVIEW. This text has not been reviewed by a lawyer. The owner\nmust complete the bracketed fields and have the whole agreement reviewed before\nthe first public release is announced.\n\nVeystrix is proprietary software that is free to download and use. It is NOT\nopen-source software. Some components inside it are open source and remain\nunder their own licenses (see \"Third-party components\" below and the file\nTHIRD_PARTY_NOTICES.md).\n\n1. PARTIES AND DEFINITIONS\n\n\"Licensor\" means [OWNER LEGAL NAME / TRADING NAME], the owner of the Veystrix\ncomponents identified in section 6.\n\n\"Software\" means the Veystrix macOS application and the Veystrix inference\nengine helper bundled inside it, in the unmodified form published by the\nLicensor as an \"Official Build\" at\nhttps://github.com/joyboyreturns/Veystrix/releases, including any update the\nLicensor publishes through the application's update feed.\n\n\"Official Build\" means a file published by the Licensor at the address above,\nwhose SHA-256 checksum matches the checksum the Licensor published for it and\nwhose code signature verifies against the Licensor's Developer ID.\n\n\"Model Checkpoint\" means a machine-learning model, weights or tokenizer that you\nobtain from anyone other than the Licensor. Model Checkpoints are not part of\nthe Software.\n\n\"You\" means the person or organization that installs or uses the Software.\n\n2. GRANT OF LICENSE\n\nSubject to this agreement, the Licensor grants You a worldwide, non-exclusive,\nnon-transferable, revocable (for breach, see section 10), royalty-free license\nto download, install and run Official Builds of the Software on computers that\nYou own or control, for any lawful purpose, including personal, educational and\ncommercial use of the Software and of the text it generates.\n\nNo payment, account, registration or network activation is required to use the\nSoftware. The Software is designed to run fully offline once installed.\n\n3. REDISTRIBUTION\n\nYou may share an Official Build with others only if ALL of the following hold:\n(a) the file is unmodified, byte for byte, and its checksum and code signature\nstill verify;\n(b) You provide it free of charge, with no fee, subscription, advertising,\nbundle, donation wall or other consideration tied to it; and\n(c) You keep this agreement and THIRD_PARTY_NOTICES.md with it, and tell the\nrecipient that the official source is the Releases page named in section 1.\n\nYou may always link to the official Releases page.\n\n4. WHAT YOU MAY NOT DO\n\nUnless the Licensor gives You separate written permission, You may not:\n(a) modify, translate, adapt or create derivative works of the Software, or\nrepackage it, or distribute any modified or repackaged version;\n(b) rename, rebrand or present a modified build as Veystrix, use the name\n\"Veystrix\", its logo or its icons in a way that suggests a build is official or\nendorsed, or publish a build that could reasonably be mistaken for an Official\nBuild;\n(c) sell, rent, lease, sublicense or charge for the Software, an Official Build,\nor access to either, or include the Software in a paid product or paid\ncollection;\n(d) remove or alter copyright, license, attribution or update-signature\nnotices;\n(e) disable, bypass or forge the code-signature or update-signature checks in\norder to distribute or install an altered build; or\n(f) distribute the Software in a manner that violates export-control or other\nlaws that apply to You.\n\n5. RIGHTS THAT CANNOT BE WAIVED; THIRD-PARTY RIGHTS\n\nNothing in this agreement limits any right that the law of Your country gives You\nand that cannot be removed by contract. In particular, and to the extent\napplicable law gives them to You, nothing here prevents You from: making a\nbackup copy needed to use the Software; observing, studying and testing how the\nSoftware functions while You use it as permitted; decompiling or reverse\nengineering it to the extent permitted by law for interoperability with\nindependently created software (for example under Article 6 of EU Directive\n2009/24/EC); or exercising rights granted by a third-party license to a\nthird-party component.\n\n6. OWNERSHIP; THIRD-PARTY COMPONENTS; SOURCE CODE\n\nThe Licensor and its licensors own the Software. This agreement grants a\nlicense, not a sale. The Licensor's source code for the Veystrix components that\nthe Licensor owns is proprietary and is not licensed to You; no source code\nlicense is granted or implied.\n\nThe Software contains or links to third-party components, including components\npublished under open-source licenses (for example MIT, BSD, Apache-2.0 and\nMPL-2.0). Those components, and the portions of Veystrix derived from MIT-licensed\ncode published earlier under the names MACQWEN and FlashNext, remain under their\nown license terms, and the copyright notices and license texts in\nTHIRD_PARTY_NOTICES.md must be preserved. This agreement does not reduce any right\nYou have under those licenses, and does not claim that earlier open-source\nreleases of that earlier code were withdrawn.\n\n7. MODEL CHECKPOINTS\n\nThe Software does not include model weights and does not download them without\nYour explicit action. A Model Checkpoint is licensed by its publisher, not by\nthe Licensor. You are responsible for reading and following the license of any\ncheckpoint You use.\n\n8. PRIVACY\n\nThe Software does not require an account and does not send Your prompts,\nfiles, repositories, sessions or model data to the Licensor or any third party.\nThe only network access the Software makes by itself is the optional update\ncheck, which You can turn off in Settings; it requests the public update feed\nfrom github.com and sends no information about Your prompts or files. Your\nInternet provider and GitHub can see ordinary connection metadata (such as Your\nIP address) when You check for updates, as with any web request. Network\nfeatures of tools You connect to the local server (for example coding agents)\nare controlled by those tools, not by the Software.\n\n9. SAFETY, HARDWARE AND NO WARRANTY\n\nThe Software streams very large model files from Your SSD and can use most of\nthe memory of Your computer. This reads many gigabytes per request, can increase\nSSD wear, and can slow or interrupt other applications. The Software includes\nmemory and swap protections, but they are estimates and cannot guarantee that\nYour computer will not become slow or unresponsive. Keep Your computer on AC\npower during long sessions and keep backups of important data.\n\nOutput generated by language models can be wrong, unsafe or offensive. You are\nresponsible for checking it before You rely on it.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND \"AS AVAILABLE\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A\nPARTICULAR PURPOSE, NON-INFRINGEMENT, AVAILABILITY OR ACCURACY. TO THE MAXIMUM\nEXTENT PERMITTED BY LAW, THE LICENSOR IS NOT LIABLE FOR ANY INDIRECT, INCIDENTAL,\nSPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR FOR LOSS OF DATA, PROFITS OR\nHARDWARE LIFE, ARISING FROM USE OF OR INABILITY TO USE THE SOFTWARE, AND THE\nLICENSOR'S TOTAL LIABILITY FOR ANY CLAIM IS LIMITED TO THE AMOUNT YOU PAID FOR THE\nSOFTWARE, WHICH IS ZERO. Some jurisdictions do not allow these limits; in that\ncase they apply only as far as the law permits. Nothing here limits liability\nthat cannot be limited by law (for example for death or personal injury caused by\nnegligence, or for fraud).\n\n10. TERM AND TERMINATION\n\nThis agreement lasts until terminated. It ends automatically if You materially\nbreach it, and You must then stop using and delete the Software. Sections 4, 6, 9\nand 11 survive termination. Termination of this agreement does not affect any\nright You hold under a third-party license.\n\n11. GENERAL\n\nThe Licensor may publish a new version of this agreement with a new release of the\nSoftware; a new version applies to that release and later releases, and does not\nchange the terms of a release You already installed unless You choose to update.\nIf a provision is unenforceable, the rest stays in force. This agreement is the\nwhole agreement about the Software between You and the Licensor. It is governed by\nthe laws of [JURISDICTION], except that mandatory consumer-protection rules of\nYour country of residence continue to apply to You. Contact: [SUPPORT CONTACT /\nGitHub Issues at https://github.com/joyboyreturns/Veystrix/issues].\n\n12. ATTRIBUTION\n\nVeystrix is built on, and includes work derived from, MIT-licensed code that was\npublished as MACQWEN and FlashNext. See THIRD_PARTY_NOTICES.md for the copyright\nholder and the full MIT license text.\n"
+      "extractedText": "VEYSTRIX FREEWARE LICENSE AGREEMENT\nDraft v0.1 \u2014 2026-11-10\n\nDRAFT FOR LEGAL REVIEW. This text has not been reviewed by a lawyer. The owner\nmust complete the bracketed fields and have the whole agreement reviewed before\nthe first public release is announced.\n\nVeystrix is proprietary software that is free to download and use. It is NOT\nopen-source software. Some components inside it are open source and remain\nunder their own licenses (see \"Third-party components\" below and the file\nTHIRD_PARTY_NOTICES.md).\n\n1. PARTIES AND DEFINITIONS\n\n\"Licensor\" means [OWNER LEGAL NAME / TRADING NAME], the owner of the Veystrix\ncomponents that the Licensor authored, as identified in section 6.\n\n\"Software\" means the Veystrix macOS application and the Veystrix inference\nengine helper bundled inside it, in the unmodified form published by the\nLicensor as an \"Official Build\" at\nhttps://github.com/joyboyreturns/Veystrix/releases, including any update the\nLicensor publishes through the application's update feed.\n\n\"Official Build\" means a file published by the Licensor at the address above,\nwhose SHA-256 checksum matches the checksum the Licensor published for it and\nwhose code signature verifies against the Licensor's Developer ID.\n\n\"Model Checkpoint\" means a machine-learning model, weights or tokenizer that you\nobtain from anyone other than the Licensor. Model Checkpoints are not part of\nthe Software.\n\n\"You\" means the person or organization that installs or uses the Software.\n\n2. GRANT OF LICENSE\n\nSubject to this agreement, the Licensor grants You a worldwide, non-exclusive,\nnon-transferable, revocable (for breach, see section 10), royalty-free license\nto download, install and run Official Builds of the Software on computers that\nYou own or control, for any lawful purpose, including personal, educational and\ncommercial use of the Software and of the text it generates.\n\nNo payment, account, registration or network activation is required to use the\nSoftware. The Software is designed to run fully offline once installed.\n\n3. REDISTRIBUTION\n\nYou may share an Official Build with others only if ALL of the following hold:\n(a) the file is unmodified, byte for byte, and its checksum and code signature\nstill verify;\n(b) You provide it free of charge, with no fee, subscription, advertising,\nbundle, donation wall or other consideration tied to it; and\n(c) You keep this agreement and THIRD_PARTY_NOTICES.md with it, and tell the\nrecipient that the official source is the Releases page named in section 1.\n\nYou may always link to the official Releases page.\n\n4. WHAT YOU MAY NOT DO\n\nUnless the Licensor gives You separate written permission, You may not:\n(a) modify, translate, adapt or create derivative works of the Software, or\nrepackage it, or distribute any modified or repackaged version;\n(b) rename, rebrand or present a modified build as Veystrix, use the name\n\"Veystrix\", its logo or its icons in a way that suggests a build is official or\nendorsed, or publish a build that could reasonably be mistaken for an Official\nBuild;\n(c) sell, rent, lease, sublicense or charge for the Software, an Official Build,\nor access to either, or include the Software in a paid product or paid\ncollection;\n(d) remove or alter copyright, license, attribution or update-signature\nnotices;\n(e) disable, bypass or forge the code-signature or update-signature checks in\norder to distribute or install an altered build; or\n(f) distribute the Software in a manner that violates export-control or other\nlaws that apply to You.\n\n5. RIGHTS THAT CANNOT BE WAIVED; THIRD-PARTY RIGHTS\n\nNothing in this agreement limits any right that the law of Your country gives You\nand that cannot be removed by contract. In particular, and to the extent\napplicable law gives them to You, nothing here prevents You from: making a\nbackup copy needed to use the Software; observing, studying and testing how the\nSoftware functions while You use it as permitted; decompiling or reverse\nengineering it to the extent permitted by law for interoperability with\nindependently created software (for example under Article 6 of EU Directive\n2009/24/EC); or exercising rights granted by a third-party license to a\nthird-party component.\n\n6. OWNERSHIP; THIRD-PARTY COMPONENTS; SOURCE CODE\n\nSubject to the rest of this section, the Licensor and its licensors own the\nSoftware. Portions of the Software are works of other authors that are licensed\nto the Licensor and to You under their own terms, including MIT-licensed code\nwhose copyright holder is named in THIRD_PARTY_NOTICES.md; the Licensor does not\nclaim to own those portions. This agreement grants a license, not a sale. The Licensor's source code for the Veystrix components that\nthe Licensor owns is proprietary and is not licensed to You; no source code\nlicense is granted or implied.\n\nThe Software contains or links to third-party components, including components\npublished under open-source licenses (for example MIT, BSD, Apache-2.0 and\nMPL-2.0). Those components, and the portions of Veystrix derived from MIT-licensed\ncode published earlier under the names MACQWEN and FlashNext, remain under their\nown license terms, and the copyright notices and license texts in\nTHIRD_PARTY_NOTICES.md must be preserved. This agreement does not reduce any right\nYou have under those licenses, and does not claim that earlier open-source\nreleases of that earlier code were withdrawn.\n\n7. MODEL CHECKPOINTS\n\nThe Software does not include model weights and does not download them without\nYour explicit action. A Model Checkpoint is licensed by its publisher, not by\nthe Licensor. You are responsible for reading and following the license of any\ncheckpoint You use.\n\n8. PRIVACY\n\nThe Software does not require an account and does not send Your prompts,\nfiles, repositories, sessions or model data to the Licensor or any third party.\nThe only network access the Software makes by itself is the optional update\ncheck, which You can turn off in Settings; it requests the public update feed\nfrom github.com and sends no information about Your prompts or files. Your\nInternet provider and GitHub can see ordinary connection metadata (such as Your\nIP address) when You check for updates, as with any web request. Network\nfeatures of tools You connect to the local server (for example coding agents)\nare controlled by those tools, not by the Software.\n\n9. SAFETY, HARDWARE AND NO WARRANTY\n\nThe Software streams very large model files from Your SSD and can use most of\nthe memory of Your computer. This reads many gigabytes per request, can increase\nSSD wear, and can slow or interrupt other applications. The Software includes\nmemory and swap protections, but they are estimates and cannot guarantee that\nYour computer will not become slow or unresponsive. Keep Your computer on AC\npower during long sessions and keep backups of important data.\n\nOutput generated by language models can be wrong, unsafe or offensive. You are\nresponsible for checking it before You rely on it.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND \"AS AVAILABLE\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A\nPARTICULAR PURPOSE, NON-INFRINGEMENT, AVAILABILITY OR ACCURACY. TO THE MAXIMUM\nEXTENT PERMITTED BY LAW, THE LICENSOR IS NOT LIABLE FOR ANY INDIRECT, INCIDENTAL,\nSPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR FOR LOSS OF DATA, PROFITS OR\nHARDWARE LIFE, ARISING FROM USE OF OR INABILITY TO USE THE SOFTWARE, AND THE\nLICENSOR'S TOTAL LIABILITY FOR ANY CLAIM IS LIMITED TO THE AMOUNT YOU PAID FOR THE\nSOFTWARE, WHICH IS ZERO. Some jurisdictions do not allow these limits; in that\ncase they apply only as far as the law permits. Nothing here limits liability\nthat cannot be limited by law (for example for death or personal injury caused by\nnegligence, or for fraud).\n\n10. TERM AND TERMINATION\n\nThis agreement lasts until terminated. It ends automatically if You materially\nbreach it, and You must then stop using and delete the Software. Sections 4, 6, 9\nand 11 survive termination. Termination of this agreement does not affect any\nright You hold under a third-party license.\n\n11. GENERAL\n\nThe Licensor may publish a new version of this agreement with a new release of the\nSoftware; a new version applies to that release and later releases, and does not\nchange the terms of a release You already installed unless You choose to update.\nIf a provision is unenforceable, the rest stays in force. This agreement is the\nwhole agreement about the Software between You and the Licensor. It is governed by\nthe laws of [JURISDICTION], except that mandatory consumer-protection rules of\nYour country of residence continue to apply to You. Contact: [SUPPORT CONTACT /\nGitHub Issues at https://github.com/joyboyreturns/Veystrix/issues].\n\n12. ATTRIBUTION\n\nVeystrix is built on, and includes work derived from, MIT-licensed code that was\npublished as MACQWEN and FlashNext. See THIRD_PARTY_NOTICES.md for the copyright\nholder and the full MIT license text.\n"
     }
   ],
   "packages": [
     {
       "SPDXID": "SPDXRef-Veystrix",
       "name": "Veystrix",
-      "versionInfo": "3.8.1-dev",
+      "versionInfo": "3.8.1",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
@@ -151,7 +151,7 @@
     {
       "SPDXID": "SPDXRef-py-7-fastapi",
       "name": "fastapi",
-      "versionInfo": "0.162.2",
+      "versionInfo": "0.162.3",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
@@ -161,14 +161,14 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:pypi/fastapi@0.162.2"
+          "referenceLocator": "pkg:pypi/fastapi@0.162.3"
         }
       ]
     },
     {
       "SPDXID": "SPDXRef-py-8-filelock",
       "name": "filelock",
-      "versionInfo": "4.2.9",
+      "versionInfo": "4.2.10",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
@@ -178,7 +178,7 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:pypi/filelock@4.2.9"
+          "referenceLocator": "pkg:pypi/filelock@4.2.10"
         }
       ]
     },
@@ -338,7 +338,7 @@
     {
       "SPDXID": "SPDXRef-py-18-markdown-it-py",
       "name": "markdown-it-py",
-      "versionInfo": "4.2.0",
+      "versionInfo": "4.3.0",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
@@ -348,7 +348,7 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:pypi/markdown-it-py@4.2.0"
+          "referenceLocator": "pkg:pypi/markdown-it-py@4.3.0"
         }
       ]
     },
@@ -506,24 +506,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-28-opencv-python",
-      "name": "opencv-python",
-      "versionInfo": "5.0.0.93",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "NOASSERTION",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:pypi/opencv-python@5.0.0.93"
-        }
-      ]
-    },
-    {
-      "SPDXID": "SPDXRef-py-29-opentelemetry-api",
+      "SPDXID": "SPDXRef-py-28-opentelemetry-api",
       "name": "opentelemetry-api",
       "versionInfo": "1.45.2",
       "downloadLocation": "NOASSERTION",
@@ -540,7 +523,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-30-packaging",
+      "SPDXID": "SPDXRef-py-29-packaging",
       "name": "packaging",
       "versionInfo": "26.3",
       "downloadLocation": "NOASSERTION",
@@ -557,7 +540,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-31-pillow",
+      "SPDXID": "SPDXRef-py-30-pillow",
       "name": "pillow",
       "versionInfo": "13.0.0",
       "downloadLocation": "NOASSERTION",
@@ -574,7 +557,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-32-protobuf",
+      "SPDXID": "SPDXRef-py-31-protobuf",
       "name": "protobuf",
       "versionInfo": "7.36.2",
       "downloadLocation": "NOASSERTION",
@@ -591,7 +574,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-33-pycparser",
+      "SPDXID": "SPDXRef-py-32-pycparser",
       "name": "pycparser",
       "versionInfo": "3.12",
       "downloadLocation": "NOASSERTION",
@@ -608,7 +591,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-34-pydantic",
+      "SPDXID": "SPDXRef-py-33-pydantic",
       "name": "pydantic",
       "versionInfo": "2.14.3",
       "downloadLocation": "NOASSERTION",
@@ -625,7 +608,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-35-pydantic-core",
+      "SPDXID": "SPDXRef-py-34-pydantic-core",
       "name": "pydantic_core",
       "versionInfo": "2.50.4",
       "downloadLocation": "NOASSERTION",
@@ -642,7 +625,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-36-Pygments",
+      "SPDXID": "SPDXRef-py-35-Pygments",
       "name": "Pygments",
       "versionInfo": "2.21.0",
       "downloadLocation": "NOASSERTION",
@@ -659,7 +642,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-37-python-multipart",
+      "SPDXID": "SPDXRef-py-36-python-multipart",
       "name": "python-multipart",
       "versionInfo": "0.0.33",
       "downloadLocation": "NOASSERTION",
@@ -676,7 +659,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-38-PyYAML",
+      "SPDXID": "SPDXRef-py-37-PyYAML",
       "name": "PyYAML",
       "versionInfo": "6.0.3",
       "downloadLocation": "NOASSERTION",
@@ -693,9 +676,9 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-39-regex",
+      "SPDXID": "SPDXRef-py-38-regex",
       "name": "regex",
-      "versionInfo": "2026.11.7",
+      "versionInfo": "2026.11.9",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
@@ -705,12 +688,12 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:pypi/regex@2026.11.7"
+          "referenceLocator": "pkg:pypi/regex@2026.11.9"
         }
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-40-requests",
+      "SPDXID": "SPDXRef-py-39-requests",
       "name": "requests",
       "versionInfo": "2.34.2",
       "downloadLocation": "NOASSERTION",
@@ -727,7 +710,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-41-rich",
+      "SPDXID": "SPDXRef-py-40-rich",
       "name": "rich",
       "versionInfo": "15.0.0",
       "downloadLocation": "NOASSERTION",
@@ -744,7 +727,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-42-safetensors",
+      "SPDXID": "SPDXRef-py-41-safetensors",
       "name": "safetensors",
       "versionInfo": "0.8.0",
       "downloadLocation": "NOASSERTION",
@@ -761,7 +744,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-43-scipy",
+      "SPDXID": "SPDXRef-py-42-scipy",
       "name": "scipy",
       "versionInfo": "1.18.1",
       "downloadLocation": "NOASSERTION",
@@ -778,7 +761,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-44-sentencepiece",
+      "SPDXID": "SPDXRef-py-43-sentencepiece",
       "name": "sentencepiece",
       "versionInfo": "0.2.3",
       "downloadLocation": "NOASSERTION",
@@ -795,7 +778,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-45-shellingham",
+      "SPDXID": "SPDXRef-py-44-shellingham",
       "name": "shellingham",
       "versionInfo": "1.5.4",
       "downloadLocation": "NOASSERTION",
@@ -812,7 +795,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-46-sounddevice",
+      "SPDXID": "SPDXRef-py-45-sounddevice",
       "name": "sounddevice",
       "versionInfo": "0.5.6",
       "downloadLocation": "NOASSERTION",
@@ -829,7 +812,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-47-starlette",
+      "SPDXID": "SPDXRef-py-46-starlette",
       "name": "starlette",
       "versionInfo": "1.10.0",
       "downloadLocation": "NOASSERTION",
@@ -846,7 +829,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-48-tokenizers",
+      "SPDXID": "SPDXRef-py-47-tokenizers",
       "name": "tokenizers",
       "versionInfo": "0.23.3",
       "downloadLocation": "NOASSERTION",
@@ -863,7 +846,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-49-tqdm",
+      "SPDXID": "SPDXRef-py-48-tqdm",
       "name": "tqdm",
       "versionInfo": "4.70.1",
       "downloadLocation": "NOASSERTION",
@@ -880,7 +863,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-50-transformers",
+      "SPDXID": "SPDXRef-py-49-transformers",
       "name": "transformers",
       "versionInfo": "5.16.1",
       "downloadLocation": "NOASSERTION",
@@ -897,9 +880,9 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-51-typer",
+      "SPDXID": "SPDXRef-py-50-typer",
       "name": "typer",
-      "versionInfo": "0.28.0",
+      "versionInfo": "0.29.0",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
@@ -909,12 +892,12 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:pypi/typer@0.28.0"
+          "referenceLocator": "pkg:pypi/typer@0.29.0"
         }
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-52-typing-inspection",
+      "SPDXID": "SPDXRef-py-51-typing-inspection",
       "name": "typing-inspection",
       "versionInfo": "0.4.5",
       "downloadLocation": "NOASSERTION",
@@ -931,7 +914,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-53-typing-extensions",
+      "SPDXID": "SPDXRef-py-52-typing-extensions",
       "name": "typing_extensions",
       "versionInfo": "4.16.0",
       "downloadLocation": "NOASSERTION",
@@ -948,7 +931,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-54-urllib3",
+      "SPDXID": "SPDXRef-py-53-urllib3",
       "name": "urllib3",
       "versionInfo": "2.8.0",
       "downloadLocation": "NOASSERTION",
@@ -965,7 +948,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-55-uvicorn",
+      "SPDXID": "SPDXRef-py-54-uvicorn",
       "name": "uvicorn",
       "versionInfo": "0.54.0",
       "downloadLocation": "NOASSERTION",
@@ -982,7 +965,7 @@
       ]
     },
     {
-      "SPDXID": "SPDXRef-py-56-websockets",
+      "SPDXID": "SPDXRef-py-55-websockets",
       "name": "websockets",
       "versionInfo": "17.4",
       "downloadLocation": "NOASSERTION",
@@ -1165,147 +1148,142 @@
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-28-opencv-python"
+      "relatedSpdxElement": "SPDXRef-py-28-opentelemetry-api"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-29-opentelemetry-api"
+      "relatedSpdxElement": "SPDXRef-py-29-packaging"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-30-packaging"
+      "relatedSpdxElement": "SPDXRef-py-30-pillow"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-31-pillow"
+      "relatedSpdxElement": "SPDXRef-py-31-protobuf"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-32-protobuf"
+      "relatedSpdxElement": "SPDXRef-py-32-pycparser"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-33-pycparser"
+      "relatedSpdxElement": "SPDXRef-py-33-pydantic"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-34-pydantic"
+      "relatedSpdxElement": "SPDXRef-py-34-pydantic-core"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-35-pydantic-core"
+      "relatedSpdxElement": "SPDXRef-py-35-Pygments"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-36-Pygments"
+      "relatedSpdxElement": "SPDXRef-py-36-python-multipart"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-37-python-multipart"
+      "relatedSpdxElement": "SPDXRef-py-37-PyYAML"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-38-PyYAML"
+      "relatedSpdxElement": "SPDXRef-py-38-regex"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-39-regex"
+      "relatedSpdxElement": "SPDXRef-py-39-requests"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-40-requests"
+      "relatedSpdxElement": "SPDXRef-py-40-rich"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-41-rich"
+      "relatedSpdxElement": "SPDXRef-py-41-safetensors"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-42-safetensors"
+      "relatedSpdxElement": "SPDXRef-py-42-scipy"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-43-scipy"
+      "relatedSpdxElement": "SPDXRef-py-43-sentencepiece"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-44-sentencepiece"
+      "relatedSpdxElement": "SPDXRef-py-44-shellingham"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-45-shellingham"
+      "relatedSpdxElement": "SPDXRef-py-45-sounddevice"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-46-sounddevice"
+      "relatedSpdxElement": "SPDXRef-py-46-starlette"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-47-starlette"
+      "relatedSpdxElement": "SPDXRef-py-47-tokenizers"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-48-tokenizers"
+      "relatedSpdxElement": "SPDXRef-py-48-tqdm"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-49-tqdm"
+      "relatedSpdxElement": "SPDXRef-py-49-transformers"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-50-transformers"
+      "relatedSpdxElement": "SPDXRef-py-50-typer"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-51-typer"
+      "relatedSpdxElement": "SPDXRef-py-51-typing-inspection"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-52-typing-inspection"
+      "relatedSpdxElement": "SPDXRef-py-52-typing-extensions"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-53-typing-extensions"
+      "relatedSpdxElement": "SPDXRef-py-53-urllib3"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-54-urllib3"
+      "relatedSpdxElement": "SPDXRef-py-54-uvicorn"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-55-uvicorn"
-    },
-    {
-      "spdxElementId": "SPDXRef-Veystrix",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-py-56-websockets"
+      "relatedSpdxElement": "SPDXRef-py-55-websockets"
     },
     {
       "spdxElementId": "SPDXRef-Veystrix",

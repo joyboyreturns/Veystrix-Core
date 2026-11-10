@@ -14,7 +14,7 @@
     <key>CFBundleShortVersionString</key><string>@SHORT_VERSION@</string>
     <!-- build number: a strictly increasing integer. Sparkle orders updates by this, never by the marketing string. -->
     <key>CFBundleVersion</key><string>@BUILD_NUMBER@</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSMinimumSystemVersion</key><string>@MIN_MACOS@</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSHumanReadableCopyright</key><string>Veystrix freeware. Contains MIT-licensed code (copyright 1architect) and third-party components; see Resources/THIRD_PARTY_NOTICES.md.</string>

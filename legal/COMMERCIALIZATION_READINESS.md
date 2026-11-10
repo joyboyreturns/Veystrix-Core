@@ -9,7 +9,7 @@ Audited 2026-11-10. Status key: **READY**, **PARTIAL**, **BLOCKED**, **OPEN** (n
 | MIT / third-party notices | PARTIAL | Generated and bundled (`THIRD_PARTY_NOTICES.md`, `Licenses/`). Upstream-copied passages need individual notices (provenance OPEN 4). |
 | Ownership of relicensed code | OPEN | **The first 204 commits appear to be by another person (`1architect` / `gioma`).** The owner can distribute the combined work as proprietary freeware only with the MIT notice kept, and must not describe that code as owner-authored (provenance OPEN 1, 2). Lawyer review recommended before announcing. |
 | AI-assisted authorship | OPEN | Provenance OPEN 3. |
-| Dependency licenses | PARTIAL | No GPL/AGPL found. MPL-2.0 (certifi, tqdm) needs notices; `opencv-python` bundles LGPL FFmpeg and should be excluded or handled. |
+| Dependency licenses | PARTIAL | No GPL/AGPL found. MPL-2.0 (certifi, tqdm) needs notices; `opencv-python` bundles LGPL FFmpeg: **excluded from the engine bundle** (removed after install, asserted absent by `packaging/engine/smoke_import.py`, 2026-11-10); video-input features that need it are unavailable in the packaged app. |
 | SBOM | READY | SPDX 2.3 JSON generated (`legal/sbom.spdx.json`); regenerate at each release. |
 | Developer ID signing, Hardened Runtime | BLOCKED | No Developer ID Application identity in the keychain. Scripts and entitlements are written and tested with an ad-hoc signature only. |
 | Notarization | BLOCKED | Needs an Apple Developer Program account, an App Store Connect API key or app-specific password. |

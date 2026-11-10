@@ -4,7 +4,7 @@
 # Environment: VEYSTRIX_SIGN_IDENTITY (Developer ID Application ...), VEYSTRIX_SPARKLE_PUBLIC_KEY (base64 EdDSA public key),
 #              VEYSTRIX_VERSION, VEYSTRIX_BUILD_NUMBER.
 # Without a signing identity the app is ad-hoc signed and labelled DEVELOPMENT: it must never be published.
-source "$SCRIPT_DIR/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 ENGINE_DIR=""
 while [[ $# -gt 0 ]]; do case "$1" in --engine) ENGINE_DIR="$2"; shift 2;; *) die "unknown option $1";; esac; done
 
@@ -24,8 +24,16 @@ SPARKLE_FW="$(find "$APP_DIR/.build" -type d -name Sparkle.framework -path '*mac
 ditto "$SPARKLE_FW" "$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/Veystrix" 2>/dev/null || true
 
+# Minimum macOS: the UI alone runs on 14, but a bundled engine inherits the minimum OS of its MLX binaries
+# (MLX 0.32.2 is built for macOS 26.2), so the bundle declares what the engine really needs.
+MIN_MACOS="14.0"
+if [[ -n "${ENGINE_DIR:-}" ]]; then
+  MLX_SO="$(ls "$ENGINE_DIR"/python/lib/python3.*/site-packages/mlx/core.*.so 2>/dev/null | head -1)"
+  [[ -n "$MLX_SO" ]] && MIN_MACOS="$(otool -l "$MLX_SO" | awk '/minos/{print $2; exit}')"
+fi
+log "LSMinimumSystemVersion = $MIN_MACOS"
 # Info.plist (Sparkle key injected; empty key => updates disabled in the app)
-sed -e "s/@SHORT_VERSION@/$SHORT_VERSION/" -e "s/@BUILD_NUMBER@/$BUILD_NUMBER/" \
+sed -e "s/@MIN_MACOS@/$MIN_MACOS/" -e "s/@SHORT_VERSION@/$SHORT_VERSION/" -e "s/@BUILD_NUMBER@/$BUILD_NUMBER/" \
     -e "s|@SPARKLE_PUBLIC_ED_KEY@|${VEYSTRIX_SPARKLE_PUBLIC_KEY:-}|" \
     "$APP_DIR/Support/Info.plist.template" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null

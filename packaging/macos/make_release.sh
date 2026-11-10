@@ -2,7 +2,7 @@
 # Build, sign, package, (notarize) and checksum a release candidate. Usage: packaging/macos/make_release.sh [--engine DIR] [--notarize]
 # Public distribution requires: VEYSTRIX_SIGN_IDENTITY, notarization (--notarize) and VEYSTRIX_SPARKLE_PUBLIC_KEY.
 # Anything else produces a clearly labelled DEV artifact and the script says so.
-source "$SCRIPT_DIR/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 ENGINE=(); NOTARIZE=0
 while [[ $# -gt 0 ]]; do case "$1" in --engine) ENGINE=(--engine "$2"); shift 2;; --notarize) NOTARIZE=1; shift;; *) die "unknown option $1";; esac; done
 mkdir -p "$DIST"
