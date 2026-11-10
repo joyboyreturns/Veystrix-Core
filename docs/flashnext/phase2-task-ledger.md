@@ -24,3 +24,4 @@ Regression commands: `.venv/bin/python -m unittest discover -s macqwen/tests -t 
 - [x] Battery-allowed mode for the after-turns harness (explicit flag, 40% default floor, recorded).
 - [x] Real-checkpoint full-routing confirmation: 1,152/1,152 layer calls routed 10 distinct experts (`results/flashnext/20261110-115952-decode-profile-manual/`). Prefix-profile invalidation against the real model is still synthetic-only.
 - [ ] Open: full-routing paired baseline with exactness gates, 8K-after-turns safety gate, decode timeline and optimization, speculation, 16K, API/client validation, final documentation.
+- [~] 8K-after-turns gate attempted on battery: postponed at preflight (11,635 MiB available, 11,908 MiB needed); nothing started. Re-run when about 300 MiB more is available.

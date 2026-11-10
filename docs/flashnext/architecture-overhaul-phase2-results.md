@@ -26,6 +26,8 @@ Diagnostic (profiled arm; not a speed result, one arm, no resolution band): deco
 
 Uncommitted-work review outcomes: the oversized-pool fallback streams every routed expert in original order and leaves the pool untouched (the G32 cast is a no-op on bf16 executor output); `bench_phase2_after_turns.py` now has an explicit `--power-rules battery-ok` mode with a charge floor (default 40%, never below 25%), a pre-8K power recheck and recorded power rules. Its own headroom estimate refused the 8K request at 7.9 GB available versus about 11.5 GB required before any purge, which is a valid safe refusal. Synthetic tests only; the 8K-after-turns gate has not run.
 
+**8K-after-turns gate, 2026-11-10: safely postponed, not run.** Command: `.venv/bin/python -m models.flashnext.tests.bench.bench_phase2_after_turns --power-rules battery-ok --min-battery 40 --pool-gb 2` (battery 71%, discharging, swap 853.5 MiB). Preflight, after its own purge attempt, found 11,635 MiB available against the 11,908 MiB the layer-major candidate needs (3,072 MiB floor + footprint + 512 MiB margin), so it stopped before starting any model process (`results/flashnext/20261110-120207-phase2-after-turns-manual/`). This is a valid safe refusal. The floor was not lowered. Re-run after freeing about 300 MiB or more of memory (for example by closing other applications); no model-side change is needed.
+
 ## Performance
 
 These are prior recorded results on this checkpoint, not new Phase II measurements. Conditions and raw arms are in [overnight-architecture-results.md](overnight-architecture-results.md). The new code has no measured throughput claim.
