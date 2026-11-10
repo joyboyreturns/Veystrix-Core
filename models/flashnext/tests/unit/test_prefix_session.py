@@ -55,6 +55,30 @@ class Base(unittest.TestCase):
 
 
 class WorkflowTests(Base):
+    def test_full_routing_never_restores_a_pruned_routing_snapshot(self):
+        from models.flashnext.routing import RoutingProfile
+        from models.flashnext.tests.unit.test_routing import FakeStore
+
+        def compatible(threshold):
+            # This test needs the compatibility fingerprint, not a global
+            # change to the adaptive router used by subsequent tests.
+            with mock.patch.object(RoutingProfile, "reset"):
+                profile = RoutingProfile("exact-quality", FakeStore(), object(), threshold=threshold)
+            return {**compat(), "profile": profile.session_profile(set())}
+
+        model = build_model()
+        prompt = self.system + self.suffix_a
+        old = S.PrefixSession(encode, lambda: compatible(0.85))
+        _, _, before = self.go(model, old, prompt)
+        self.assertEqual(before.snapshots, [len(self.system)])
+        full = S.PrefixSession(encode, lambda: compatible(1.0))
+        _, _, different = self.go(model, full, prompt)
+        self.assertEqual(different.hit_tokens, 0)
+        resumed_old = S.PrefixSession(encode, lambda: compatible(0.85))
+        _, _, same = self.go(model, resumed_old, prompt)
+        self.assertEqual(same.hit_tokens, len(self.system))
+        self.assertEqual(same.tier, "ssd")
+
     def test_layer_order_report_records_the_executed_windows(self):
         from models.flashnext import layer_major
 

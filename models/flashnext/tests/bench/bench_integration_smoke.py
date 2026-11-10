@@ -45,7 +45,7 @@ def post(url, path, payload, timeout=600):
 def stream(url, path, payload, timeout=600):
     request = urllib.request.Request(url + path, data=json.dumps(payload).encode(), headers={
         "Content-Type": "application/json", "Authorization": "Bearer local"})
-    events, done, text = 0, False, []
+    events, done, text, errors, finish_reasons = 0, False, [], [], []
     with urllib.request.urlopen(request, timeout=timeout) as response:
         status = response.status
         for raw in response:
@@ -58,11 +58,29 @@ def stream(url, path, payload, timeout=600):
                 continue
             events += 1
             try:
-                delta = json.loads(body)["choices"][0].get("delta", {})
-                text.append(delta.get("content") or "")
-            except (ValueError, KeyError, IndexError):
-                pass
-    return {"status": status, "events": events, "done": done, "text": "".join(text)[:300]}
+                event = json.loads(body)
+                if not isinstance(event, dict):
+                    raise ValueError("event is not an object")
+                if event.get("error") is not None:
+                    errors.append(str(event["error"])[:300])
+                    continue
+                choices = event.get("choices")
+                if not isinstance(choices, list):
+                    raise ValueError("missing choices")
+                # A usage-only terminal chunk may have no choices.
+                for choice in choices:
+                    if not isinstance(choice, dict) or not isinstance(choice.get("delta", {}), dict):
+                        raise ValueError("invalid choice")
+                    content = choice.get("delta", {}).get("content")
+                    if content is not None and not isinstance(content, str):
+                        raise ValueError("invalid content")
+                    text.append(content or "")
+                    if choice.get("finish_reason") is not None:
+                        finish_reasons.append(choice["finish_reason"])
+            except (ValueError, TypeError) as error:
+                errors.append(f"malformed stream event: {error}")
+    return {"status": status, "events": events, "done": done, "text": "".join(text)[:300],
+            "errors": errors, "finish_reasons": finish_reasons}
 
 
 def get(url, path):
@@ -138,10 +156,12 @@ def make_driver(checkpoint, report):
         # 4. other protocols
         status, body = post(url, "/v1/messages", {"model": "flashnext", "max_tokens": 16, "messages": [
             {"role": "user", "content": "Reply with the single word: pong"}]})
-        report["anthropic"] = {"status": status, "text": json.dumps(body.get("content"))[:120] if isinstance(body, dict) else None}
+        report["anthropic"] = {"status": status, "content": body.get("content") if isinstance(body, dict) else None}
         status, body = post(url, "/v1/responses", {"model": "flashnext", "input": "Reply with the single word: pong",
                                                    "max_output_tokens": 16})
-        report["responses"] = {"status": status, "keys": sorted(body)[:8] if isinstance(body, dict) else None}
+        report["responses"] = {"status": status, "object": body.get("object") if isinstance(body, dict) else None,
+                               "response_status": body.get("status") if isinstance(body, dict) else None,
+                               "output": body.get("output") if isinstance(body, dict) else None}
         report["final_health"] = get(url, "/health")
         return report
 
@@ -150,18 +170,31 @@ def make_driver(checkpoint, report):
 
 def verdict(report):
     problems = []
-    if report.get("tool_turn", {}).get("status") != 200:
-        problems.append("tool turn failed")
+    tool = report.get("tool_turn") or {}
+    call = tool.get("first_call") or {}
+    try:
+        arguments = json.loads(call.get("arguments", ""))
+    except (ValueError, TypeError, AttributeError):
+        arguments = None
+    if (tool.get("status") != 200 or tool.get("finish_reason") != "tool_calls"
+            or not tool.get("tool_calls") or not isinstance(call, dict) or call.get("name") != "read_file"
+            or not isinstance(arguments, dict) or arguments.get("path") != "models/flashnext/layer_major.py"):
+        problems.append("tool turn did not produce the expected read_file call")
     follow = report.get("follow_up") or {}
-    if follow.get("status") != 200 or not follow.get("done") or not follow.get("events"):
+    if (follow.get("status") != 200 or not follow.get("done") or not follow.get("events")
+            or follow.get("errors") or not follow.get("finish_reasons") or not follow.get("text", "").strip()):
         problems.append("streamed follow-up incomplete")
     if not report.get("cancel", {}).get("ready"):
         problems.append("server did not return to ready after the cancel")
     if report.get("after_cancel", {}).get("status") != 200:
         problems.append("request after the cancel failed")
-    for key in ("anthropic", "responses"):
-        if report.get(key, {}).get("status") != 200:
-            problems.append(f"{key} request failed")
+    anthropic = report.get("anthropic") or {}
+    if anthropic.get("status") != 200 or not isinstance(anthropic.get("content"), list):
+        problems.append("anthropic response failed or has an invalid shape")
+    responses = report.get("responses") or {}
+    if (responses.get("status") != 200 or responses.get("object") != "response"
+            or responses.get("response_status") != "completed" or not isinstance(responses.get("output"), list)):
+        problems.append("responses request failed or has an invalid shape")
     return problems
 
 

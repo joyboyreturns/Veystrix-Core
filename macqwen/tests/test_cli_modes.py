@@ -33,6 +33,14 @@ class ModeLaunchTests(unittest.TestCase):
         self.assertEqual((env["VEYSTRIX_MAX_COLD_PREFILL"], env["VEYSTRIX_MAX_INCREMENTAL_PREFILL"]), ("32768", "32768"))
         self.assertEqual((env["FLASHNEXT_CHAT_GUARD"], env["FLASHNEXT_WATCHDOG"], env["VEYSTRIX_MODE"]), ("1", "1", "agentic"))
 
+    def test_supervisor_forwards_recorded_full_routing_threshold_to_worker(self):
+        from models.flashnext import overnight
+
+        args = overnight.build_parser().parse_args(["--threshold", "1.0"])
+        supervised = overnight.server_command(args)
+        command, _ = self.launch(*supervised[1:])
+        self.assertEqual(command[command.index("--threshold") + 1], "1.0")
+
     def test_prefill_ceilings_are_launch_options_and_validated(self):
         _, env = self.launch("--mode", "agentic", "--max-cold-prefill", "16384", "--max-incremental-prefill", "8192")
         self.assertEqual((env["VEYSTRIX_MAX_COLD_PREFILL"], env["VEYSTRIX_MAX_INCREMENTAL_PREFILL"]), ("16384", "8192"))

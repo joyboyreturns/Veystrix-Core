@@ -18,8 +18,9 @@ held); take a native ``sample``; tell the client whose request is in flight, ove
 over at request start; SIGTERM; wait out a grace period; SIGKILL only if it is still alive. Before every signal the process
 identity (pid plus start time) is re-checked, so a recycled pid is never signalled, and only the one worker is ever signalled.
 The optional independent swap backstop samples macOS outside the worker's GIL. It immediately kills the identity-checked
-worker on an unsafe active-work reading or a failed probe. Sampling and process termination take time, so this cannot
-guarantee a hard swap ceiling; admission and the worker's other guards remain necessary.
+worker on an unsafe active-work reading, failed probe, persistently unreadable progress record, or stall. The candidate
+skips the slow stall diagnostics so swap is not left unmonitored during them. Sampling and process termination take time,
+so this cannot guarantee a hard swap ceiling; admission and the worker's other guards remain necessary.
 """
 from __future__ import annotations
 
@@ -353,6 +354,8 @@ def run(pid, identity, record_path, channel, directory, config=None, trace=None,
     record = P.Record(record_path)
     judge, responder = Judge(config), Responder(pid, identity, config, directory, trace, log, sleep, clock)
     last_judge = None
+    last_row = None
+    invalid_since = None
     heartbeat_fd = None
     heartbeat_at = None
     try:
@@ -363,8 +366,22 @@ def run(pid, identity, record_path, channel, directory, config=None, trace=None,
             if channel is not None:
                 responder.accept_clients(channel)
             row = record.read()
-            if row is None or row["pid"] != pid or (row["start_sec"], row["start_usec"]) != identity:
-                sleep(min(config.poll, config.memory_poll) if config.memory_watch else config.poll)
+            valid_row = (row is not None and row["pid"] == pid
+                         and (row["start_sec"], row["start_usec"]) == identity)
+            if valid_row:
+                last_row, invalid_since = row, None
+            elif config.memory_watch:
+                # A seqlock read can briefly race a writer. Do not let a stuck
+                # or corrupt record disable swap monitoring for an active worker.
+                now = clock()
+                if invalid_since is None:
+                    invalid_since = now
+                if now - invalid_since >= 0.5:
+                    fallback = last_row or {"stage": "unknown", "request_seq": 0, "response_started": 0}
+                    responder.handle_memory(fallback, "independent watchdog progress record unavailable")
+                    return EXIT_MEMORY_HANDLED
+            else:
+                sleep(config.poll)               # not written yet, or somebody else's record: never act on it
                 continue
             if config.memory_watch:
                 try:
@@ -372,8 +389,8 @@ def run(pid, identity, record_path, channel, directory, config=None, trace=None,
                     if not (0 <= used < float("inf")):
                         raise ValueError("invalid swap counter")
                     reason = (f"swap {used:.1f} MiB reached safety stop {config.memory_stop_mib:.1f} MiB"
-                              if used >= config.memory_stop_mib and row["stage"] != "idle" else None)
-                    if reason is None and (heartbeat_at is None or clock() - heartbeat_at >= 1.0):
+                              if used >= config.memory_stop_mib and (not valid_row or row["stage"] != "idle") else None)
+                    if valid_row and reason is None and (heartbeat_at is None or clock() - heartbeat_at >= 1.0):
                         if heartbeat_fd is None:
                             heartbeat_fd = os.open(record_path + ".memory", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                         os.utime(heartbeat_fd, None)
@@ -381,8 +398,12 @@ def run(pid, identity, record_path, channel, directory, config=None, trace=None,
                 except Exception as error:
                     reason = f"independent swap probe failed: {type(error).__name__}: {error}"
                 if reason:
-                    responder.handle_memory(row, reason)
+                    fallback = row if valid_row else last_row or {"stage": "unknown", "request_seq": 0, "response_started": 0}
+                    responder.handle_memory(fallback, reason)
                     return EXIT_MEMORY_HANDLED
+            if not valid_row:
+                sleep(min(config.poll, config.memory_poll))
+                continue
             now = clock()
             if last_judge is not None and now - last_judge < config.poll:
                 sleep(config.memory_poll)
@@ -390,11 +411,22 @@ def run(pid, identity, record_path, channel, directory, config=None, trace=None,
             last_judge = now
             verdict = judge.observe(row, usage_fn(pid), now)
             if verdict.state == "stalled":
+                if config.memory_watch:
+                    # Diagnostic sampling and graceful termination block this
+                    # very loop for seconds, leaving swap unmonitored.
+                    responder.handle_memory(row, "worker stalled; " + verdict.reason)
+                    return EXIT_MEMORY_HANDLED
                 responder.handle_stall(row, verdict, judge.previous and (judge.previous[1], judge.previous[2]))
                 return EXIT_STALL_HANDLED
             if verdict.state == "slow":
                 log(verdict.reason)
             sleep(min(config.poll, config.memory_poll) if config.memory_watch else config.poll)
+    except Exception as error:
+        if not config.memory_watch:
+            raise
+        fallback = last_row or {"stage": "unknown", "request_seq": 0, "response_started": 0}
+        responder.handle_memory(fallback, f"independent watchdog failed: {type(error).__name__}: {error}")
+        return EXIT_MEMORY_HANDLED
     finally:
         if heartbeat_fd is not None:
             os.close(heartbeat_fd)

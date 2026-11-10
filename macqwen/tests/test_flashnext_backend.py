@@ -149,6 +149,37 @@ class FlashNextBackendTests(unittest.TestCase):
         self.assertFalse(backend._replay_needed)
         self.assertTrue(backend.check_invariant())
 
+    def test_saved_session_with_different_routing_is_refused(self):
+        backend = self.backend()
+        loader = unittest.mock.Mock()
+        backend._sessions = lambda: SimpleNamespace(
+            profile={"mode": "exact-quality", "threshold": 1.0},
+            saved_profile=lambda _: {"mode": "exact-quality", "threshold": 0.85},
+            load=loader,
+        )
+        self.assertIn("saved routing profile differs", backend.load_session("saved"))
+        loader.assert_not_called()
+        self.assertEqual(backend.tape, [])
+
+    def test_routing_change_discards_old_state_and_prefix_namespace(self):
+        backend = self.backend()
+        backend.tape = [1, 2, 3]
+        backend.pending = [4]
+        backend.cache = [SimpleNamespace(offset=3)]
+        backend._prefix = object()
+        backend.store = SimpleNamespace(set_residency_tracking=lambda _: None)
+        backend.threshold, backend.resident_experts, backend.tail_experts = 1.0, 32, 6
+        backend.tail_warmup, backend.pin_budget_gb, backend.swap_epsilon = 8, 2.0, 0.02
+        backend.routing = SimpleNamespace(session_profile=lambda _: {"threshold": 0.85})
+        replacement = SimpleNamespace(session_profile=lambda _: {"threshold": 1.0})
+        with patch("models.flashnext.routing.RoutingProfile", return_value=replacement):
+            backend._rebuild_routing()
+        self.assertIsNone(backend._prefix)
+        self.assertEqual(backend.tape, [1, 2, 3])
+        self.assertEqual(backend.pending, [4])
+        self.assertTrue(backend._replay_needed)
+        self.assertEqual(backend.cache[0].offset, 0)
+
 
 class _ScriptedLanguage:
     """Yield scripted token IDs, then a stop ID, through greedy argmax."""

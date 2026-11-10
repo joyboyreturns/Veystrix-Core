@@ -245,6 +245,8 @@ class FlashNextBackend(Conversation):
     def _rebuild_routing(self) -> None:
         from models.flashnext.routing import RoutingProfile, prewarm_enabled
 
+        old = getattr(self, "routing", None)
+        old_profile = old.session_profile(self.stops) if old is not None and self.tape else None
         decoder = self._decoder
         if decoder is not None and self._is_native_mtp_decoder(decoder):
             if self._turn_allows_mtp():
@@ -277,6 +279,13 @@ class FlashNextBackend(Conversation):
             or os.environ.get("FLASHNEXT_TRACK_RESIDENT") == "1"
         )
         self._store = None
+        self._prefix = None  # its store captured the previous profile fingerprint
+        if old_profile is not None and old_profile != self.routing.session_profile(self.stops):
+            # Existing recurrent/KV state contains the previous routing result.
+            # Replay the transcript under the new settings instead of mixing states.
+            self._mark_replay_needed()
+            if self._mtp_active:
+                self._mtp_blocked = True
 
     def configure(self, argument: str) -> str:
         return get_registry().configure(self, argument, "flashnext")
@@ -337,20 +346,15 @@ class FlashNextBackend(Conversation):
                 f"thinking={'on' if summary.thinking else 'off'}")
 
     def load_session(self, name: str) -> str:
-        from models.flashnext.sessions import SessionError, SessionStore
+        from models.flashnext.sessions import SessionError
 
         try:
             sessions = self._sessions()
             saved_profile = sessions.saved_profile(name)
-            loader = sessions
             if saved_profile != sessions.profile:
-                loader = SessionStore(
-                    os.path.expanduser(self.session_dir),
-                    self.model_path,
-                    saved_profile,
-                    self.language,
-                )
-            loaded = loader.load(name)
+                raise SessionError("saved routing profile differs from the current runtime; "
+                                   "restore its original settings or replay the transcript")
+            loaded = sessions.load(name)
         except (OSError, SessionError, ValueError) as exc:
             return f"could not load session: {exc}"
         self.cache = loaded.cache

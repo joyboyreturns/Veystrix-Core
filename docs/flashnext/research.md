@@ -1,5 +1,7 @@
 # Flash-Next research
 
+> Phase II correction: historical results using the former 0.85 retained-mass default can omit routed experts. They do not establish performance or exactness for the owner's required full top-10 routing. See [phase II results](architecture-overhaul-phase2-results.md) before applying the historical conclusions below.
+
 This file is the single active research record for Flash-Next. It preserves the chronological experiments below. Current operation belongs in [`handoff.md`](handoff.md). The original streaming architecture study remains archived at [`docs/archive/flashnext/streaming-architecture.md`](../archive/flashnext/streaming-architecture.md).
 
 ## Research summary

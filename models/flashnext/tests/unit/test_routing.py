@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import os
+import warnings
 import unittest.mock
 from types import SimpleNamespace
 
@@ -59,6 +60,19 @@ class RoutingTests(unittest.TestCase):
     def test_only_known_profiles_are_accepted(self):
         with self.assertRaises(ValueError):
             self.make("turbo")
+
+    def test_default_routing_is_full_and_approximate_modes_warn(self):
+        from models.flashnext import adaptive_topk
+
+        default = self.make("exact-quality")
+        self.assertEqual(default.threshold, 1.0)
+        self.assertEqual(default.session_profile(set())["threshold"], 1.0)
+        self.assertEqual(adaptive_topk._THRESHOLD[0], 1.0)
+        for mode, threshold in (("exact-quality", 0.85), ("fast-quality", 1.0), ("cache-aware", 1.0)):
+            with warnings.catch_warnings(record=True) as captured:
+                warnings.simplefilter("always")
+                RoutingProfile(mode, FakeStore(), object(), threshold=threshold)
+            self.assertTrue(any("Approximate expert routing" in str(item.message) for item in captured))
 
     def test_quality_profiles_collect_a_warmup(self):
         self.assertFalse(self.make("standard").quality)

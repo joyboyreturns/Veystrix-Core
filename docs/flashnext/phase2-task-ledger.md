@@ -2,6 +2,10 @@
 
 Updated 2026-11-10. Branch `development3.8`; starting HEAD `6663a8a`, clean and 14 commits ahead of remote. Do not push or alter the checkpoint.
 
+Critical correction: the previous launch defaulted to a 0.85 retained-mass routing threshold. The current-checkpoint trace contains 4–9 experts per layer/token, not the required top 10. Previous speed and same-setting exactness evidence cannot establish full-routing behavior. Re-run the model gates at threshold 1.0, including safety estimates, before promotion.
+
+The default threshold is now 1.0 and the supervised paired harness passes it explicitly. Synthetic tests check ten distinct expert routes and separation from 0.85 prefix snapshots; a routing-profile change triggers transcript replay, and incompatible saved sessions are refused. Full-routing live performance, memory, and state validation remain open.
+
 - [x] Recover prior measurements and safety incident. The 8K layer-major win remains opt-in; 8K after decode breached 3 GiB swap with a five-second monitor. The 4.6K passing smoke does not validate that workload.
 - [ ] Strengthen and test memory admission, cancellation, and independent monitoring. Candidate admission and an independent swap backstop now have focused synthetic coverage; their combined live behavior and cleanup remain unvalidated. Do not claim a hard limit from polling alone.
 - [ ] Isolate decode costs, investigate native I/O, kernel execution and residency; retain changes only with correctness and performance evidence.

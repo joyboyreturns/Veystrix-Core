@@ -1,5 +1,7 @@
 # Architecture overhaul: layer-major prefill, decode data plane, speculative verification (2026-11-09)
 
+> Phase II routing correction: the previous default retained-mass threshold was 0.85 and can drop experts. Historical timing and same-setting exactness results do not validate the owner's required full top-10 routing. See [phase II results](architecture-overhaul-phase2-results.md) for the correction and pending full-routing gates.
+
 Status: **layer-major prefill is implemented behind an opt-in flag and verified bit-identical on a small model, checkpoint-free.
 No real-checkpoint number in this document is new.** Every predicted rate below is a model calibrated on earlier owner-run
 measurements, not a measurement of the new code. The owner has authorized the controlled plan in section 9.

@@ -151,7 +151,7 @@ def attach(language) -> None:
     language.mtp.layers[0].mlp._flashnext_threshold = float(
         os.environ.get(
             "FLASHNEXT_MTP_THRESHOLD",
-            os.environ.get("FLASHNEXT_TOPK_THRESHOLD", "0.85"),
+            os.environ.get("FLASHNEXT_TOPK_THRESHOLD", "1.0"),
         )
     )
 

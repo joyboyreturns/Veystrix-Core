@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+import warnings
 
 
 PROFILES = (
@@ -355,7 +356,7 @@ class RoutingProfile:
         mode,
         store,
         language,
-        threshold=0.85,
+        threshold=1.0,
         resident_experts=32,
         tail_experts=6,
         warmup=8,
@@ -368,6 +369,13 @@ class RoutingProfile:
         self.store = store
         self.language = language
         self.threshold = float(threshold)
+        if self.threshold < 1.0 or mode in ("fast-quality", "cache-aware") or swap_enabled():
+            warnings.warn(
+                "Approximate expert routing is enabled: experts may be dropped or replaced; "
+                "this does not preserve the full checkpoint routing. Use threshold 1.0 and "
+                "exact-quality without resident swaps for the full-routing path.",
+                RuntimeWarning, stacklevel=2,
+            )
         self.resident_experts = int(resident_experts)
         self.tail_experts = int(tail_experts)
         self.warmup = int(warmup)

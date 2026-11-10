@@ -108,6 +108,7 @@ class SettingsRegistryTests(unittest.TestCase):
         self.assertIs(registry.get("flashnext", "mode"), registry.get("flashnext", "routing"))
         defaults = registry.defaults("flashnext")
         self.assertEqual(defaults["routing"], "exact-quality")
+        self.assertEqual(defaults["threshold"], 1.0)
         self.assertEqual(defaults["swap-epsilon"], 0.02)
         self.assertEqual(defaults["metal-g64"], "1")
 

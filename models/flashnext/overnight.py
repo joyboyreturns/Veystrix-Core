@@ -62,6 +62,8 @@ def server_command(args) -> list:
         command += ["--preferences-file", args.preferences_file]
     if getattr(args, "no_auto_purge", False):
         command.append("--no-auto-purge")
+    if getattr(args, "threshold", None) is not None:
+        command += ["--threshold", str(args.threshold)]
     return command
 
 
@@ -432,6 +434,8 @@ def build_parser():
     p.add_argument("--prefix-dir", help="separate prefix-cache directory (default: normal AGENTIC cache)")
     p.add_argument("--preferences-file", help="preferences file for the child server")
     p.add_argument("--no-auto-purge", action="store_true", help="disable automatic file-cache purge")
+    p.add_argument("--threshold", type=float, default=None,
+                   help="expert mass retained; values below 1.0 enable approximate legacy routing")
     p.add_argument("--max-restarts", type=int, default=8)
     p.add_argument("--window-minutes", type=float, default=30.0)
     p.add_argument("--max-guard-stops", type=int, default=4)

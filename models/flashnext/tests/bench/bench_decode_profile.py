@@ -112,6 +112,7 @@ def main() -> int:
     run = MeasurementRun(path, runtime="flashnext", experiment="decode-profile", metadata={
         "checkpoint": str(checkpoint), "commit": git("rev-parse", "HEAD").strip(), "worktree": git("status", "--short"),
         "source_tokens": args.source_tokens, "decode_tokens": args.tokens, "pool_gb": args.pool_gb, "arms": names,
+        "routing_threshold": 1.0,
         "memory_rules": "swap-only", "power_rules": args.power_rules, "initial_machine": initial, "initial_purge": purge,
         "reads": "prefill-only F_NOCACHE, chunk-major reference",
         "purpose": "decode time distribution and current-checkpoint route trace; profiled arms are not speed results"})

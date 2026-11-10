@@ -23,8 +23,9 @@ Output identity against threshold 1.0, ten prompts, ten greedy tokens each:
 0.70 matches on 7/10, and the three that differ pick a different but equally
 correct continuation (Italy instead of Germany, `age > 25` instead of
 `age > 17`). Facts hold: gold is Au and Japan's capital is Tokyo at every
-threshold tested. 0.85 is the default because it sits just past the cliff while
-staying closest to the shipped behaviour.
+threshold tested. Those historical tests used approximate routing. The runtime
+default is now 1.0, retaining the checkpoint's full top-k experts; lower
+thresholds are an explicit legacy approximation.
 """
 from __future__ import annotations
 
@@ -455,6 +456,6 @@ def apply() -> bool:
     from mlx_vlm.models.qwen3_5_moe.language import Qwen3_5MoeSparseMoeBlock
 
     Qwen3_5MoeSparseMoeBlock.__call__ = _moe_call
-    set_threshold(float(os.environ.get("FLASHNEXT_TOPK_THRESHOLD", "0.85")))
+    set_threshold(float(os.environ.get("FLASHNEXT_TOPK_THRESHOLD", "1.0")))
     _applied = True
     return True

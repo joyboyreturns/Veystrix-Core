@@ -1,5 +1,7 @@
 # Overnight architecture results (2026-11-09 to 2026-11-10)
 
+> **Routing correction, Phase II:** The default launch used a 0.85 retained-mass threshold, which can drop routed experts. The current-checkpoint decode trace has only 4–9 expert IDs per layer/token, rather than the model's top 10. These historical timings and A/B exactness comparisons therefore do **not** establish speed or equivalence under full top-10 routing. The layer-major implementation is retained, but its performance and state correctness must be revalidated at threshold 1.0 before using these results for the owner's quality requirement. The earlier throughput and physical-I/O figures below remain historical observations under that different routing setting.
+
 Engineering report for the prefill and decode work on Qwen3.8-Flash-Next 4-bit (MacBook Air M4, 16 GB, fanless). Everything
 below was measured on the real checkpoint (`/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP`) with the supervised harness
 (`serve.sh` server, independent watchdog, swap/power/thermal stops, uncached prefill reads, reversed pairs) unless it says

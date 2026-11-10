@@ -451,7 +451,7 @@ def run_arm(name, index, checkpoint, payload, result_dir, sampler=machine_sample
         preferences.write_text(json.dumps({"temperature": 0.0, "thinking_enabled": False}))
         command = [str(ROOT / "serve.sh"), "--port", str(port), "--pool-gb", pool_gb if (name == "layer" and pool_ab) else base_pool_gb, "--checkpoint", str(checkpoint),
                    "--prefix-dir", str(prefix_dir if prefix_dir is not None else Path(temporary) / "prefix"),
-                   "--preferences-file", str(preferences)] + ([] if auto_purge else ["--no-auto-purge"])
+                   "--preferences-file", str(preferences), "--threshold", "1.0"] + ([] if auto_purge else ["--no-auto-purge"])
         # Both arms read experts with F_NOCACHE (same bytes, same order, so exactness is unaffected): three owner/agent runs
         # stopped on compressor growth while the file cache filled with streamed experts. Symmetric, recorded, opt-in.
         if decode_ab:
@@ -675,7 +675,7 @@ def main():
     source_id = runtime_fingerprint()
     metadata = {"checkpoint": str(checkpoint), "checkpoint_files": checkpoint_id, "commit": git("rev-parse", "HEAD").strip(),
                 "worktree": git("status", "--short"), "sources": {p: source_hash(ROOT / p) for p in SOURCES},
-                "runtime_fingerprint": source_id,
+                "runtime_fingerprint": source_id, "routing_threshold": 1.0,
                 "prompt_sha256": hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
                 "rounds": args.rounds, "candidate": args.candidate, "sampler": "greedy", "memory_rules": args.memory_rules, "layer_prefetch": args.prefetch, "decode_ab": args.decode_ab, "candidate_pool_gb": args.candidate_pool_gb, "candidate_enable": args.candidate_enable, "pool_gb_both_arms": args.pool_gb, "power_rules": args.power_rules, "reads": args.reads, "expert_reads": ("reference F_NOCACHE all phases vs candidate F_NOCACHE prefill only" if args.decode_ab else "buffered" if args.buffered_reads else "F_NOCACHE (both arms)"),
                 "cache": "isolated prefix cache per arm; OS file cache uncontrolled",

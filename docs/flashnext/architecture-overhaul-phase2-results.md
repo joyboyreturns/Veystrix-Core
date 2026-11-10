@@ -2,15 +2,19 @@
 
 Updated 2026-11-10. **The optimized long-lived server is not safety-validated.** The machine was on battery during this work, so no AC-only real-checkpoint experiment was started. The previously observed 8K-after-decode swap breach remains open. Do not use the candidate as a production server or interpret the offline tests below as proving the 3 GiB ceiling.
 
+**Routing correction:** The historical server default was a 0.85 retained-mass threshold, which drops routed experts. Its recorded current-checkpoint decode trace contains 4–9 routed expert IDs per layer/token, not the required 10. Consequently, the historical throughput and same-setting A/B exactness numbers below do not verify full top-10 model behavior or performance. The layer-major architecture and snapshots remain in place, but all model exactness, physical I/O, safety and performance gates must be repeated at full routing.
+
 ## Architecture and evidence
 
-The existing layer-major 8,192-token windows, two-half expert prefetch ring, inner snapshots and exact persistent cache remain in place and opt-in. The default remains the reference chunk-major server. The new layer-major admission gate checks fresh swap and pressure readings, a live guard, and estimated headroom after optional recovery; it reserves for output tokens and planned prefix snapshots. It defaults the candidate's absolute guard to 3,072 MiB with a 768 MiB margin. A separate watchdog samples swap through `sysctlbyname` every 0.25 seconds by default and can immediately terminate the identity-checked worker at the safety margin; admission requires its fresh heartbeat. These are conservative estimates, not bounds on allocator peaks or concurrent external allocations. Sampling and termination latency cannot guarantee a ceiling against an arbitrarily fast spike. A supervised live safety gate is still required.
+The existing layer-major 8,192-token windows, two-half expert prefetch ring, inner snapshots and exact persistent cache remain in place and opt-in. The default remains the reference chunk-major server, now with the full-routing threshold of 1.0. Changing a numerical routing profile invalidates the live state for replay and the prefix namespace; a saved session with a different routing profile is refused rather than silently restored. Legacy approximate options warn when selected. The new layer-major admission gate checks fresh swap and pressure readings, a live guard, and estimated headroom after optional recovery; it reserves for output tokens and planned prefix snapshots. It defaults the candidate's absolute guard to 3,072 MiB with a 768 MiB margin. A separate watchdog samples swap through `sysctlbyname` every 0.25 seconds by default and can immediately terminate the identity-checked worker at the safety margin; admission requires its fresh heartbeat. These are conservative estimates, not bounds on allocator peaks or concurrent external allocations. Sampling and termination latency cannot guarantee a ceiling against an arbitrarily fast spike. A supervised live safety gate is still required, particularly because its allocation estimates were calibrated on pruned routing.
 
 An interrupted or failed expert-pool fill now drains submitted writes and invalidates the affected slots before reuse. Descriptor initialization is serialized. This protects subsequent requests from partially populated cache entries; it is not a measured speed optimization. An experimental `--enable ngram-dedup` removes duplicate row reads within each bounded lookup and restores original order; it is disabled by default and only has synthetic exactness evidence. Decode profile summaries now preserve actual source layer IDs and report p95 layer-arrival gaps. Those host gaps include several stages and are not GPU execution times.
 
 The external research and compatibility caveats are recorded in [phase2-reference-research.md](phase2-reference-research.md). No new native engine or Metal kernel has passed an end-to-end gate. Existing MTP experiments and predicted expert prefetch remain disabled; no new real-checkpoint speculation measurement was made.
 
 On the settled offline tree, `.venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py'` ran 1,779 tests successfully (3 skipped); `.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'` ran 686 successfully. Both exited 0. These are checkpoint-free regressions, not a model exactness or production-safety gate. An earlier unqualified discovery did not load the test package's temporary warm-cache isolation, and an earlier FlashNext run overlapped source edits; neither is used as final evidence.
+
+After the full-routing correction and watchdog review, the same commands ran 1,791 FlashNext tests (3 skipped) and 689 MacQwen tests, both exit 0. A subsequent test-only isolation change was followed by 78 focused prefix, routing, smoke-gate and one-sync tests, all passing. The full-routing unit test checks ten distinct expert IDs for synthetic one-row and multi-row inputs. It does not replace a real-checkpoint exactness gate.
 
 ## Performance
 
@@ -36,19 +40,19 @@ An exploratory offline replay used the existing `20261109-231546-decode-profile-
 
 ## Safety and commands
 
-Reference rollback (existing default):
+Reference execution (chunk-major and full routing; not yet benchmarked at full routing):
 
 ```bash
 VEYSTRIX_API_KEY=local ./serve.sh --pool-gb 2
 ```
 
-Prior measured prefill configuration, **experimental and not validated for long-lived use**:
+Layer-major candidate, **experimental and not validated for long-lived use**. This command now uses full routing and does not reproduce the earlier pruned-routing timings:
 
 ```bash
 VEYSTRIX_API_KEY=local ./serve.sh --pool-gb 2 --enable uncached-prefill-reads --enable layer-major --enable layer-prefetch
 ```
 
-Prior measured decode configuration, separate from the preceding prefill combination:
+Buffered decode candidate, separate from the preceding prefill combination; its full-routing throughput has not been measured:
 
 ```bash
 VEYSTRIX_API_KEY=local ./serve.sh --pool-gb 2 --enable uncached-prefill-reads --enable pool-buffered-fill
@@ -64,5 +68,7 @@ After the long-session gate passes, the documented clients are `VEYSTRIX_API_KEY
 2. Capture current-checkpoint coding and tool-use routes and a buffered-fill decode profile, with unprofiled controls. Measure physical SSD reads, wait distributions and GPU execution separately; do not add overlapping timers. Prototype demand-read/resident-expert overlap or native submission only if those measurements justify it.
 3. Measure n-gram dedup with exact tokens, logits and state, physical reads and peak memory; reject it if end-to-end performance or safety regresses. Revisit 16K window scheduling and exact MTP only under the same gates.
 4. After the safety gate, validate restart/restoration, streaming/cancellation, all three API protocols and bounded real Qwen Code and DeepSeek Harness sessions. No 262K execution has been validated.
+
+The smoke verdict now requires the expected tool call and arguments, a completed error-free stream, and valid Anthropic and Responses envelopes. The independent watchdog also fails closed on a persistently unreadable progress record or its own unexpected loop failure and skips slow stall diagnostics while memory monitoring is active. These are offline tests; failure and cleanup on the actual server remain open.
 
 Task status and prior test commands are in [phase2-task-ledger.md](phase2-task-ledger.md). Local commit `a3a07d1` contains the offline safety, cache-fill, profiling, n-gram and documentation work. The original checkpoint and existing commits are unchanged; no push was made.

@@ -1,5 +1,7 @@
 # Flash-Next operational handoff
 
+> Phase II routing correction: the former 0.85 retained-mass default prunes routed experts; the owner requires all top-10 experts. Historical rates and same-setting exactness results do not validate that requirement. See [phase II results](architecture-overhaul-phase2-results.md) for the correction and outstanding gates.
+
 ## Resume for the next agent, 2026-09-22
 
 Start here. The sections after this one are older and describe the REAP-288

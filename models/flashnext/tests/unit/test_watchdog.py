@@ -292,6 +292,44 @@ class MemoryWatchTests(unittest.TestCase):
         self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
         self.assertIn("probe failed", responder.handle_memory.call_args.args[1])
 
+    def test_invalid_progress_record_does_not_hide_high_swap(self):
+        with mock.patch.object(P.Record, "read", return_value=None):
+            result, responder = self._run([2304])
+        self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
+        self.assertIn("swap 2304.0", responder.handle_memory.call_args.args[1])
+
+    def test_persistently_invalid_progress_record_stops_worker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            record = P.Record(os.path.join(directory, "r.bin"), create=True)
+            identity = P.process_identity(os.getpid())
+            record.write(pid=os.getpid(), start_sec=identity[0], start_usec=identity[1], stage="prefill")
+            responder = mock.Mock()
+            responder.clients = {}
+            try:
+                with mock.patch.object(W, "Responder", return_value=responder), \
+                     mock.patch.object(P.Record, "read", return_value=None):
+                    result = W.run(os.getpid(), identity, record.path, None, directory,
+                                   W.Config(memory_watch=True, memory_stop_mib=2304, memory_poll=0.25),
+                                   swap_fn=lambda: 0)
+                self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
+                self.assertIn("record unavailable", responder.handle_memory.call_args.args[1])
+            finally:
+                record.close()
+
+    def test_stalled_worker_stops_without_suspending_swap_monitor_for_diagnostics(self):
+        verdict = W.Verdict("stalled", "test stall", "prefill")
+        with mock.patch.object(W.Judge, "observe", return_value=verdict):
+            result, responder = self._run([0])
+        self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
+        responder.handle_stall.assert_not_called()
+        self.assertIn("worker stalled", responder.handle_memory.call_args.args[1])
+
+    def test_monitor_exception_fails_closed(self):
+        with mock.patch.object(W.Judge, "observe", side_effect=OSError("usage probe")):
+            result, responder = self._run([0])
+        self.assertEqual(result, W.EXIT_MEMORY_HANDLED)
+        self.assertIn("watchdog failed", responder.handle_memory.call_args.args[1])
+
     def test_idle_high_swap_does_not_kill_worker(self):
         with self.assertRaises(KeyboardInterrupt):
             self._run([2304], stage="idle")

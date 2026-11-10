@@ -200,7 +200,9 @@ class FastDraftGreedy:
         self.store._read_mode = DEFAULT_READ_MODE
         set_resident_experts(None)
         set_route_observer(self.route_observer)
-        set_threshold(0.85)
+        # Verification must use all target experts. The old 0.85 target was
+        # only exact relative to a mass-pruned target, not the checkpoint.
+        set_threshold(1.0)
         set_layer_thresholds({})
         set_renorm_blend(1.0)
 

@@ -83,7 +83,15 @@ def _warn_fused(backend):
 
 
 def _warn_routing(backend):
+    if backend.routing_profile == "fast-quality":
+        return "approximate routing drops experts after warmup; it does not preserve the full checkpoint routing"
     return _warn_cache(backend) or _warn_fused(backend)
+
+
+def _warn_threshold(backend):
+    if backend.threshold < 1.0:
+        return "approximate routing drops experts; use 1.0 to retain all checkpoint top-k experts"
+    return None
 
 
 def _effective_swap_epsilon(backend):
@@ -119,7 +127,7 @@ SETTINGS = (
     # The backend writes FLASHNEXT_TOPK_THRESHOLD internally while loading.
     # Keep provenance tied to CLI/default/live state instead of that internal
     # implementation variable.
-    Setting("threshold", (), 0.85, _threshold, "next-turn", "routing", "public", "flashnext", _threshold_display, _set_attr("threshold"), lambda b: True, None, None, __file__, "threshold", ("--threshold",), "threshold", {"type": float}),
+    Setting("threshold", (), 1.0, _threshold, "next-turn", "routing", "public", "flashnext", _threshold_display, _set_attr("threshold"), lambda b: True, _warn_threshold, None, __file__, "threshold", ("--threshold",), "threshold", {"type": float}),
     Setting("swap-epsilon", (), 0.02, _epsilon, "next-turn", "routing", "public", "flashnext", _effective_swap_epsilon, _set_attr("swap_epsilon"), _swap_active, _warn_cache, "FLASHNEXT_SWAP_EPSILON", __file__, "swap_epsilon", ("--swap-epsilon",), "swap_epsilon", {"type": float}),
     Setting("resident-experts", ("pinned-experts",), 32, lambda raw: _integer(raw, "resident-experts"), "next-turn", "routing", "public", "flashnext", lambda b: b.resident_experts, _set_attr("resident_experts"), _quality, None, None, __file__, "resident_experts", ("--resident-experts", "--pinned-experts"), "resident_experts", {"type": int}),
     Setting("pin-budget-gb", (), 6.0, _budget, "next-turn", "routing", "public", "flashnext", lambda b: b.pin_budget_gb, _set_attr("pin_budget_gb"), _quality, None, None, __file__, "pin_budget_gb", ("--pin-budget-gb",), "pin_budget_gb", {"type": float}),

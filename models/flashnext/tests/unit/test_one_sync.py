@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import mlx.core as mx
 
@@ -46,11 +48,14 @@ class OneSyncTests(unittest.TestCase):
     def setUp(self):
         self.threshold = adaptive_topk._THRESHOLD[0]
         self.one_sync = adaptive_topk._ONE_SYNC[0]
+        self.layers = dict(adaptive_topk._LAYER_THRESHOLDS)
+        adaptive_topk.set_layer_thresholds({})
         adaptive_topk.set_threshold(0.85)
 
     def tearDown(self):
         adaptive_topk.set_threshold(self.threshold)
         adaptive_topk.set_one_sync(self.one_sync)
+        adaptive_topk.set_layer_thresholds(self.layers)
 
     def test_host_route_matches_device_route(self):
         mx.random.seed(11)
@@ -74,6 +79,30 @@ class OneSyncTests(unittest.TestCase):
         adaptive_topk.set_one_sync(True)
         adaptive_topk._moe_call(block, mx.random.normal((1, 16, 32)))
         self.assertIsNone(block.switch_mlp.seen[-1][0])
+
+    def test_full_threshold_sends_all_ten_distinct_experts(self):
+        mx.random.seed(21)
+        adaptive_topk.set_threshold(1.0)
+        block = _Block(64, 32)
+        for rows in (1, 16):
+            adaptive_topk._moe_call(block, mx.random.normal((1, rows, 32)))
+            _, inds, route = block.switch_mlp.seen[-1]
+            self.assertEqual(tuple(inds.shape), (1, rows, 10))
+            self.assertTrue(all(len(set(route[i:i+10])) == 10 for i in range(0, len(route), 10)))
+
+    def test_speculative_target_verification_restores_full_routing(self):
+        from models.flashnext.speculative import FastDraftGreedy
+
+        decoder = FastDraftGreedy.__new__(FastDraftGreedy)
+        decoder.store = SimpleNamespace(_read_mode=None)
+        decoder.route_observer = None
+        with patch.object(adaptive_topk, "set_threshold") as threshold, \
+                patch.object(adaptive_topk, "set_layer_thresholds"), \
+                patch.object(adaptive_topk, "set_resident_experts"), \
+                patch.object(adaptive_topk, "set_route_observer"), \
+                patch.object(adaptive_topk, "set_renorm_blend"):
+            decoder._exact_profile()
+        threshold.assert_called_once_with(1.0)
 
 
 if __name__ == "__main__":

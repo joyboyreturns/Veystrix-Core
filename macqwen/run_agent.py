@@ -46,7 +46,8 @@ def main() -> int:
     parser.add_argument("--profile", default="agent", choices=("agent", "plain"))
     parser.add_argument("--workspace", default=os.getcwd())
     parser.add_argument("--model-path", "--checkpoint", dest="model_path", default=None)
-    parser.add_argument("--threshold", type=float, default=0.85)
+    from macqwen.model_settings import FLASHNEXT_DEFAULTS
+    parser.add_argument("--threshold", type=float, default=FLASHNEXT_DEFAULTS["threshold"])
     parser.add_argument("--resident-experts", type=int, default=32)
     parser.add_argument("--max-turns", type=int, default=8)
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_ANSWER_TOKENS)
