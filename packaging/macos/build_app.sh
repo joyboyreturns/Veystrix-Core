@@ -1,0 +1,53 @@
+#!/bin/bash
+# Build Veystrix.app (arm64) from the Swift package. Usage:
+#   packaging/macos/build_app.sh [--engine DIR]     # DIR = output of packaging/engine/build_engine_bundle.sh
+# Environment: VEYSTRIX_SIGN_IDENTITY (Developer ID Application ...), VEYSTRIX_SPARKLE_PUBLIC_KEY (base64 EdDSA public key),
+#              VEYSTRIX_VERSION, VEYSTRIX_BUILD_NUMBER.
+# Without a signing identity the app is ad-hoc signed and labelled DEVELOPMENT: it must never be published.
+source "$SCRIPT_DIR/common.sh"
+ENGINE_DIR=""
+while [[ $# -gt 0 ]]; do case "$1" in --engine) ENGINE_DIR="$2"; shift 2;; *) die "unknown option $1";; esac; done
+
+APP="$DIST/$APP_NAME.app"
+log "Building $APP_NAME $SHORT_VERSION (build $BUILD_NUMBER) for $ARCH $(is_release_signing || echo '[DEVELOPMENT, ad-hoc signed]')"
+cd "$APP_DIR"
+swift build -c release --arch "$ARCH" --product Veystrix 2>&1 | grep -vE "ld: warning: search path" | tail -5
+BIN_DIR="$(swift build -c release --arch "$ARCH" --show-bin-path)"
+[[ -x "$BIN_DIR/Veystrix" ]] || die "binary not found in $BIN_DIR"
+
+rm -rf "$APP"; mkdir -p "$APP/Contents/"{MacOS,Resources,Frameworks}
+cp "$BIN_DIR/Veystrix" "$APP/Contents/MacOS/Veystrix"
+
+# Sparkle.framework from the SwiftPM binary artifact
+SPARKLE_FW="$(find "$APP_DIR/.build" -type d -name Sparkle.framework -path '*macos-arm64_x86_64*' | head -1)"
+[[ -n "$SPARKLE_FW" ]] || die "Sparkle.framework not found; run 'swift build' once to fetch it"
+ditto "$SPARKLE_FW" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/Veystrix" 2>/dev/null || true
+
+# Info.plist (Sparkle key injected; empty key => updates disabled in the app)
+sed -e "s/@SHORT_VERSION@/$SHORT_VERSION/" -e "s/@BUILD_NUMBER@/$BUILD_NUMBER/" \
+    -e "s|@SPARKLE_PUBLIC_ED_KEY@|${VEYSTRIX_SPARKLE_PUBLIC_KEY:-}|" \
+    "$APP_DIR/Support/Info.plist.template" > "$APP/Contents/Info.plist"
+plutil -lint "$APP/Contents/Info.plist" >/dev/null
+[[ -n "${VEYSTRIX_SPARKLE_PUBLIC_KEY:-}" ]] || log "NOTE: no VEYSTRIX_SPARKLE_PUBLIC_KEY: this build has updates disabled"
+
+# Icon, licenses, notices
+python3 "$APP_DIR/Support/Icon/make_icon.py" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null \
+  || "$ROOT/.venv/bin/python" "$APP_DIR/Support/Icon/make_icon.py" "$APP/Contents/Resources/AppIcon.icns" \
+  || log "WARNING: icon not generated (Pillow missing)"
+cp "$ROOT/legal/FREEWARE-LICENSE.txt" "$APP/Contents/Resources/LICENSE.txt"
+cp "$ROOT/legal/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/THIRD_PARTY_NOTICES.md"
+cp -R "$ROOT/LICENSES" "$APP/Contents/Resources/Licenses"
+echo "$SHORT_VERSION" > "$APP/Contents/Resources/VERSION"
+
+# Engine runtime (optional)
+if [[ -n "$ENGINE_DIR" ]]; then
+  [[ -x "$ENGINE_DIR/python/bin/python3" ]] || die "$ENGINE_DIR is not an engine bundle"
+  log "Embedding engine runtime from $ENGINE_DIR"
+  ditto "$ENGINE_DIR" "$APP/Contents/Resources/engine"
+else
+  log "NOTE: no --engine: this app finds the engine only through Settings > Developer (source checkout)"
+fi
+
+"$SCRIPT_DIR/sign_app.sh" "$APP"
+log "Built $APP"
