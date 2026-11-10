@@ -419,7 +419,7 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
         return result
     from models.flashnext import layer_major
 
-    if layer_major.enabled() and not (want_logits or want_hidden):
+    if layer_major.enabled() and total >= layer_major.min_tokens() and not (want_logits or want_hidden):
         return _run_layer_major(language, ids, cache, sampler, boundaries, on_boundary, offset, spans, anchors, required, trace)
     absolute_end = offset + total
     wanted = tuple(boundaries if anchors is None else anchors)

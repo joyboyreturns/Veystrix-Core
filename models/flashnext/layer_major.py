@@ -43,6 +43,8 @@ FLAG_HYBRID = "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS"  # opt-in: reference path
 FLAG_PREFETCH = "FLASHNEXT_PREFILL_LAYER_PREFETCH"      # opt-in: read layer l+1's experts while layer l computes
 FLAG_INNER_SNAPSHOTS = "FLASHNEXT_PREFILL_INNER_SNAPSHOTS"  # "1" (default): snapshot chunk edges inside a window; "0": cut windows there
 FLAG_TAIL_CHUNK = "FLASHNEXT_PREFILL_TAIL_CHUNK"        # "1" (default): a trailing tiny chunk runs chunk-major after the last window
+FLAG_MIN_TOKENS = "FLASHNEXT_LAYER_MAJOR_MIN_TOKENS"    # smaller uncached prefills use the chunk-major path
+DEFAULT_MIN_TOKENS = 4096
 ORDERS = ("chunk", "layer")
 PLAN_VERSION = "layer-major-v1"
 DEFAULT_WINDOW_TOKENS = 8192
@@ -121,6 +123,22 @@ def peel_tail(group):
     if len(group) > 1 and tail_chunk_enabled() and group[-1][1] - group[-1][0] <= TINY_CHUNK_TOKENS:
         return group[:-1], group[-1]
     return group, None
+
+
+def min_tokens() -> int:
+    """Uncached tokens below which a prefill stays chunk-major.
+
+    A layer-major window reads every layer's 512 experts once whatever its size. A 55-token follow-up prefill measured
+    about 96 s that way (2026-11-10, DeepSeek Harness effort-turn warm-up) against a few seconds chunk-major. The 8K
+    gain (1.70-1.84x) is real, so only prefills large enough to amortize the sweep use it. Below 4096 is unmeasured."""
+    value = os.environ.get(FLAG_MIN_TOKENS, "") or str(DEFAULT_MIN_TOKENS)
+    try:
+        tokens = int(value)
+    except ValueError:
+        raise ValueError(f"{FLAG_MIN_TOKENS} must be an integer") from None
+    if tokens < 0:
+        raise ValueError(f"{FLAG_MIN_TOKENS} must not be negative")
+    return tokens
 
 
 def hybrid_enabled() -> bool:

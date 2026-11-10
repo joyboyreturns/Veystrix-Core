@@ -337,6 +337,34 @@ class ModelEquivalenceTests(unittest.TestCase):
         self.assertIs(expert_cache._LAYER_WINDOW[0], previous)
 
 
+class MinimumSizeTests(unittest.TestCase):
+    def test_default_and_override(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(layer_major.FLAG_MIN_TOKENS, None)
+            self.assertEqual(layer_major.min_tokens(), 4096)
+        with mock.patch.dict(os.environ, {layer_major.FLAG_MIN_TOKENS: "0"}):
+            self.assertEqual(layer_major.min_tokens(), 0)
+        for bad in ("-1", "abc"):
+            with mock.patch.dict(os.environ, {layer_major.FLAG_MIN_TOKENS: bad}):
+                with self.assertRaises(ValueError):
+                    layer_major.min_tokens()
+
+    def test_small_multi_chunk_prefill_stays_chunk_major(self):
+        from models.flashnext import prefill
+
+        env = {layer_major.FLAG_ORDER: "layer", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "64", "FLASHNEXT_PREFILL_CHUNK_POLICY": "grid"}
+        ids = mx.array([[int(t) for t in mx.random.randint(2, 512, (200,)).tolist()]])
+        for minimum, expected in (("4096", 0), ("0", 1)):
+            with mock.patch.dict(os.environ, {**env, layer_major.FLAG_MIN_TOKENS: minimum}), \
+                 mock.patch.object(prefill, "_run_layer_major", return_value=None) as layered, \
+                 mock.patch.object(prefill, "_prefill_chunk"), mock.patch.object(prefill, "_prefill_target", return_value=None):
+                try:
+                    prefill._run_chunks(None, ids, None, False, False, None, (), None, 0)
+                except Exception:
+                    pass
+            self.assertEqual(layered.call_count, expected, minimum)
+
+
 class PrefillIntegrationTests(unittest.TestCase):
     """``prefill_target`` with ``FLASHNEXT_PREFILL_ORDER=layer``: same token, same cache, same plan, coarser snapshots."""
 
@@ -352,7 +380,8 @@ class PrefillIntegrationTests(unittest.TestCase):
 
         env = {"FLASHNEXT_PREFILL_CHUNK_TOKENS": "64", "FLASHNEXT_PREFILL_CHUNK_POLICY": "grid",
                layer_major.FLAG_ORDER: order, layer_major.FLAG_HYBRID: "1" if hybrid else "0",
-               layer_major.FLAG_INNER_SNAPSHOTS: "1" if inner else "0"}
+               layer_major.FLAG_INNER_SNAPSHOTS: "1" if inner else "0",
+               layer_major.FLAG_MIN_TOKENS: "0"}     # these tiny prompts must still exercise layer-major
         seen, trace = [], prefill.PlanTrace()
         cache = cache if cache is not None else self.model.make_cache()
         prompt = prompt or self.ids

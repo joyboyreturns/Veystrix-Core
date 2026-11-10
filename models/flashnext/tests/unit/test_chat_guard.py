@@ -311,3 +311,39 @@ class ChatGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "restart the process"):
                 backend.generate(1)
 
+
+
+class MetalCacheReleaseTests(unittest.TestCase):
+    LIMIT = 12_710_000_000
+
+    def row(self, active, cache):
+        return {"available_mb": 6000.0, "mlx_active": active, "mlx_cache": cache, "compressor_mb": 100,
+                "swapout": 0, "swapin": 0, "metal_limit_bytes": self.LIMIT}
+
+    def guard(self):
+        return ChatGuard(Path(tempfile.mkdtemp()) / "g.jsonl", probe=Probe(), sampler=Sampler())
+
+    def run_recheck(self, row, active_after, cache_after):
+        import mlx.core as mx
+
+        with mock.patch.object(mx, "clear_cache") as cleared, \
+             mock.patch.object(mx, "get_active_memory", return_value=active_after), \
+             mock.patch.object(mx, "get_cache_memory", return_value=cache_after):
+            reason = self.guard()._recheck_after_cache_release(row, True)
+        cleared.assert_called_once()
+        return reason
+
+    def test_reclaimable_cache_does_not_stop(self):
+        row = self.row(10_000_000_000, 2_220_000_000)          # 12.22 GB held: the real stop
+        self.assertIsNone(self.run_recheck(row, 10_000_000_000, 0))
+
+    def test_active_memory_near_the_limit_still_stops(self):
+        row = self.row(12_300_000_000, 100_000_000)
+        self.assertIn("Metal limit", self.run_recheck(row, 12_300_000_000, 0))
+
+    def test_unreadable_memory_keeps_the_original_stop(self):
+        import mlx.core as mx
+
+        row = self.row(12_300_000_000, 100_000_000)
+        with mock.patch.object(mx, "clear_cache", side_effect=RuntimeError("no")):
+            self.assertIn("Metal limit", self.guard()._recheck_after_cache_release(row, True))

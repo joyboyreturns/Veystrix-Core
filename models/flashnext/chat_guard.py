@@ -87,6 +87,19 @@ class ChatGuard:
     def _read_command(command):
         return subprocess.run(command, capture_output=True, text=True, timeout=5, check=True).stdout
 
+    def _recheck_after_cache_release(self, row, waived):
+        try:
+            import mlx.core as mx
+
+            mx.clear_cache()
+            active = getattr(mx, "get_active_memory", None) or mx.metal.get_active_memory
+            cache = getattr(mx, "get_cache_memory", None) or mx.metal.get_cache_memory
+            fresh = dict(row, mlx_active=int(active()), mlx_cache=int(cache()))
+        except Exception:
+            fresh = row            # cannot release or read: keep the original stop
+        return H.guard_reason(fresh, min_available_gb=0.0 if waived else H.MIN_AVAILABLE_GB,
+                              compressor_stop_available_mib=0.0 if waived else H.COMPRESSOR_STOP_AVAILABLE_GIB * 1024)
+
     def _reason(self, row):
         for key in ("mlx_active", "mlx_cache", "available_mb", "compressor_mb", "swapout", "swapin"):
             if row.get(key) is None:
@@ -96,6 +109,11 @@ class ChatGuard:
         waived = memory_policy.is_swap_growth_policy() or memory_waiver.active()
         reason = H.guard_reason(row, min_available_gb=0.0 if waived else H.MIN_AVAILABLE_GB,
                                 compressor_stop_available_mib=0.0 if waived else H.COMPRESSOR_STOP_AVAILABLE_GIB * 1024)
+        if reason and reason.startswith("MLX holds"):
+            # The cache part is reclaimable buffer memory, not a live allocation. Release it once and re-read before
+            # treating the total as a real approach to the Metal limit (a 10.7K layer-major prefill stopped at
+            # 12.22 GB active+cache). Active memory still near the limit stops the process as before.
+            reason = self._recheck_after_cache_release(row, waived)
         if reason:
             return reason
         now = time.monotonic()
