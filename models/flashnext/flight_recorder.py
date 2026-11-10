@@ -40,7 +40,8 @@ class FlightRecorder:
 
     def _open(self):
         directory = os.path.dirname(self.path)
-        os.makedirs(directory, mode=0o700, exist_ok=True)
+        if directory:
+            os.makedirs(directory, mode=0o700, exist_ok=True)
         fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         os.fchmod(fd, 0o600)
         self._handle = os.fdopen(fd, "a", buffering=1, encoding="utf-8")

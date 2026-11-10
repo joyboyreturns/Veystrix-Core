@@ -111,6 +111,8 @@ class Policy:
         self.base_cooldown_s, self.guard_cooldown_s, self.max_cooldown_s = base_cooldown_s, guard_cooldown_s, max_cooldown_s
         self.restarts = deque()
         self.guard_stops = deque()
+        self.consecutive_failures = 0
+        self.last_failure_time = None
 
     @staticmethod
     def _prune(queue, now, window):
@@ -120,11 +122,20 @@ class Policy:
     def decide(self, exit_code: int, now: float, *, owner_stop: bool = False) -> tuple:
         """Return ``(action, cooldown_seconds, reason)`` with action in {"stop", "restart"}."""
         if owner_stop or exit_code == 0:
+            self.consecutive_failures = 0
+            self.last_failure_time = None
             return "stop", 0.0, "stopped by the owner" if owner_stop else "server exited cleanly"
         if exit_code == PORT_BUSY_EXIT:
             return "stop", 0.0, "the port is already served by another process: stop it first (./serve.sh --status shows this supervisor)"
         if exit_code == CONFIG_EXIT:
             return "stop", 0.0, "launch configuration refused (exit 70): restarting cannot fix it"
+
+        # If previous crash was longer ago than the window, reset consecutive failure count
+        if self.last_failure_time is not None and now - self.last_failure_time > self.window_s:
+            self.consecutive_failures = 0
+        self.last_failure_time = now
+        self.consecutive_failures += 1
+
         self._prune(self.restarts, now, self.window_s)
         self._prune(self.guard_stops, now, self.guard_window_s)
         if exit_code in (GUARD_EXIT, ADMISSION_EXIT):
@@ -135,9 +146,10 @@ class Policy:
             self.restarts.append(now)
             return "restart", self.guard_cooldown_s, f"memory guard stop (exit {exit_code}); restarting after cooldown"
         self.restarts.append(now)
-        if len(self.restarts) > self.max_restarts:
-            return "stop", 0.0, f"{len(self.restarts)} restarts within {self.window_s / 60:g} min (limit {self.max_restarts}): crash loop"
-        cooldown = min(self.max_cooldown_s, self.base_cooldown_s * (2 ** (len(self.restarts) - 1)))
+        failures = max(self.consecutive_failures, len(self.restarts))
+        if failures > self.max_restarts:
+            return "stop", 0.0, f"{failures} restarts within {self.window_s / 60:g} min (limit {self.max_restarts}): crash loop"
+        cooldown = min(self.max_cooldown_s, self.base_cooldown_s * (2 ** (self.consecutive_failures - 1)))
         return "restart", cooldown, f"server exited with code {exit_code}; restarting after cooldown"
 
 

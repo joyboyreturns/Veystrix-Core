@@ -722,12 +722,17 @@ class FlashNextBackend(Conversation):
                 synchronize=gpu_sync.synchronize,
             )
             if self.last_memory_after.get("error"):
-                self._memory_cleanup_error = self.last_memory_after["error"]
-                pool_lifecycle.mark_lifecycle_fault(self._memory_cleanup_error)
+                error_msg = str(self.last_memory_after["error"])
+                self._memory_cleanup_error = error_msg
+                # Only genuine GPU / runtime lifecycle faults should refuse subsequent requests
+                if "gpu_sync" in error_msg.lower() or "metal" in error_msg.lower():
+                    pool_lifecycle.mark_lifecycle_fault(self._memory_cleanup_error)
         except Exception as error:
             self.last_memory_after = {"error": f"{type(error).__name__}: {error}"}
             self._memory_cleanup_error = self.last_memory_after["error"]
-            pool_lifecycle.mark_lifecycle_fault(self._memory_cleanup_error)
+            err_str = str(error).lower()
+            if "gpu_sync" in err_str or "metal" in err_str:
+                pool_lifecycle.mark_lifecycle_fault(self._memory_cleanup_error)
 
     def _make_room_for_prefill(self, prompt, prefix_cache_runs: bool, fresh: bool = True) -> None:
         """Opt-in memory planning before a prefill.

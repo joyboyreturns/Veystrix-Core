@@ -652,19 +652,21 @@ def _apply_tier(verdict, display) -> None:
 
     current = modes.context_limit_from_environment()
     required = os.environ.get("VEYSTRIX_CONTEXT_REQUIRED") == "1"
+    env_cold = modes.max_cold_prefill_from_environment()
     if required and current:
         limit = current
-        env_cold = modes.max_cold_prefill_from_environment()
-        cold_prefill = env_cold if env_cold else min(tier.max_cold_prefill, modes.DEFAULT_MAX_COLD_PREFILL)
+        cold_prefill = min(tier.max_cold_prefill, env_cold) if env_cold else tier.max_cold_prefill
     else:
         limit = min(tier.context_limit, current) if current else tier.context_limit
-        env_cold = modes.max_cold_prefill_from_environment()
-        cold_prefill = env_cold if env_cold else tier.max_cold_prefill
+        cold_prefill = min(tier.max_cold_prefill, env_cold) if env_cold else tier.max_cold_prefill
     os.environ["VEYSTRIX_CONTEXT_LIMIT"] = str(limit)
     os.environ["VEYSTRIX_MAX_COLD_PREFILL"] = str(cold_prefill)
     if tier.name != "standard" and not required:
         print(f"admitted at tier {tier.name}: context limit {limit}, cold prefill up to {cold_prefill} tokens "
               f"(memory does not admit the standard tier right now; larger requests are refused, never truncated)",
+              file=display, flush=True)
+    elif tier.max_cold_prefill < (env_cold or modes.DEFAULT_MAX_COLD_PREFILL):
+        print(f"admitted at tier {tier.name}: cold prefill capped at {cold_prefill} tokens by memory tier",
               file=display, flush=True)
 
 
@@ -920,6 +922,7 @@ def main() -> int:
             and args.think_budget != -1 and args.think_budget <= 0:
         parser.error("--think-budget must be positive or -1")
     prefs = preferences.load(args.preferences_file)
+    saved_profile = prefs.get("profile")
     if (
         args.tail_experts < 1
         or (args.resident_experts is not None and args.resident_experts < 1)
@@ -1019,7 +1022,10 @@ def main() -> int:
     # A benchmark uses temporary command-line conditions. It must not change
     # the user's next interactive chat, as an earlier 20-token probe did.
     if not benchmarking:
-        preferences.save(prefs, args.preferences_file)
+        to_save = dict(prefs)
+        if os.environ.get("MACQWEN_PROFILE_EPHEMERAL") == "1" and saved_profile is not None:
+            to_save["profile"] = saved_profile
+        preferences.save(to_save, args.preferences_file)
 
     signal.signal(signal.SIGTSTP, signal.SIG_IGN)
 
@@ -1151,10 +1157,25 @@ def main() -> int:
             if handle_interrupt(interrupt_level):
                 return 0
     if session.server_requested:
+        from models.flashnext import supervision
+
+        refusal = supervision.check(os.environ, model=prefs["model"], server=True, benchmarking=benchmarking)
+        if refusal:
+            print(refusal, file=sys.stderr, flush=True)
+            return supervision.EXIT_CODE
+
         from macqwen.server import serve
+        from models.flashnext.settings.modes import (
+            context_limit_from_environment,
+            max_cold_prefill_from_environment,
+            max_incremental_prefill_from_environment,
+        )
 
         serve(session, args.host, args.port, args.server_api_key,
-              args.allow_origin)
+              args.allow_origin, context_limit=context_limit_from_environment(),
+              max_cold_prefill=max_cold_prefill_from_environment(),
+              max_incremental_prefill=max_incremental_prefill_from_environment())
+        return 0
     return 0
 
 

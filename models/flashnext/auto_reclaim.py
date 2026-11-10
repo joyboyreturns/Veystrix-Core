@@ -185,10 +185,13 @@ class AutoReclaimer:
                     clear_cache()
                     report.reasons.append("cleared MLX allocator cache")
                 if prefix_store is not None:
-                    evicted = prefix_store.shrink_ram(0)
-                    report.ram_prefix_evicted_bytes = evicted
-                    if evicted:
-                        report.reasons.append(f"evicted {evicted / 1e6:.1f} MB RAM prefix snapshots to SSD")
+                    try:
+                        evicted = prefix_store.shrink_ram(0)
+                        report.ram_prefix_evicted_bytes = evicted
+                        if evicted:
+                            report.reasons.append(f"evicted {evicted / 1e6:.1f} MB RAM prefix snapshots to SSD")
+                    except Exception as exc:
+                        report.reasons.append(f"prefix shrink_ram failed: {exc}")
                 if pool is not None and in_flight == 0:
                     freed = pool_lifecycle.release_decode_pool(store, synchronize=synchronize, clear_cache=clear_cache)
                     report.pool_released_bytes = freed
@@ -203,10 +206,13 @@ class AutoReclaimer:
                     clear_cache()
                     report.reasons.append("trimmed MLX allocator cache")
                 if prefix_store is not None:
-                    evicted = prefix_store.shrink_ram(0)
-                    report.ram_prefix_evicted_bytes = evicted
-                    if evicted:
-                        report.reasons.append(f"moved {evicted / 1e6:.1f} MB cold RAM prefix snapshots to SSD")
+                    try:
+                        evicted = prefix_store.shrink_ram(0)
+                        report.ram_prefix_evicted_bytes = evicted
+                        if evicted:
+                            report.reasons.append(f"moved {evicted / 1e6:.1f} MB cold RAM prefix snapshots to SSD")
+                    except Exception as exc:
+                        report.reasons.append(f"prefix shrink_ram failed: {exc}")
                 # Maintain warm pool if already resident, but signal next pool build should use 1.0 GB
                 if pool is not None:
                     report.pool_retained = True

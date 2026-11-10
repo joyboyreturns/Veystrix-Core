@@ -286,10 +286,12 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     plan = None
     if model == "flashnext" and (known.mode or not benchmarking):
         try:
+            serve = "--server" in remaining
+            default_mode = modes.AGENTIC if serve else modes.CHAT
             plan = modes.plan_mode(
-                known.mode or modes.CHAT, pool_gb=known.pool_gb, enable=known.enable,
+                known.mode or default_mode, pool_gb=known.pool_gb, enable=known.enable,
                 prefix_dir=known.prefix_dir, context_limit=known.context_limit,
-                serve="--server" in remaining, max_cold_prefill=known.max_cold_prefill,
+                serve=serve, max_cold_prefill=known.max_cold_prefill,
                 max_incremental_prefill=known.max_incremental_prefill)
         except modes.ModeError as exc:
             raise SystemExit(f"veystrix: {exc}") from exc
@@ -328,6 +330,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     environment = dict(os.environ)
     if plan:
         modes.apply_mode(environment, plan)
+        if not known.profile:
+            environment["MACQWEN_PROFILE_EPHEMERAL"] = "1"
     if known.no_auto_purge:
         environment["FLASHNEXT_AUTO_PURGE"] = "0"
     elif known.auto_purge:

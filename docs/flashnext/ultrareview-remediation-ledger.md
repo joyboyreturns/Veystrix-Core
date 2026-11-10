@@ -4,36 +4,36 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 
 | ID | Phase | File | Function/Lines | Severity | Status | Commit |
 |---|---|---|---|---|---|---|
-| R1-01 | Phase 4: Supervision & Failure Recovery | `models/flashnext/auto_reclaim.py` | L187-L209 | normal | open | pending |
-| R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | open | pending |
+| R1-01 | Phase 4: Supervision & Failure Recovery | `models/flashnext/auto_reclaim.py` | L187-L209 | normal | verified | pending |
+| R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | verified | pending |
 | R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_session.py` | L213-L220 | normal | verified | fe4682a |
-| R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | open | pending |
+| R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | verified | pending |
 | R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
 | R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
 | R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | open | pending |
 | R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | open | pending |
 | R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | open | pending |
 | R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | open | pending |
-| R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | open | pending |
+| R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | verified | pending |
 | R2-02 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L223-L223 | normal | verified | 5a63d00 |
 | R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
-| R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | open | pending |
+| R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | verified | pending |
 | R2-05 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L355-L357 | normal | verified | 5a63d00 |
 | R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | verified | fe4682a |
 | R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | verified | fe4682a |
 | R2-08 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1459-L1469 | normal | verified | 5a63d00 |
 | R2-09 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1245-L1270 | normal | verified | 5a63d00 |
 | R2-10 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefix_session.py` | L251-L268 | normal | verified | 5a63d00 |
-| R3-01 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L37-L65 | normal | open | pending |
-| R3-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/chat_guard.py` | L121-L124 | normal | open | pending |
-| R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | open | pending |
-| R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | open | pending |
+| R3-01 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L37-L65 | normal | verified | pending |
+| R3-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/chat_guard.py` | L121-L124 | normal | verified | pending |
+| R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | verified | pending |
+| R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | verified | pending |
 | R3-05 | Phase 2: Correctness & Tool-Calling | `macqwen/sessions.py` | L154-L189 | normal | verified | 5a63d00 |
 | R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | verified | fe4682a |
-| R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | open | pending |
+| R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | verified | pending |
 | R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | verified | fe4682a |
 | R3-09 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L156-L158 | nit | verified | fe4682a |
-| R3-10 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L1153-L1157 | pre_existing | open | pending |
+| R3-10 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L1153-L1157 | pre_existing | verified | pending |
 
 ## Detailed Finding Specifications
 
@@ -49,11 +49,11 @@ Trigger: FLASHNEXT_AUTO_MEMORY_RECLAIM=1 (`--enable auto-reclaim`, which by itse
 
 How it happens:
 - In the new `models/flashnext/auto_reclaim.py`, line 188 (CRITICAL) and line 206 (CONSTRAINED) call `evicted = prefix_store.shrink_ram(0)` with no try/except. By contrast, the `set_uncached_reads` call at lines 155-159 is wrapped.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/auto_reclaim.py:187-209` where `shrink_ram(0)` called during after-request cleanup lacked exception handling, leading `FlashNextBackend._after_request()` to mark a process-wide lifecycle fault poisoning future requests.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r1_01_auto_reclaim_shrink_ram_failure_is_isolated`.
+- **Planned fix**: Wrap `prefix_store.shrink_ram(0)` in try/except in `auto_reclaim.py` so disk/cache errors are non-fatal, and restrict lifecycle fault marking in `macqwen/backends/flashnext.py:_after_request` to GPU synchronization and Metal device errors.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r1_01_auto_reclaim_shrink_ram_failure_is_isolated`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-02 — `models/flashnext/overnight.py` (L137-L141)
@@ -68,11 +68,11 @@ Trigger: `./serve.sh --overnight` with defaults, `--max-restarts 8 --window-minu
 
 Mechanism in models/flashnext/overnight.py, which is new in this diff (476 added lines):
 - Line 137 `self.restarts.append(now)` runs after `_prune` at line 128 (`now - queue[0] > window`).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/overnight.py:137-141` where exponential backoffs pushed restarts beyond 1800s window, pruning restarts and preventing `len(self.restarts) > 8` from ever triggering.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r1_02_overnight_crash_loop_detects_consecutive_failures`.
+- **Planned fix**: Track `consecutive_failures` in `Policy.decide`, resetting it only after a stable run duration, and trigger crash loop stop when `consecutive_failures > max_restarts`.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r1_02_overnight_crash_loop_detects_consecutive_failures`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-03 — `models/flashnext/prefix_session.py` (L213-L220)
@@ -103,11 +103,11 @@ How it happens:
 With FLASHNEXT_FLIGHT_LOG=flight.jsonl (a relative bare name, which `resolve_path` accepts), `os.makedirs('', ...)` raises FileNotFoundError. `record()` catches it as OSError and only increments `failures`, so it never opens the file. The flight recorder writes nothing, and a stalled request leaves no lifecycle record, which is the reason this module exists. Fix: skip makedirs when the directory is empty, or resolve the path with os.path.abspath first.
 
 **Verification:** nit. Trigger: an operator sets FLASHNEXT_FLIGHT_LOG to a bare relative filename such as `flight.jsonl`. resolve_path (line 94-95) returns `os.path.expanduser(configured)` unchanged, so nothing makes the path absolute. `_open` then runs `directory = os.path.dirname(self.path)` (line 42), which gives `''`, and `os.makedirs(directory, mode=0o700, exist_ok=True)` (line 43). In CPython, `os.makedirs('')` calls `mkdir('')`, which fails with ENOENT. `exist_ok` only suppresses the error when `os.path.isdir(name)` is true, and `isdir('')` is False, so FileNotFoundError is raised.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/flight_recorder.py:43` where `os.makedirs(os.path.dirname(self.path))` failed with FileNotFoundError when configured with a bare filename because `dirname` was `""`.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r1_04_flight_recorder_handles_bare_filename`.
+- **Planned fix**: Guard `os.makedirs` with `if directory: os.makedirs(directory, ...)`.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r1_04_flight_recorder_handles_bare_filename`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-05 — `models/flashnext/expert_cache.py` (L1836-L1844)
@@ -237,11 +237,11 @@ How it happens:
 - `_log_request` is new in this diff; the base `macqwen/server.py` has no `_log_request` or `REQUEST_LOG`.
 - When the target is not "1", it ends with a bare `with open(target, "a") as handle: handle.write(line + "\n")` at server.py:930-931. Nothing catches errors around it, and nothing expands `~`.
 - It is called at server.py:1522, inside `complete()`'s outer `try`.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:928-930` where `_log_request` lacked exception handling and path expansion, failing requests if log write failed.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r2_01_log_request_failure_does_not_abort_generation`.
+- **Planned fix**: Wrap `_log_request` in a non-fatal try/except logging a diagnostic warning without failing the completed generation.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r2_01_log_request_failure_does_not_abort_generation`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R2-02 — `macqwen/server.py` (L223-L223)
@@ -293,11 +293,11 @@ protocol_version is "HTTP/1.1" and the 404 JSON reply sets Content-Length withou
 How it happens:
 - `MacqwenHandler` sets `protocol_version = "HTTP/1.1"` (server.py:1622), so the connection stays open unless the client sends `Connection: close`.
 - The new `do_POST` checks `if path not in self.ROUTES: self._error("route not found", 404, "not_found"); return` before it calls `self._payload()`.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/server.py:1473-1476` where `do_POST` rejected unknown routes with 404 before reading the request body on HTTP/1.1 keep-alive connections.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r2_04_do_post_drains_payload_on_404`.
+- **Planned fix**: Call `self._drain_payload()` to consume `Content-Length` bytes before returning 404.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r2_04_do_post_drains_payload_on_404`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R2-05 — `macqwen/server.py` (L355-L357)
@@ -413,11 +413,11 @@ How it fails:
 - macqwen/cli.py:259 rewrites `/server` to `--server`.
 - When `model == "flashnext"` and the launch is not a benchmark, cli.py calls `modes.plan_mode(known.mode or modes.CHAT, ..., serve="--server" in remaining, ...)`. With no `--mode`, this builds a CHAT plan with serve=True.
 - Only `plan.mode == modes.AGENTIC` adds `--server` and agentic settings. CHAT does not.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/cli.py:37-65` where `--server` without `--mode` defaulted to CHAT mode which was refused by `supervision.check`.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r3_01_cli_defaults_server_to_agentic_mode`.
+- **Planned fix**: Default `--server` launches to `modes.AGENTIC` when `--mode` is not specified.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_01_cli_defaults_server_to_agentic_mode`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-02 — `models/flashnext/chat_guard.py` (L121-L124)
@@ -433,11 +433,11 @@ On a desktop Mac, `pmset -g batt` prints no '<n>%;' line, so parse_battery retur
 How it happens:
 - macqwen/cli.py (new in this diff) now calls `modes.plan_mode(known.mode or modes.CHAT, ...)` for every flashnext launch that is not a benchmark, then runs `modes.apply_mode(environment, plan)`.
 - The plan env starts with `{**COMMON, ...}` (modes.py:247), and COMMON contains `"FLASHNEXT_CHAT_GUARD": "1"` (modes.py:57-58).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/chat_guard.py:121-124` where `battery_percent is None` on desktop Macs (Mac mini / Mac Studio / Mac Pro) was treated as missing probe.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r3_02_chat_guard_allows_desktop_mac_without_battery`.
+- **Planned fix**: Treat AC-powered desktop Macs (`power_source == "ac"` and `battery_percent is None`) as valid power states rather than missing probes.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_02_chat_guard_allows_desktop_mac_without_battery`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-03 — `macqwen/cli.py` (L303-L304)
@@ -453,11 +453,11 @@ On the base, cli.py passed `--profile` only when the user gave one, so session.p
 How it happens:
 - cli.py:286-295 builds a plan whenever `model == "flashnext" and (known.mode or not benchmarking)`. Without `--mode`, the mode is `modes.CHAT`.
 - modes.py:34 has `PROFILE = {CHAT: "plain", AGENTIC: "agent"}`, and modes.py:295 builds the plan with `ModePlan(mode, PROFILE[mode], ...)`. So `plan.profile` is "plain".
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/cli.py:303-304` where `--profile` was appended even when not explicitly passed, overwriting user saved preferences.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r3_03_cli_does_not_override_saved_profile_when_unspecified`.
+- **Planned fix**: Only pass `--profile` argument if explicitly provided by user.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_03_cli_does_not_override_saved_profile_when_unspecified`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-04 — `models/flashnext/request_admission.py` (L47-L53)
@@ -472,11 +472,11 @@ With `./chat.sh --enable layer-major` (also `layer-major-4k` and `layer-major-hy
 
 How it happens, traced in the code:
 - **The gate turns on from the prefill order alone.** In models/flashnext/request_admission.py:47-50, `enabled()` returns True when `FLASHNEXT_PREFILL_ORDER == "layer"` and `FLASHNEXT_REQUEST_ADMISSION != "0"` (default "1").
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/settings/modes.py` and `request_admission.py:47-53` where CHAT mode with `layer-major` prefill enabled was accepted but every request refused due to absent watchdog.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r3_04_chat_mode_refuses_layer_major`.
+- **Planned fix**: Disallow `layer-major` in `modes.plan_mode(CHAT)`, and gate `request_admission.enabled()` on `VEYSTRIX_MODE == "agentic"`.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_04_chat_mode_refuses_layer_major`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-05 — `macqwen/sessions.py` (L154-L189)
@@ -531,11 +531,11 @@ Condition: AGENTIC started through `./chat.sh --mode agentic` (the only launch s
 **Verification:** normal. Trigger: a launcher-started AGENTIC server run with the opt-in strict memory policy (FLASHNEXT_MEMORY_POLICY=strict-staged). The candidate's compact/minimal example is mostly wrong, but the same mechanism is reached through another path, given below.
 
 **The mechanism holds.** `modes.apply_mode` (models/flashnext/settings/modes.py:316-317) always writes `VEYSTRIX_MAX_COLD_PREFILL = str(plan.max_cold_prefill or DEFAULT_MAX_COLD_PREFILL)` for AGENTIC.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/session.py:649-661` where `_apply_tier` allowed `env_cold` to override the admitted tier's `max_cold_prefill`.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r3_07_apply_tier_caps_cold_prefill`.
+- **Planned fix**: Enforce `min(tier.max_cold_prefill, env_cold)` in `_apply_tier()` so runtime cold prefill never exceeds admitted memory tier limits.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_07_apply_tier_caps_cold_prefill`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R3-08 — `macqwen/cache_tools.py` (L101-L151)
@@ -581,9 +581,9 @@ The in-chat `/server` path (`session.server_requested`) still calls `serve()` wi
 A user starts the default CHAT mode (`FLASHNEXT_PREFILL_CHUNK_TOKENS=0`, no context limit) and types `/server` (commands.py:412). On exit from the chat loop, session.py:1153-1157 calls `serve(session, host, port, key, allow_origin)` with no supervision check and `context_limit=None`. The resulting server accepts a large agent-harness prompt and prefills it in one call with no context, cold-prefill or incremental limits. This is the 2026-11-09 incident pattern that the new `supervision.check` at line 1011 was added to block, but only the `--server` path is guarded.
 
 **Verification:** pre-existing. Trigger: a flashnext chat session started with no --mode (CHAT, the default) where the user types `/server` (commands.py:412, which sets `session.server_requested = True` at session.py:233). The mechanism is real. The new fail-closed guard (session.py:1013-1018, `supervision.check(os.environ, model=..., server=bool(args.server), ...)`) only looks at `args.server`. A CHAT launch has `args.server` false, so the check returns None at supervision.py:27 (`if model != "flashnext" or not server ...: return None`) and the model loads.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `macqwen/session.py:1153-1157` where in-chat `/server` invocation bypassed `supervision.check` and launched unlimited server.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase4_remediations.py:test_r3_10_server_requested_runs_supervision_check`.
+- **Planned fix**: Enforce `supervision.check` and pass bounded context and prefill limits in `/server` handler before invoking `serve()`.
+- **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_10_server_requested_runs_supervision_check`
+- **Status**: verified
 - **Associated commit**: pending

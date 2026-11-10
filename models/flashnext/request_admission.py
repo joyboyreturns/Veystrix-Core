@@ -46,6 +46,8 @@ def strict_read():
 
 def enabled(environ=None):
     env = os.environ if environ is None else environ
+    if env.get("VEYSTRIX_MODE") == "chat":
+        return False
     return (env.get("FLASHNEXT_PREFILL_ORDER", "").strip().lower() == "layer"
             and env.get("FLASHNEXT_REQUEST_ADMISSION", "1") != "0")
 

@@ -120,9 +120,13 @@ class ChatGuard:
         if self.start_sample is None or now - self.last_power_check >= 1:
             self.last_power_check = now
             sample = self.sampler.sample()
-            for key in ("battery_percent", "power_source", "low_power", "pressure_level", "swap_used_mb"):
+            for key in ("power_source", "low_power", "pressure_level", "swap_used_mb"):
                 if sample.get(key) is None:
                     return f"critical probe unavailable: {key}"
+            if sample.get("battery_percent") is None:
+                power = str(sample.get("power_source", "")).lower()
+                if "ac" not in power:
+                    return "critical probe unavailable: battery_percent"
             # The benchmark parser reports no recorded warning as False. Require
             # recognizable output as well, since an empty response also parses False.
             thermal = self.sampler.runner(["pmset", "-g", "therm"])

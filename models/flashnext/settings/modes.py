@@ -239,6 +239,8 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         raise ModeError("prefix-profiles needs the AGENTIC prefix cache")
     if mode == CHAT and "long-context" in enable:
         raise ModeError("long-context is an AGENTIC feature (CHAT keeps one-call prefill and its reference numerics)")
+    if mode == CHAT and {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
+        raise ModeError("layer-major is an AGENTIC feature (needs watchdog supervision and agentic mode)")
     if len({"kv-affine4", "kv-affine8"} & set(enable)) > 1:
         raise ModeError("choose one quantized KV mode: kv-affine4 or kv-affine8")
     gb, reason = choose_pool_gb(pool_gb, available_gb)

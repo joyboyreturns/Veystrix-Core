@@ -935,29 +935,32 @@ def _log_request(backend, stats, wall: float, first_piece, calls: int, started: 
     target = os.environ.get("MACQWEN_REQUEST_LOG")
     if not target:
         return
-    prefix = getattr(backend, "last_prefix", None)
-    row = {
-        "time": time.time(), "wall_seconds": round(wall, 3),
-        "ttft_seconds": None if first_piece is None else round(first_piece - started, 3),
-        "prompt_tokens": getattr(stats, "prompt_tokens", None),
-        "prefill_seconds": round(getattr(stats, "prefill_seconds", 0.0), 3),
-        "prefill_tokens_per_second": round(getattr(stats, "prompt_rate", 0.0), 2),
-        "completion_tokens": getattr(stats, "tokens", None),
-        "decode_seconds": round(getattr(stats, "seconds", 0.0), 3),
-        "decode_tokens_per_second": round(getattr(stats, "rate", 0.0), 3),
-        "finish": getattr(stats, "finish", None), "tool_calls": calls,
-        "prefix": prefix.as_dict() if hasattr(prefix, "as_dict") else prefix,
-    }
-    if text is not None:
-        row["raw_output"] = text[:8000]          # what the model generated, before any parsing (diagnosis of tool calls)
-    if extra:
-        row.update(extra)
-    line = json.dumps(row, default=str)
-    if target == "1":
-        print("request " + line, file=sys.stderr, flush=True)
-        return
-    with open(target, "a") as handle:
-        handle.write(line + "\n")
+    try:
+        prefix = getattr(backend, "last_prefix", None)
+        row = {
+            "time": time.time(), "wall_seconds": round(wall, 3),
+            "ttft_seconds": None if first_piece is None else round(first_piece - started, 3),
+            "prompt_tokens": getattr(stats, "prompt_tokens", None),
+            "prefill_seconds": round(getattr(stats, "prefill_seconds", 0.0), 3),
+            "prefill_tokens_per_second": round(getattr(stats, "prompt_rate", 0.0), 2),
+            "completion_tokens": getattr(stats, "tokens", None),
+            "decode_seconds": round(getattr(stats, "seconds", 0.0), 3),
+            "decode_tokens_per_second": round(getattr(stats, "rate", 0.0), 3),
+            "finish": getattr(stats, "finish", None), "tool_calls": calls,
+            "prefix": prefix.as_dict() if hasattr(prefix, "as_dict") else prefix,
+        }
+        if text is not None:
+            row["raw_output"] = text[:8000]          # what the model generated, before any parsing (diagnosis of tool calls)
+        if extra:
+            row.update(extra)
+        line = json.dumps(row, default=str)
+        if target == "1":
+            print("request " + line, file=sys.stderr, flush=True)
+            return
+        with open(target, "a") as handle:
+            handle.write(line + "\n")
+    except Exception as exc:
+        print(f"Warning: _log_request failed: {exc}", file=sys.stderr, flush=True)
 
 
 def _memory_ledger():
@@ -1768,6 +1771,14 @@ class MacqwenHandler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             return True
 
+    def _drain_payload(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if 0 < length <= MAX_BODY:
+                self.rfile.read(length)
+        except Exception:
+            pass
+
     def _payload(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -1906,6 +1917,7 @@ class MacqwenHandler(BaseHTTPRequestHandler):
         self._reasoning = None
         path = urlsplit(self.path).path
         if path not in self.ROUTES:
+            self._drain_payload()
             self._error("route not found", 404, "not_found")
             return
         try:
