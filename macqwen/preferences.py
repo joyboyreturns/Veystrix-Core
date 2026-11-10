@@ -16,14 +16,16 @@ import os
 from pathlib import Path
 import tempfile
 
-DEFAULT_PATH = "~/.macqwen/preferences.json"
+DEFAULT_PATH = "~/.veystrix/preferences.json"
 DEFAULT_ANSWER_TOKENS = 2048
 DEFAULT_PLAIN_ANSWER_TOKENS = 4096
 DEFAULT_THINK_TOKENS = 512
 # read once at migration time, in this order, and then left alone
+# ~/.macqwen/preferences.json was the default until Veystrix 3.8.1; it is read last so it wins, and is never deleted.
 LEGACY_PATHS = (
     "~/.cache/flashnext/preferences.json",
     "~/.frankenstein/preferences.json",
+    "~/.macqwen/preferences.json",
 )
 
 

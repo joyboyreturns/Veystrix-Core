@@ -445,7 +445,7 @@ class FrankensteinBackend:
         try:
             fcntl.flock(self._model_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise SystemExit("another MACQWEN chat already has the model loaded") from exc
+            raise SystemExit("another Veystrix chat already has the model loaded") from exc
 
         self._cache_options = {
             "paged": paged,

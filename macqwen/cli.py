@@ -152,13 +152,13 @@ def _supports_python(path: Path, model: str) -> bool:
 def _setup_failure(operation: str, error: BaseException) -> SystemExit:
     detail = getattr(error, "stderr", None) or str(error)
     return SystemExit(
-        f"MACQWEN setup failed during {operation}: {detail}\n"
+        f"Veystrix setup failed during {operation}: {detail}\n"
         "Retry with './chat.sh setup'."
     )
 
 
 def _run_setup_step(operation: str, command: list[str]) -> None:
-    print(f"MACQWEN setup: {operation}", flush=True)
+    print(f"Veystrix setup: {operation}", flush=True)
     try:
         subprocess.check_call(command)
     except (OSError, subprocess.CalledProcessError) as exc:
@@ -189,14 +189,14 @@ def _interpreter(model: str) -> Path:
     if not _supports_python(MANAGED_PYTHON, model):
         reason = _python_runtime_error(MANAGED_PYTHON, model) or "runtime probe failed"
         raise SystemExit(
-            f"managed MACQWEN environment is incompatible with {model}: {reason}\n"
+            f"managed Veystrix environment is incompatible with {model}: {reason}\n"
             "Retry with './chat.sh setup'."
         )
     return MANAGED_PYTHON
 
 
 def setup_environment(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="macqwen setup")
+    parser = argparse.ArgumentParser(prog="veystrix setup")
     parser.add_argument("--venv", type=Path, default=ROOT / ".venv")
     args = parser.parse_args(argv)
     target = args.venv.expanduser().resolve()
@@ -212,10 +212,10 @@ def setup_environment(argv: list[str]) -> int:
         [str(python), "-m", "pip", "install", "--upgrade", "pip"],
     )
     _run_setup_step(
-        "install MACQWEN and its shared runtime",
+        "install Veystrix and its shared runtime",
         [str(python), "-m", "pip", "install", "-e", str(ROOT)],
     )
-    print(f"MACQWEN environment ready: {target}")
+    print(f"Veystrix environment ready: {target}")
     return 0
 
 

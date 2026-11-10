@@ -47,7 +47,7 @@ class TavilySearch:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "User-Agent": "MACQWEN/1.0",
+                "User-Agent": "Veystrix/3.8",
             },
             method="POST",
         )

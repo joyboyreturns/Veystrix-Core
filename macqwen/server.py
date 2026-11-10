@@ -1,4 +1,4 @@
-"""Local OpenAI and Anthropic compatible HTTP server for MACQWEN."""
+"""Local OpenAI and Anthropic compatible HTTP server for Veystrix."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -538,18 +538,18 @@ MAX_INCREMENTAL_PREFILL_DEFAULT = 32768
 ARCHITECTURAL_CONTEXT_MAXIMUM = 262144
 
 _MODEL_DISPLAY_NAMES = {
-    "flashnext": "MACQWEN Flash-Next",
-    "bonsai2": "MACQWEN Bonsai-2",
-    "k2-horizon": "MACQWEN K2-Horizon",
-    "k2_horizon": "MACQWEN K2-Horizon",
-    "qwen27b": "MACQWEN Qwen3.8-27B",
+    "flashnext": "Veystrix Flash-Next",
+    "bonsai2": "Veystrix Bonsai-2",
+    "k2-horizon": "Veystrix K2-Horizon",
+    "k2_horizon": "Veystrix K2-Horizon",
+    "qwen27b": "Veystrix Qwen3.8-27B",
 }
 
 _BACKEND_DISPLAY_NAMES = {
-    "FlashNextBackend": "MACQWEN Flash-Next",
-    "BonsaiBackend": "MACQWEN Bonsai-2",
-    "K2HorizonBackend": "MACQWEN K2-Horizon",
-    "FrankensteinBackend": "MACQWEN Qwen3.8-27B",
+    "FlashNextBackend": "Veystrix Flash-Next",
+    "BonsaiBackend": "Veystrix Bonsai-2",
+    "K2HorizonBackend": "Veystrix K2-Horizon",
+    "FrankensteinBackend": "Veystrix Qwen3.8-27B",
 }
 
 _WINDOW_ATTRS = (
@@ -688,7 +688,7 @@ def _display_name_for(service) -> str:
     named = _MODEL_DISPLAY_NAMES.get(key.lower().replace("_", "-"))
     if named is not None:
         return named
-    return slug or "MACQWEN Flash-Next"
+    return slug or "Veystrix Flash-Next"
 
 
 def capabilities(service) -> dict:

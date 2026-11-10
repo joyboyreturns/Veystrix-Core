@@ -4,20 +4,27 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CANONICAL_REPOSITORY = "https://github.com/1architect/macqwen-releases"
+CORE_REPOSITORY = "https://github.com/joyboyreturns/Veystrix-Core"      # private: source, history
+PUBLIC_REPOSITORY = "https://github.com/joyboyreturns/Veystrix"          # public: README, releases, update feed
 
 
 class DistributionTests(unittest.TestCase):
-    def test_readme_uses_the_public_clone_url(self):
+    def test_readme_uses_the_core_clone_url_and_links_the_public_home(self):
         readme = (ROOT / "README.md").read_text()
-        self.assertIn(CANONICAL_REPOSITORY + ".git", readme)
-        self.assertNotIn("github.com/1architect/MACQWEN", readme)
+        self.assertIn(CORE_REPOSITORY + ".git", readme)
+        self.assertIn(PUBLIC_REPOSITORY, readme)
+        self.assertNotIn("github.com/1architect/macqwen-releases", readme)
 
-    def test_package_metadata_uses_the_public_repository(self):
+    def test_package_metadata_points_at_the_public_repository_only(self):
         data = tomllib.loads((ROOT / "pyproject.toml").read_text())
-        self.assertEqual(data["project"]["urls"]["Repository"], CANONICAL_REPOSITORY)
+        urls = data["project"]["urls"]
+        self.assertEqual(urls["Homepage"], PUBLIC_REPOSITORY)
+        self.assertEqual(urls["Issues"], PUBLIC_REPOSITORY + "/issues")
+        # Package metadata ships inside wheels: it must not advertise the private repository.
+        self.assertFalse([u for u in urls.values() if "Veystrix-Core" in u or "1architect" in u])
         changelog = (ROOT / "CHANGELOG.md").read_text()
-        self.assertIn(f"## MACQWEN {data['project']['version']} ", changelog)
+        release = data["project"]["version"].split(".dev")[0]
+        self.assertIn(f"## Veystrix {release} ", changelog)
 
     def test_shared_runtime_dependencies_are_pinned_in_project_metadata(self):
         data = tomllib.loads((ROOT / "pyproject.toml").read_text())

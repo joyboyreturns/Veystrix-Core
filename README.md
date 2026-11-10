@@ -1,8 +1,14 @@
-# MACQWEN
+# Veystrix Core
 
-[![CI](https://github.com/1architect/macqwen-releases/actions/workflows/ci.yml/badge.svg)](https://github.com/1architect/macqwen-releases/actions/workflows/ci.yml)
+> **Private repository (`joyboyreturns/Veystrix-Core`).** Veystrix is proprietary freeware. This
+> repository holds the engine, the macOS app, internal documentation and the full development
+> history. The public home (README, releases, update feed, license) is
+> [`joyboyreturns/Veystrix`](https://github.com/joyboyreturns/Veystrix). Veystrix was formerly
+> named MACQWEN; historical documents and a few internal paths (`macqwen/`) keep the old name for
+> compatibility. See [docs/branding/MIGRATION.md](docs/branding/MIGRATION.md) and
+> [legal/LICENSE_PROVENANCE.md](legal/LICENSE_PROVENANCE.md).
 
-MACQWEN streams sparse Mixture-of-Experts language models from SSD on
+Veystrix streams sparse Mixture-of-Experts language models from SSD on
 low-memory Apple Silicon Macs. The primary runtime keeps the dense model
 core in unified memory while streaming selected expert rows and n-gram
 rows from the checkpoint on demand.
@@ -75,16 +81,16 @@ for the checkpoint, and about 10 GB of free memory for the default
 Flash-Next chat (about 3.4 GB model core plus the 6 GB expert pool).
 
 ```bash
-git clone https://github.com/1architect/macqwen-releases.git
-cd macqwen-releases
+git clone https://github.com/joyboyreturns/Veystrix-Core.git   # private; needs access
+cd Veystrix-Core
 ./chat.sh setup
 hf download Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP \
   --local-dir "$HOME/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
 ./chat.sh --model flashnext --checkpoint vontra-mtp
 ```
 
-With exactly one compatible checkpoint installed, MACQWEN selects it
-automatically. Set `MACQWEN_MODEL_ROOT` when checkpoints live outside
+With exactly one compatible checkpoint installed, Veystrix selects it
+automatically. Set `VEYSTRIX_MODEL_ROOT` (legacy `MACQWEN_MODEL_ROOT` still works) when checkpoints live outside
 `~/models`. A full path also works with `--checkpoint`, and the
 launcher validates the checkpoint before loading.
 
@@ -183,7 +189,7 @@ Localhost does not require authentication by default. A non-local bind
 requires a shared key:
 
 ```bash
-export MACQWEN_SERVER_API_KEY="PRIVATE_VALUE"
+export VEYSTRIX_SERVER_API_KEY="PRIVATE_VALUE"   # legacy: MACQWEN_SERVER_API_KEY
 ./chat.sh --server --host 0.0.0.0
 ```
 
@@ -212,15 +218,15 @@ state; keep them private.
 
 | Data | Default location |
 |---|---|
-| Preferences | `~/.macqwen/preferences.json` |
-| API keys | `~/Library/Application Support/MACQWEN/api_keys.json` |
+| Preferences | `~/.veystrix/preferences.json` (copied once from `~/.macqwen/preferences.json`) |
+| API keys | `~/Library/Application Support/Veystrix/api_keys.json` (copied once from `.../MACQWEN/api_keys.json`) |
 | Flash-Next sessions | `~/.cache/flashnext/sessions/` |
 | K2-Horizon sessions | `~/.cache/k2-horizon/sessions/` |
 | Bonsai-2 sessions | `~/.cache/bonsai2/sessions/` |
 | Qwen3.8-27B sessions | `~/.frankenstein/sessions/` |
 
 The launcher uses `.venv` by default. Developers can provide a validated
-override with `MACQWEN_PYTHON` or a model-specific `MACQWEN_*_PYTHON` variable.
+override with `VEYSTRIX_PYTHON` or a model-specific `VEYSTRIX_*_PYTHON` variable (the `MACQWEN_` names still work).
 
 ## Troubleshooting
 
@@ -277,14 +283,14 @@ results/                    Per-run measurement records (one folder per run)
 
 ## License
 
-MACQWEN source code uses the MIT License. Models and dependencies use their
+Veystrix is proprietary freeware; it is not open source as a whole. Code published earlier as MACQWEN under the MIT License keeps that license and notice (see LICENSE, LICENSES/, legal/). Models and dependencies use their
 own licenses. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The Vontra
 checkpoint card carries the Qwen Community License 1.0; review it before
 use or redistribution.
 
 ## Acknowledgements
 
-MACQWEN uses and builds on these third-party projects and platform tools:
+Veystrix uses and builds on these third-party projects and platform tools:
 
 - Apple macOS, Apple Silicon, Metal, Objective-C++ Metal APIs, Xcode, and
   Instruments provide the runtime platform, custom kernels, and trace tools.
@@ -295,12 +301,12 @@ MACQWEN uses and builds on these third-party projects and platform tools:
 - Hugging Face hosts the public checkpoint files and model discussions used in
   this project and its evidence record.
 - The Qwen team provides the Qwen model architecture, tokenizer, sampling
-  guidance, and checkpoint family used by MACQWEN.
+  guidance, and checkpoint family used by Veystrix.
 - Vontra provides the public Flash-Next MLX checkpoints used in this work.
 - IFM provides K2-Horizon, and abenzerps provides its public MLX checkpoint.
 - Tavily and Context7 provide optional search and documentation tools for the
   repository-tool chat profile.
 - Python provides the runtime and standard-library components.
 - GitHub provides repository hosting, issue tracking, and GitHub Actions CI.
-- The MACQWEN research record credits external reports and source notes where
+- The Veystrix research record credits external reports and source notes where
   they affect a measurement or a decision.

@@ -1,4 +1,9 @@
-# Contributing to MACQWEN
+# Contributing to Veystrix Core
+
+> **This repository is private and proprietary. External contributions are not accepted.**
+> Earlier text about contributions made under the MIT license describes the project as it was
+> published before 2026-11-10. Notes below are internal engineering rules for the owner and
+> people they invite.
 
 ## Before changing code
 

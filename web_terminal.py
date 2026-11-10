@@ -184,7 +184,7 @@ def _shortcut_buttons() -> str:
 PAGE = """<!doctype html><html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<title>MACQWEN</title>
+<title>Veystrix</title>
 <style>
   :root{color-scheme:dark}
   *{box-sizing:border-box}

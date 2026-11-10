@@ -1,5 +1,29 @@
 # Changelog
 
+## Veystrix 3.8.1 (development, `development3.81`)
+
+Not released. No hardware validation was done for these changes: no model was loaded.
+
+### Changed
+
+- Rebrand to **Veystrix** (staged, compatible). New `veystrix` import alias and `veystrix` console
+  script; `macqwen` imports and the `macqwen` script keep working. `VEYSTRIX_*` environment
+  names are accepted for every legacy `MACQWEN_*` name. User-facing strings, `/v1/models`
+  display names and package metadata now say Veystrix.
+- Default locations: `~/.veystrix/preferences.json` and `~/Library/Application Support/Veystrix/api_keys.json`;
+  existing files at the old locations are copied once and never deleted. Cache, session and
+  prefix-cache directories and module paths are unchanged.
+- License: proprietary freeware (draft) for the combined work; MIT notices retained. See `legal/`.
+
+### Added
+
+- Native macOS app (`apps/macos/Veystrix`), packaging and release automation, Sparkle 2 update
+  support, Hermes Agent integration and test mocks, security and license audits.
+
+### Fixed
+
+- Two stale test expectations (`test_modes`, `test_prefill_ring`) left by the scratch-ring WIP commit.
+
 ## MACQWEN 0.5.1 - 2026-09-23
 
 ### Added

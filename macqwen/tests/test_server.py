@@ -685,18 +685,18 @@ class ModelCardTests(unittest.TestCase):
         backend = FakeFlashNextBackend(["hi"])
         service = _service_with_backend("macqwen-flashnext", backend)
         caps = capabilities(service)
-        self.assertEqual(caps["display_name"], "MACQWEN Flash-Next")
+        self.assertEqual(caps["display_name"], "Veystrix Flash-Next")
         self.assertEqual(caps["context_window"], 131072)
         card = model_card(service)
         self.assertEqual(card["slug"], "macqwen-flashnext")
-        self.assertEqual(card["display_name"], "MACQWEN Flash-Next")
+        self.assertEqual(card["display_name"], "Veystrix Flash-Next")
         self.assertEqual(card["context_window"], 131072)
 
     def test_bonsai_card_reads_backend_window(self):
         backend = FakeBonsaiBackend(["hi"])
         service = _service_with_backend("macqwen-bonsai2", backend)
         caps = capabilities(service)
-        self.assertEqual(caps["display_name"], "MACQWEN Bonsai-2")
+        self.assertEqual(caps["display_name"], "Veystrix Bonsai-2")
         self.assertEqual(caps["context_window"], 65536)
 
     def test_missing_config_falls_back_to_default_window(self):
@@ -719,7 +719,7 @@ class ModelCardTests(unittest.TestCase):
         self.assertEqual(body["object"], "list")
         self.assertEqual(body["data"][0]["id"], "macqwen-bonsai2")
         self.assertEqual(body["models"][0], model_card(service))
-        self.assertEqual(body["models"][0]["display_name"], "MACQWEN Bonsai-2")
+        self.assertEqual(body["models"][0]["display_name"], "Veystrix Bonsai-2")
         self.assertEqual(body["models"][0]["context_window"], 65536)
 
     def test_limit_caps_at_backend_window(self):

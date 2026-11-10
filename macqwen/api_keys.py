@@ -9,7 +9,31 @@ import re
 import tempfile
 
 
-DEFAULT_PATH = "~/Library/Application Support/MACQWEN/api_keys.json"
+DEFAULT_PATH = "~/Library/Application Support/Veystrix/api_keys.json"
+# Before Veystrix 3.8.1 the file lived under the old project name. It is copied (never moved or
+# deleted) to DEFAULT_PATH the first time the default store is opened.
+LEGACY_PATH = "~/Library/Application Support/MACQWEN/api_keys.json"
+
+
+def migrate_legacy(new: str | Path, legacy: str | Path) -> bool:
+    """Copy a legacy key file to ``new`` (mode 0600, parent 0700) when ``new`` is absent.
+
+    Returns True if a copy was made. The legacy file is left in place so a downgrade still works.
+    """
+    new_path, old_path = Path(new).expanduser(), Path(legacy).expanduser()
+    if new_path.exists() or not old_path.is_file():
+        return False
+    try:
+        data = old_path.read_text()
+        new_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(new_path.parent, 0o700)
+        descriptor = os.open(new_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w") as handle:
+            handle.write(data)
+        os.chmod(new_path, 0o600)
+    except OSError:
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -39,6 +63,8 @@ def sanitized_environment() -> dict[str, str]:
 class KeyStore:
     def __init__(self, path: str | Path = DEFAULT_PATH):
         self.path = Path(path).expanduser()
+        if self.path == Path(DEFAULT_PATH).expanduser():
+            migrate_legacy(self.path, LEGACY_PATH)
         self._external = {
             service.environment: os.environ.get(service.environment)
             for service in SERVICES.values()
