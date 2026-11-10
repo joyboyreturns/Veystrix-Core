@@ -542,6 +542,7 @@ class RealProcessTests(unittest.TestCase):
         time.sleep(1.0)
         self.assertIsNone(P.process_identity(result["watchdog_pid"]), "the watchdog outlived its worker")
 
+    @unittest.skipIf(os.environ.get("CI") == "true", "reproduces a deadlock of the real Apple GPU driver; virtualized CI runners do not")
     @unittest.skipUnless(metal_available(), "needs the Metal build of MLX")
     def test_the_known_gpu_gil_deadlock_is_bounded_by_the_watchdog(self):
         result = self.run_worker("real_deadlock", timeout=60)

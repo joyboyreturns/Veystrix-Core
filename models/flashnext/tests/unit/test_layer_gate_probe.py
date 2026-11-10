@@ -132,6 +132,10 @@ class GateValidationTests(unittest.TestCase):
         self.assertIn("never lower the floor", gate.headroom_reason({"available_mb": 1}))
 
     def test_postponed_gate_starts_nothing(self):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()          # the gate only resolves the path here; no weights are read
+        self.addCleanup(tmp.cleanup)
+        self.checkpoint_dir = tmp.name
         low = {"power_source": "ac", "battery_percent": 80, "battery_state": "charging", "low_power": False,
                "thermal_readable": True, "thermal_warning": False, "thermal_speed_limit": None,
                "pressure_level": 1, "swap_used_mb": 100, "available_mb": 8300, "compressor_mb": 400}
@@ -140,7 +144,7 @@ class GateValidationTests(unittest.TestCase):
                 mock.patch.object(gate, "make_prompt") as prompt, \
                 mock.patch.object(gate, "run_arm") as arm, \
                 mock.patch.object(gate, "checkpoint_fingerprint"), \
-                mock.patch("sys.argv", ["bench_layer_gate", "--memory-rules", "strict"]), \
+                mock.patch("sys.argv", ["bench_layer_gate", "--memory-rules", "strict", "--checkpoint", self.checkpoint_dir]), \
                 mock.patch("builtins.print"), \
                 mock.patch("shutil.disk_usage") as disk:
             disk.return_value = mock.Mock(free=10**12)

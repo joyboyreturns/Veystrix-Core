@@ -640,7 +640,7 @@ class TracerGuardTests(unittest.TestCase):
         tracer.stop()
         rows = [r for r in tracer.rows if r.get("phase")]
         fast, full = [r for r in rows if r.get("fast")], [r for r in rows if not r.get("fast")]
-        self.assertGreater(len(fast), 10)
+        self.assertGreater(len(fast), 4)                       # about 50 are expected; a loaded CI runner delivers far fewer
         self.assertGreaterEqual(len(full), 2)                # the first, then one about every 0.2 s
         self.assertLess(len(full), len(fast))
 
@@ -1004,7 +1004,7 @@ class ChildMainTests(unittest.TestCase):
 
     def test_growth_over_the_limit_with_ample_memory_warns_but_the_child_completes(self):
         self.probe.compressor, self.probe.compressor_step = 310.0, 1000.0
-        code, target = self.run_child(delay=0.4, available=8000.0)
+        code, target = self.run_child(delay=1.5, available=8000.0)   # long enough for a slow runner to take the samples
         self.assertEqual(code, 0)
         self.exit.assert_not_called()
         data = json.loads(target.read_text())
