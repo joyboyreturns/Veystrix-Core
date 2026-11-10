@@ -53,6 +53,12 @@ final class AppModel: ObservableObject {
     // MARK: model folder
 
     func chooseCheckpoint(_ url: URL) {
+        // Choosing a folder is an explicit selection: follow what the folder actually is, so a Nemotron folder is
+        // never judged against the Flash-Next rules (or the other way round). Each model keeps its own path.
+        if let family = CheckpointValidator.detectFamily(directory: url), family != settings.selectedModel {
+            settings.selectedModel = family
+            logs.append("The folder is a \(family.title) checkpoint; the model selection was changed to match.", source: .app)
+        }
         settings.activeCheckpointPath = url.path
         revalidateCheckpoint()
     }

@@ -467,6 +467,13 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         let q = tempDir().appendingPathComponent("q"); try makeCheckpoint(in: q)
         #expect(CheckpointValidator.validate(directory: q, family: .nemotron35).verdict == .incompatible)
     }
+    @Test func familyIsDetectedFromTheFolder() throws {
+        #expect(CheckpointValidator.detectFamily(directory: try nemotronFolder()) == .nemotron35)
+        let q = tempDir().appendingPathComponent("q"); try makeCheckpoint(in: q)
+        #expect(CheckpointValidator.detectFamily(directory: q) == .flashnext)
+        let l = tempDir().appendingPathComponent("l"); try makeCheckpoint(in: l, modelType: "llama")
+        #expect(CheckpointValidator.detectFamily(directory: l) == nil)
+    }
     @Test func nvfp4AndPartialDownloadsAreRefused() throws {
         let nv = try nemotronFolder(quant: #"{"mode":"nvfp4","bits":4,"group_size":16}"#)
         #expect(CheckpointValidator.validate(directory: nv, family: .nemotron35).verdict == .incompatible)

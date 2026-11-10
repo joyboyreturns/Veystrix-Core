@@ -99,6 +99,17 @@ public enum CheckpointValidator {
         return report
     }
 
+    /// The model family a folder belongs to, read from its `config.json` only. Nil when it matches none.
+    public static func detectFamily(directory: URL) -> ModelFamily? {
+        guard let config = readJSON(directory.appendingPathComponent("config.json")) else { return nil }
+        var types = Set<String>()
+        if let t = config["model_type"] as? String { types.insert(t) }
+        for key in ["text_config", "llm_config"] {
+            if let nested = config[key] as? [String: Any], let t = nested["model_type"] as? String { types.insert(t) }
+        }
+        return ModelFamily.allCases.first { !$0.modelTypes.isDisjoint(with: types) }
+    }
+
     /// Same constraints as the engine: a plain `*.safetensors` file name, no separators, not hidden, not absolute.
     static func isSaneShardName(_ name: String) -> Bool {
         name.hasSuffix(".safetensors") && !name.contains("/") && !name.contains("\\")
