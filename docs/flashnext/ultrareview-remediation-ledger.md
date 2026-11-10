@@ -4,36 +4,36 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 
 | ID | Phase | File | Function/Lines | Severity | Status | Commit |
 |---|---|---|---|---|---|---|
-| R1-01 | Phase 4: Supervision & Failure Recovery | `models/flashnext/auto_reclaim.py` | L187-L209 | normal | verified | pending |
-| R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | verified | pending |
+| R1-01 | Phase 4: Supervision & Failure Recovery | `models/flashnext/auto_reclaim.py` | L187-L209 | normal | verified | 9cac8f5 |
+| R1-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/overnight.py` | L137-L141 | normal | verified | 9cac8f5 |
 | R1-03 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_session.py` | L213-L220 | normal | verified | fe4682a |
-| R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | verified | pending |
+| R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | verified | 9cac8f5 |
 | R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
 | R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
 | R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | open | pending |
 | R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | open | pending |
 | R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | open | pending |
 | R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | open | pending |
-| R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | verified | pending |
+| R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | verified | 9cac8f5 |
 | R2-02 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L223-L223 | normal | verified | 5a63d00 |
 | R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
-| R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | verified | pending |
+| R2-04 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L1473-L1476 | normal | verified | 9cac8f5 |
 | R2-05 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L355-L357 | normal | verified | 5a63d00 |
 | R2-06 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_cache.py` | L832-L841 | normal | verified | fe4682a |
 | R2-07 | Phase 3: Persistent Cache & Recovery | `models/flashnext/prefix_profiles.py` | L382-L383 | normal | verified | fe4682a |
 | R2-08 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1459-L1469 | normal | verified | 5a63d00 |
 | R2-09 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L1245-L1270 | normal | verified | 5a63d00 |
 | R2-10 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefix_session.py` | L251-L268 | normal | verified | 5a63d00 |
-| R3-01 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L37-L65 | normal | verified | pending |
-| R3-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/chat_guard.py` | L121-L124 | normal | verified | pending |
-| R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | verified | pending |
-| R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | verified | pending |
+| R3-01 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L37-L65 | normal | verified | 9cac8f5 |
+| R3-02 | Phase 4: Supervision & Failure Recovery | `models/flashnext/chat_guard.py` | L121-L124 | normal | verified | 9cac8f5 |
+| R3-03 | Phase 4: Supervision & Failure Recovery | `macqwen/cli.py` | L303-L304 | normal | verified | 9cac8f5 |
+| R3-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/request_admission.py` | L47-L53 | normal | verified | 9cac8f5 |
 | R3-05 | Phase 2: Correctness & Tool-Calling | `macqwen/sessions.py` | L154-L189 | normal | verified | 5a63d00 |
 | R3-06 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L114-L140 | normal | verified | fe4682a |
-| R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | verified | pending |
+| R3-07 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L649-L661 | normal | verified | 9cac8f5 |
 | R3-08 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L101-L151 | nit | verified | fe4682a |
 | R3-09 | Phase 3: Persistent Cache & Recovery | `macqwen/cache_tools.py` | L156-L158 | nit | verified | fe4682a |
-| R3-10 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L1153-L1157 | pre_existing | verified | pending |
+| R3-10 | Phase 4: Supervision & Failure Recovery | `macqwen/session.py` | L1153-L1157 | pre_existing | verified | 9cac8f5 |
 
 ## Detailed Finding Specifications
 
@@ -54,7 +54,7 @@ How it happens:
 - **Planned fix**: Wrap `prefix_store.shrink_ram(0)` in try/except in `auto_reclaim.py` so disk/cache errors are non-fatal, and restrict lifecycle fault marking in `macqwen/backends/flashnext.py:_after_request` to GPU synchronization and Metal device errors.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r1_01_auto_reclaim_shrink_ram_failure_is_isolated`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R1-02 — `models/flashnext/overnight.py` (L137-L141)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -73,7 +73,7 @@ Mechanism in models/flashnext/overnight.py, which is new in this diff (476 added
 - **Planned fix**: Track `consecutive_failures` in `Policy.decide`, resetting it only after a stable run duration, and trigger crash loop stop when `consecutive_failures > max_restarts`.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r1_02_overnight_crash_loop_detects_consecutive_failures`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R1-03 — `models/flashnext/prefix_session.py` (L213-L220)
 - **Phase**: Phase 3: Persistent Cache & Recovery
@@ -108,7 +108,7 @@ With FLASHNEXT_FLIGHT_LOG=flight.jsonl (a relative bare name, which `resolve_pat
 - **Planned fix**: Guard `os.makedirs` with `if directory: os.makedirs(directory, ...)`.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r1_04_flight_recorder_handles_bare_filename`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R1-05 — `models/flashnext/expert_cache.py` (L1836-L1844)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -242,7 +242,7 @@ How it happens:
 - **Planned fix**: Wrap `_log_request` in a non-fatal try/except logging a diagnostic warning without failing the completed generation.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r2_01_log_request_failure_does_not_abort_generation`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R2-02 — `macqwen/server.py` (L223-L223)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -298,7 +298,7 @@ How it happens:
 - **Planned fix**: Call `self._drain_payload()` to consume `Content-Length` bytes before returning 404.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r2_04_do_post_drains_payload_on_404`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R2-05 — `macqwen/server.py` (L355-L357)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -418,7 +418,7 @@ How it fails:
 - **Planned fix**: Default `--server` launches to `modes.AGENTIC` when `--mode` is not specified.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_01_cli_defaults_server_to_agentic_mode`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R3-02 — `models/flashnext/chat_guard.py` (L121-L124)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -438,7 +438,7 @@ How it happens:
 - **Planned fix**: Treat AC-powered desktop Macs (`power_source == "ac"` and `battery_percent is None`) as valid power states rather than missing probes.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_02_chat_guard_allows_desktop_mac_without_battery`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R3-03 — `macqwen/cli.py` (L303-L304)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -458,7 +458,7 @@ How it happens:
 - **Planned fix**: Only pass `--profile` argument if explicitly provided by user.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_03_cli_does_not_override_saved_profile_when_unspecified`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R3-04 — `models/flashnext/request_admission.py` (L47-L53)
 - **Phase**: Phase 4: Supervision & Failure Recovery
@@ -477,7 +477,7 @@ How it happens, traced in the code:
 - **Planned fix**: Disallow `layer-major` in `modes.plan_mode(CHAT)`, and gate `request_admission.enabled()` on `VEYSTRIX_MODE == "agentic"`.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_04_chat_mode_refuses_layer_major`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R3-05 — `macqwen/sessions.py` (L154-L189)
 - **Phase**: Phase 2: Correctness & Tool-Calling
@@ -536,7 +536,7 @@ Condition: AGENTIC started through `./chat.sh --mode agentic` (the only launch s
 - **Planned fix**: Enforce `min(tier.max_cold_prefill, env_cold)` in `_apply_tier()` so runtime cold prefill never exceeds admitted memory tier limits.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_07_apply_tier_caps_cold_prefill`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
 
 ### R3-08 — `macqwen/cache_tools.py` (L101-L151)
 - **Phase**: Phase 3: Persistent Cache & Recovery
@@ -586,4 +586,4 @@ A user starts the default CHAT mode (`FLASHNEXT_PREFILL_CHUNK_TOKENS=0`, no cont
 - **Planned fix**: Enforce `supervision.check` and pass bounded context and prefill limits in `/server` handler before invoking `serve()`.
 - **Regression test**: `macqwen/tests/test_phase4_remediations.py:test_r3_10_server_requested_runs_supervision_check`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9cac8f5
