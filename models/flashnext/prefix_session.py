@@ -137,6 +137,7 @@ class PrefixSession:
             kv_part = quantized_kv.fingerprint_parts()      # bf16: empty (unchanged); else dtype, bits, group size
             fp = P.fingerprint(
                 **self._compatibility(), prefix_cache=P.FORMAT_VERSION,
+                snapshot_chain_semantics=2,
                 chunk=prefill_module.chunk_tokens(), **plan, **kv_part,
                 # Prefill settings that change numerics are part of the key: a prefix computed one way
                 # is not the same state as one computed another way.
@@ -319,11 +320,17 @@ class PrefixSession:
             stored = time.perf_counter()
             from models.flashnext import flight_recorder
             flight_recorder.record("prefix_snapshot_begin", position=position)
+            snapshot_plan = history(position)
             entry = store.put(prompt[:position], cache if frozen is None else frozen, parent=last[-1] if last else hit, language=language,
-                              plan=history(position),
-                              kind="system" if position == system else None)
+                              plan=snapshot_plan,
+                              kind="system" if position == system else None, auto_parent=False)
             flight_recorder.record("prefix_snapshot_end", position=position, seconds=round(time.perf_counter() - stored, 3))
             report.snapshot_seconds += time.perf_counter() - stored
+            if entry.plan != snapshot_plan:
+                # A token-identical entry produced under different chunking is
+                # not the state we just computed. Do not chain a delta to it.
+                flight_recorder.record("prefix_snapshot_plan_conflict", position=position)
+                return
             held.enter_context(store.lease((entry.key,)))   # the next snapshot chains to it: keep it until we finish
             last.append(entry)
             report.snapshots.append(position)

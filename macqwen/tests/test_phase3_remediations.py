@@ -108,6 +108,20 @@ class TestPhase3Remediations(unittest.TestCase):
         self.assertNotIn(leaf.key, cache._disk)
         self.assertEqual(cache._ram_bytes, sum(e.nbytes() for e in cache._ram.values()))
 
+    def test_child_is_not_persisted_when_parent_spill_fails(self):
+        cache = P.PrefixCache("testfp" + "0" * 26, ram_budget=10**8,
+                              directory=self.cache_dir, min_disk_free_bytes=0)
+        parent = make_dummy_entry("p" * 64, n_tokens=10, parent=None)
+        child = make_dummy_entry("c" * 64, n_tokens=20, parent=parent.key, parent_tokens=10)
+        cache._admit(parent)
+        cache._admit(child)
+        with mock.patch.object(P, "write_entry", side_effect=OSError("disk failure")) as write:
+            cache._persist(child)
+        self.assertEqual(write.call_count, 1)
+        self.assertNotIn(parent.key, cache._disk)
+        self.assertNotIn(child.key, cache._disk)
+        self.assertIn(child.key, cache._ram)
+
     def test_r2_07_prefix_cache_evicts_foreign_leaves_first(self):
         """R2-07: Base PrefixCache tracks foreign manifests and reclaims them first on disk over-budget."""
         fp = "testfp" + "0" * 26

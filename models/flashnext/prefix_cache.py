@@ -738,7 +738,7 @@ class PrefixCache:
 
     # ---- store ----
     def put(self, tokens, cache_list, parent: Hit | Entry | None = None, language=None, plan=None,
-            kind: str | None = None) -> Entry:
+            kind: str | None = None, *, auto_parent: bool = True) -> Entry:
         """Capture the live cache at ``tokens`` and store it. ``parent`` is the Hit or Entry it extends.
 
         ``plan`` is the chunk-plan provenance (internal edges before ``len(tokens)``). An entry stored
@@ -756,7 +756,7 @@ class PrefixCache:
                     self.stats.plan_conflicts += 1
                 self._touch(key)
                 return self._ram.get(key) or self._load_entry(key)[0]
-            parent_entry = self._as_entry(parent, tokens)
+            parent_entry = self._as_entry(parent, tokens) if parent is not None or auto_parent else None
             entry = capture(cache_list, tokens, self.fp, parent_entry, language, plan)
             self._plans[key] = entry.plan
             entry._tokens = tokens
@@ -875,6 +875,18 @@ class PrefixCache:
     def _persist(self, entry: Entry) -> None:
         if entry.key in self._disk:
             return
+        # A delta on SSD is durable only if its complete parent chain is also
+        # durable. In particular, a failed parent spill must not let a child
+        # masquerade as a recoverable disk copy.
+        if entry.parent is not None and entry.parent not in self._disk:
+            parent = self._ram.get(entry.parent)
+            if parent is None:
+                self.stats.writes_skipped += 1
+                return
+            self._persist(parent)
+            if entry.parent not in self._disk:
+                self.stats.writes_skipped += 1
+                return
         if self.directory is not None:
             try:
                 usage = shutil.disk_usage(self.directory)
@@ -889,7 +901,14 @@ class PrefixCache:
                                      "atime": time.time()}
             self.stats.ssd_writes += 1
             self.stats.ssd_bytes_written += written
-            self._evict_disk()
+            # Keep the ancestor until quota enforcement has seen the child.
+            if entry.parent is not None:
+                self._acquire((entry.parent,))
+            try:
+                self._evict_disk()
+            finally:
+                if entry.parent is not None:
+                    self._release((entry.parent,))
         except OSError:
             self.stats.writes_skipped += 1
 

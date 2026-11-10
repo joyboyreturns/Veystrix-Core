@@ -284,6 +284,16 @@ class BoundaryTests(Base):
 
 
 class BalancedPolicyTests(Base):
+    def test_new_plan_never_auto_chains_to_unrelated_old_boundary(self):
+        with mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: "chunks", S.FLAG_DIR: str(self.tmp / "chain")}):
+            model, session = self.engine()
+            self.go(model, session, [4] * 300)
+            _, _, report = self.go(model, session, [4] * 330)
+            self.assertEqual(report.hit_tokens, 0)
+            store = session.store()
+            first = store._ram[P.chain_key(store.fp, tuple([4] * report.snapshots[0]))]
+            self.assertIsNone(first.parent)
+
     """The boundary-aware planner through the real prefix session on the small model."""
 
     def setUp(self):
@@ -432,10 +442,10 @@ class BalancedPolicyTests(Base):
                 _, _, report = self.go(build_model(), grid_session, system + [8] * 50)
                 self.assertEqual(report.hit_tokens, 0, "a grid prefix is not a balanced prefix")
                 expected = P.fingerprint(
-                    **compat(), prefix_cache=P.FORMAT_VERSION, chunk=128,
+                    **compat(), prefix_cache=P.FORMAT_VERSION, snapshot_chain_semantics=2, chunk=128,
                     ring=os.environ.get("FLASHNEXT_PREFILL_RING_EXPERTS", "0"),
                     qsa_chunk=os.environ.get("FLASHNEXT_QSA_QUERY_CHUNK", "2048"))
-                self.assertEqual(grid_session.store().fp, expected, "the grid key must not change")
+                self.assertEqual(grid_session.store().fp, expected)
             self.assertNotEqual(session.store().fp, expected)
             with mock.patch.dict(os.environ, {S.FLAG_BOUNDARIES: "messages"}):
                 self.assertNotEqual(S.PrefixSession(encode, compat).store().fp, session.store().fp)

@@ -502,9 +502,9 @@ class ProfiledPrefixCache(P.PrefixCache):
         with self._lock:
             return list(self.eviction_events)
 
-    def put(self, tokens, cache_list, parent=None, language=None, plan=None, kind=None, high_value=None):
+    def put(self, tokens, cache_list, parent=None, language=None, plan=None, kind=None, high_value=None, *, auto_parent=True):
         with self._lock:
-            entry = super().put(tokens, cache_list, parent, language, plan, kind)
+            entry = super().put(tokens, cache_list, parent, language, plan, kind, auto_parent=auto_parent)
             meta = self._meta.get(entry.key)
             is_hv = high_value if high_value is not None else self.is_high_value(tokens, kind)
             if meta is None:
