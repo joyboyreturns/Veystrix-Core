@@ -65,4 +65,4 @@ After the long-session gate passes, the documented clients are `VEYSTRIX_API_KEY
 3. Measure n-gram dedup with exact tokens, logits and state, physical reads and peak memory; reject it if end-to-end performance or safety regresses. Revisit 16K window scheduling and exact MTP only under the same gates.
 4. After the safety gate, validate restart/restoration, streaming/cancellation, all three API protocols and bounded real Qwen Code and DeepSeek Harness sessions. No 262K execution has been validated.
 
-Task status and prior test commands are in [phase2-task-ledger.md](phase2-task-ledger.md). The original checkpoint and existing commits are unchanged; no push was made.
+Task status and prior test commands are in [phase2-task-ledger.md](phase2-task-ledger.md). Local commit `a3a07d1` contains the offline safety, cache-fill, profiling, n-gram and documentation work. The original checkpoint and existing commits are unchanged; no push was made.
