@@ -28,6 +28,21 @@ Uncommitted-work review outcomes: the oversized-pool fallback streams every rout
 
 **8K-after-turns gate, 2026-11-10: safely postponed, not run.** Command: `.venv/bin/python -m models.flashnext.tests.bench.bench_phase2_after_turns --power-rules battery-ok --min-battery 40 --pool-gb 2` (battery 71%, discharging, swap 853.5 MiB). Preflight, after its own purge attempt, found 11,635 MiB available against the 11,908 MiB the layer-major candidate needs (3,072 MiB floor + footprint + 512 MiB margin), so it stopped before starting any model process (`results/flashnext/20261110-120207-phase2-after-turns-manual/`). This is a valid safe refusal. The floor was not lowered. Re-run after freeing about 300 MiB or more of memory (for example by closing other applications); no model-side change is needed.
 
+## Full-routing decode baseline and buffered pool fill, 2026-11-10 (measured)
+
+Real checkpoint, threshold 1.0, chunk-major reference, 2 GB pool, 2,239-token prompt, 64 greedy decode tokens, battery-ok (71% → 58% across all runs, discharging, Low Power Mode off, swap 845–854 MiB throughout), each arm a fresh supervised process with the independent watchdog. Raw arms are in `results/flashnext/20261110-120244-`, `-121327-`, `-122054-` and `-122626-decode-profile-manual/`. Commands: `bench_decode_profile --source-tokens 600 --tokens 64 --arms plain,io,host,plain2` (default fill) and the same with `--buffered-fill`.
+
+| Condition (unprofiled arms) | Decode tok/s | Process physical read per later output token |
+|---|---:|---:|
+| Default pool fill, order A: 2.220, 2.202 (first batch); order B: 2.187, 2.164 | 2.16–2.22 | 1.04–1.06 GB |
+| Buffered pool fill (`--enable pool-buffered-fill`), order A: 2.795, 2.867; order B: 2.853, 2.841 | 2.80–2.87 | 0.70–0.74 GB |
+
+Order A ran default first, then buffered; order B ran buffered first, then default, so the gain does not come from run order. Within-condition spread is at most about 3% and the gap is about 28–30%, with physical reads about 30% lower. Token IDs were identical across all 11 arms (digest `1e055db49628`), including profiled arms. This is exactness at the greedy token-ID level for one prompt, not a logits comparison, and does not cover other prompts, longer decodes, multi-turn sessions or sustained page-cache pressure. Reads are process I/O and include housekeeping. Fresh-process arms ran back to back on a fanless Mac with a 45–60 s settle.
+
+Profiled arms (`io`, `host`) decoded within about 2% of the unprofiled controls (2.18 versus 2.20–2.22), so the diagnostic split is representative here. Default fill: median 453 ms/token (p95 about 532 ms), host-measured `io_wait` 354 ms/token and `router_sync` 64 ms/token, 48 read calls per token. Buffered fill: median 345 ms/token (p95 478 ms), `io_wait` 259 ms/token, `router_sync` 65 ms/token. These host timers overlap and are not GPU time; the I/O wait still dominates, and buffered fill removed about 95 ms/token of it. GPU execution time is not yet separated. Every one of 3,072 profiled layer calls per arm routed exactly 10 distinct experts. The pool hit/miss counters are not fed on this path, so logical cache hits are not reported.
+
+Decision: buffered fill stays opt-in. The evidence is strong for this setting but narrow, and AGENT_INVARIANTS require promotion evidence beyond a single prompt. It is the best justified decode improvement so far and a candidate default once multi-turn and longer-context arms with memory traces agree. Use `VEYSTRIX_API_KEY=local ./serve.sh --pool-gb 2 --enable uncached-prefill-reads --enable pool-buffered-fill`. The 8K layer-major prefill claims (48.3 → 89.5 tok/s) remain pruned-routing history, not full-routing results.
+
 ## Performance
 
 These are prior recorded results on this checkpoint, not new Phase II measurements. Conditions and raw arms are in [overnight-architecture-results.md](overnight-architecture-results.md). The new code has no measured throughput claim.
