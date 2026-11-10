@@ -43,7 +43,7 @@ public struct LaunchPlan: Equatable, Sendable {
                             isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }) throws -> LaunchPlan {
         let problems = settings.validationProblems()
         guard problems.isEmpty else { throw PlanError.invalidSettings(problems) }
-        guard !settings.checkpointPath.isEmpty, let checkpoint else { throw PlanError.noCheckpoint }
+        guard !settings.activeCheckpointPath.isEmpty, let checkpoint else { throw PlanError.noCheckpoint }
         guard checkpoint.isUsable else {
             throw PlanError.checkpointNotUsable(checkpoint.notes.first ?? "it is incomplete or incompatible")
         }
@@ -73,9 +73,11 @@ public struct LaunchPlan: Equatable, Sendable {
                     "--host", "127.0.0.1",                       // loopback only, always
                     "--port", String(settings.port),
                     "--pool-gb", String(settings.decodePool.rawValue),
-                    "--checkpoint", settings.checkpointPath]
+                    "--checkpoint", settings.activeCheckpointPath]
+        if settings.selectedModel == .nemotron35 { args += ["--model", ModelFamily.nemotron35.rawValue] }
         if settings.supervisedRestarts { args.append("--overnight") }
-        if !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
+        // The prefix cache is a Flash-Next feature; the Nemotron engine has no use for the folder.
+        if settings.selectedModel == .flashnext, !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
 
         var env: [String: String] = [:]
         for key in inheritedKeys { if let v = parentEnvironment[key] { env[key] = v } }
@@ -89,6 +91,8 @@ public struct LaunchPlan: Equatable, Sendable {
         // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;
         // needs the narrow `sudo -n /usr/sbin/purge` permission, otherwise it records that and backs off).
         env["FLASHNEXT_AUTO_PURGE"] = "1"
+        // Choosing Nemotron and pressing Start (after the load confirmation) is the approval for real inference.
+        if settings.selectedModel == .nemotron35 { env["VEYSTRIX_NEMOTRON_AUTHORIZED"] = "1" }
         env["VEYSTRIX_API_KEY"] = apiKey ?? "local"
         if settings.requireAPIKey, let apiKey { env["VEYSTRIX_SERVER_API_KEY"] = apiKey }
         if case .bundled(let root) = source { env["PYTHONPATH"] = root.appendingPathComponent("lib").path }

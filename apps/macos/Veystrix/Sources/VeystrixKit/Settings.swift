@@ -21,6 +21,26 @@ public enum DecodePool: Int, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// Which engine the app launches. Selection is always manual; nothing routes between models automatically.
+public enum ModelFamily: String, Codable, CaseIterable, Sendable, Identifiable {
+    case flashnext
+    case nemotron35 = "nemotron35-lightning"
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .flashnext: return "Qwen 3.8 Flash-Next"
+        case .nemotron35: return "NVIDIA Nemotron 3.5 Lightning (experimental)"
+        }
+    }
+    /// Engine architectures (`model_type`) this family accepts.
+    public var modelTypes: Set<String> {
+        switch self {
+        case .flashnext: return ["qwen4_exp", "qwen4_exp_text"]
+        case .nemotron35: return ["nemotron_h"]
+        }
+    }
+}
+
 /// User-visible settings. Stored as JSON in Application Support. Unknown or missing keys fall back to defaults,
 /// so an older settings file keeps working after an update (see `schemaVersion`).
 public struct AppSettings: Codable, Equatable, Sendable {
@@ -29,7 +49,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var schemaVersion: Int = AppSettings.currentSchemaVersion
     /// Local API port. The engine binds to 127.0.0.1 only.
     public var port: Int = 8080
+    /// The Flash-Next folder (kept under the original key so existing settings keep working).
     public var checkpointPath: String = ""
+    /// Which engine to launch. Flash-Next stays the default.
+    public var selectedModel: ModelFamily = .flashnext
+    /// The Nemotron folder. Independent of the Flash-Next folder: switching models never overwrites the other path.
+    public var nemotronCheckpointPath: String = ""
     public var decodePool: DecodePool = .none
     /// Let the engine's supervisor restart the server after a crash or memory guard stop (bounded and logged).
     public var supervisedRestarts: Bool = true
@@ -51,8 +76,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     public init() {}
 
+    /// The folder of the selected model.
+    public var activeCheckpointPath: String {
+        get { selectedModel == .nemotron35 ? nemotronCheckpointPath : checkpointPath }
+        set { if selectedModel == .nemotron35 { nemotronCheckpointPath = newValue } else { checkpointPath = newValue } }
+    }
+
     enum CodingKeys: String, CodingKey {
-        case schemaVersion, port, checkpointPath, decodePool, supervisedRestarts, keepMacAwake, cacheQuotaGB,
+        case schemaVersion, port, checkpointPath, selectedModel, nemotronCheckpointPath, decodePool, supervisedRestarts, keepMacAwake, cacheQuotaGB,
              cacheDirectory, confirmBeforeLoading, requireAPIKey, checkForUpdatesAutomatically,
              includeLogsInDiagnostics, developerRepoPath, allowBattery, minimumBatteryPercent, allowLowPowerMode
     }
@@ -63,6 +94,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         s.port = try c.decodeIfPresent(Int.self, forKey: .port) ?? s.port
         s.checkpointPath = try c.decodeIfPresent(String.self, forKey: .checkpointPath) ?? s.checkpointPath
+        s.selectedModel = (try? c.decodeIfPresent(ModelFamily.self, forKey: .selectedModel)) ?? s.selectedModel
+        s.nemotronCheckpointPath = try c.decodeIfPresent(String.self, forKey: .nemotronCheckpointPath) ?? s.nemotronCheckpointPath
         s.decodePool = try c.decodeIfPresent(DecodePool.self, forKey: .decodePool) ?? s.decodePool
         s.supervisedRestarts = try c.decodeIfPresent(Bool.self, forKey: .supervisedRestarts) ?? s.supervisedRestarts
         s.keepMacAwake = try c.decodeIfPresent(Bool.self, forKey: .keepMacAwake) ?? s.keepMacAwake

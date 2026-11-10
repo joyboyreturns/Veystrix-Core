@@ -20,9 +20,10 @@ public struct CheckpointReport: Equatable, Sendable {
 /// Mirrors the engine's own rules (`veystrix/checkpoints.py: flashnext_compatible`) so the app and the engine agree.
 public enum CheckpointValidator {
     static let tokenizerFiles = ["tokenizer.json", "tokenizer_config.json"]
-    static let supportedModelTypes: Set<String> = ["qwen4_exp", "qwen4_exp_text"]
+    static let supportedModelTypes: Set<String> = ModelFamily.flashnext.modelTypes
 
-    public static func validate(directory: URL, fileManager: FileManager = .default) -> CheckpointReport {
+    public static func validate(directory: URL, family: ModelFamily = .flashnext,
+                                fileManager: FileManager = .default) -> CheckpointReport {
         var report = CheckpointReport(verdict: .notFound, path: directory.path)
         var isDir: ObjCBool = false
         guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDir), isDir.boolValue else {
@@ -44,9 +45,17 @@ public enum CheckpointValidator {
                 if let nested = config[key] as? [String: Any], let t = nested["model_type"] as? String { types.insert(t) }
             }
             report.modelType = types.sorted().joined(separator: ", ")
-            if types.isDisjoint(with: supportedModelTypes) {
-                report.notes.append("Unsupported model type (\(report.modelType ?? "unknown")). This Veystrix build supports the Qwen3.8 Flash-Next family (qwen4_exp).")
+            if types.isDisjoint(with: family.modelTypes) {
+                report.notes.append("Unsupported model type (\(report.modelType ?? "unknown")) for \(family.title). Choose the matching model above, or a folder with a supported checkpoint.")
                 return report
+            }
+            if family == .nemotron35 {
+                // Only the MLX affine 4-bit conversion is supported (NVIDIA's NVFP4 is a different format).
+                let q = config["quantization"] as? [String: Any]
+                guard q?["mode"] as? String == "affine", q?["bits"] as? Int == 4 else {
+                    report.notes.append("Nemotron needs the MLX affine 4-bit conversion (mlx-community). NVFP4 and other formats are not supported.")
+                    return report
+                }
             }
         }
 
@@ -65,6 +74,13 @@ public enum CheckpointValidator {
             return report
         }
         report.shardCount = shardNames.count
+        if let leftovers = try? fileManager.contentsOfDirectory(atPath: directory.path),
+           leftovers.contains(where: { $0.hasSuffix(".incomplete") || $0.hasSuffix(".part") }) {
+            report.verdict = .incomplete
+            report.missingFiles.append("partial download files present")
+            report.notes.append("A download is still in progress or was interrupted. Finish it, then validate again.")
+            return report
+        }
         for shard in shardNames.sorted() {
             let url = directory.appendingPathComponent(shard)
             if let attrs = try? fileManager.attributesOfItem(atPath: url.path), let size = attrs[.size] as? NSNumber {
@@ -98,6 +114,8 @@ public enum CheckpointValidator {
     public static let licenseNotice = """
     Veystrix does not include a model and does not download one. A checkpoint is licensed by its publisher, \
     not by Veystrix. Read that license before you download, use, modify or share the checkpoint. \
-    Supported by this build: the Qwen3.8 Flash-Next family in MLX 4-bit format (architecture qwen4_exp).
+    Supported by this build: the Qwen3.8 Flash-Next family in MLX 4-bit format (architecture qwen4_exp), and, \
+    experimentally, NVIDIA Nemotron 3.5 Lightning in the mlx-community affine 4-bit conversion (architecture \
+    nemotron_h; NVIDIA Open Model / OpenMDW 1.1 license). The engine verifies the Nemotron layout before it loads.
     """
 }

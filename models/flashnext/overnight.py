@@ -510,9 +510,8 @@ def main(argv=None) -> int:
         args.auto_warm = bool(args.overnight) and args.model == "flashnext"   # warming relies on the Flash-Next prefix cache
     if args.model == "nemotron35-lightning":
         args.auto_warm = False
-        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") != "1":
-            print("Nemotron real-checkpoint inference needs the owner's explicit approval: set "
-                  "VEYSTRIX_NEMOTRON_AUTHORIZED=1. Nothing was started.", file=sys.stderr)
+        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") == "0":
+            print("Nemotron is disabled by VEYSTRIX_NEMOTRON_AUTHORIZED=0. Nothing was started.", file=sys.stderr)
             return 2
     if args.status:
         return print_status()

@@ -1,6 +1,6 @@
-# Hermes Agent integration — planned, not yet operational
+# Hermes Agent integration — available, unverified with real model output
 
-[Hermes custom-provider documentation](https://hermes-agent.nousresearch.com/docs/integrations/providers) supports the OpenAI-compatible base URL below. This example is a target configuration only: the current branch does not register or serve this model ID yet. Do not change the user's live Hermes configuration for testing.
+[Hermes custom-provider documentation](https://hermes-agent.nousresearch.com/docs/integrations/providers) supports the OpenAI-compatible base URL below. The server now registers and serves this model ID when started with `--model nemotron35-lightning` (see real-checkpoint-checklist.md). Real Nemotron tool-call behavior in long Hermes sessions is not yet observed. Do not change the user's live Hermes configuration for testing.
 
 ```yaml
 model:

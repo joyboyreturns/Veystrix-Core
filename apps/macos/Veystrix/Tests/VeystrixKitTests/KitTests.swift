@@ -436,3 +436,61 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         #expect(MemoryProbe.powerRefusal(power(ac: false, 1), minPercent: 0) == nil)
     }
 }
+
+// MARK: Nemotron model selection
+@Suite struct NemotronSelectionTests {
+    private let exists: (String) -> Bool = { _ in true }
+    private func nemotronFolder(quant: String = #"{"mode":"affine","bits":4,"group_size":64}"#, partial: Bool = false) throws -> URL {
+        let d = tempDir().appendingPathComponent("nemo")
+        try makeCheckpoint(in: d, modelType: "nemotron_h")
+        try Data(#"{"model_type":"nemotron_h","quantization":\#(quant)}"#.utf8).write(to: d.appendingPathComponent("config.json"))
+        if partial { try Data().write(to: d.appendingPathComponent("model-00001-of-00002.safetensors.incomplete")) }
+        return d
+    }
+
+    @Test func defaultsKeepFlashNextAndIndependentPaths() {
+        let s = AppSettings()
+        #expect(s.selectedModel == .flashnext); #expect(s.nemotronCheckpointPath.isEmpty)
+        var t = s; t.selectedModel = .nemotron35; t.activeCheckpointPath = "/n"
+        #expect(t.nemotronCheckpointPath == "/n"); #expect(t.checkpointPath.isEmpty)
+    }
+    @Test func oldSettingsFileStillDecodes() throws {
+        let s = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"port":8081,"checkpointPath":"/q"}"#.utf8))
+        #expect(s.selectedModel == .flashnext); #expect(s.checkpointPath == "/q")
+        let odd = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"selectedModel":"future-model"}"#.utf8))
+        #expect(odd.selectedModel == .flashnext)
+    }
+    @Test func validatorIsFamilySpecific() throws {
+        let d = try nemotronFolder()
+        #expect(CheckpointValidator.validate(directory: d, family: .nemotron35).verdict == .compatible)
+        #expect(CheckpointValidator.validate(directory: d, family: .flashnext).verdict == .incompatible)
+        let q = tempDir().appendingPathComponent("q"); try makeCheckpoint(in: q)
+        #expect(CheckpointValidator.validate(directory: q, family: .nemotron35).verdict == .incompatible)
+    }
+    @Test func nvfp4AndPartialDownloadsAreRefused() throws {
+        let nv = try nemotronFolder(quant: #"{"mode":"nvfp4","bits":4,"group_size":16}"#)
+        #expect(CheckpointValidator.validate(directory: nv, family: .nemotron35).verdict == .incompatible)
+        let partial = try nemotronFolder(partial: true)
+        #expect(CheckpointValidator.validate(directory: partial, family: .nemotron35).verdict == .incomplete)
+    }
+    @Test func launchPlanSelectsNemotronAndAuthorizesIt() throws {
+        let d = try nemotronFolder()
+        var s = AppSettings(); s.selectedModel = .nemotron35; s.nemotronCheckpointPath = d.path; s.checkpointPath = "/qwen"
+        s.cacheDirectory = "/cache"
+        let plan = try LaunchPlan.make(settings: s, checkpoint: CheckpointValidator.validate(directory: d, family: .nemotron35),
+                                       source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
+        let m = try #require(plan.arguments.firstIndex(of: "--model")); #expect(plan.arguments[m + 1] == "nemotron35-lightning")
+        let c = try #require(plan.arguments.firstIndex(of: "--checkpoint")); #expect(plan.arguments[c + 1] == d.path)
+        #expect(!plan.arguments.contains("--prefix-dir"))
+        #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == "1")
+        #expect(plan.arguments.contains("127.0.0.1"))
+    }
+    @Test func flashNextPlanIsUnchanged() throws {
+        let d = tempDir().appendingPathComponent("q"); try makeCheckpoint(in: d)
+        var s = AppSettings(); s.checkpointPath = d.path; s.cacheDirectory = "/cache"
+        let plan = try LaunchPlan.make(settings: s, checkpoint: CheckpointValidator.validate(directory: d),
+                                       source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
+        #expect(!plan.arguments.contains("--model")); #expect(plan.arguments.contains("--prefix-dir"))
+        #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == nil)
+    }
+}

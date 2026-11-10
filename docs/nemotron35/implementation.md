@@ -3,7 +3,7 @@
 Status: **experimental.** The streamed backend exists, is integrated into the shared CLI, session, server, supervisor and guards,
 and passes model-free tests on tiny synthetic checkpoints in the exact real tensor layout. **No inference has been run on the
 real checkpoint**, so correctness, memory and speed on real weights are unknown. Qwen (Flash-Next) remains the default; there is
-no automatic routing. Real-weight loading refuses to start unless `VEYSTRIX_NEMOTRON_AUTHORIZED=1` is set.
+no automatic routing. Real use was approved by the owner on 2026-11-11: selecting the model manually is the opt-in, and `VEYSTRIX_NEMOTRON_AUTHORIZED=0` is a kill switch that makes every entry point refuse.
 
 ## What exists
 
@@ -22,6 +22,6 @@ no automatic routing. Real-weight loading refuses to start unless `VEYSTRIX_NEMO
 - Real-checkpoint inference of any kind (numerical match, tokens/s, memory peak, swap, thermals).
 - Asynchronous I/O, prefetch and GPU-resident expert pool tuning; reads are synchronous. About 5.6 MB per expert per layer.
 - Automatic prefix/persistent cache across requests (server `_prefix_session` is Flash-Next only). Named sessions exist; per-turn automatic snapshots do not. A prompt whose template-rendered history differs from the tape (the template rewrites historical thinking) cold-replays.
-- Desktop app (Swift) model picker, validator and launch plan: not changed.
+- Desktop app: model picker (Flash-Next default, independent folder per model), family-aware validator and launch plan are implemented and build, but the Swift tests could not be executed here (the installed Command Line Tools lack the Swift Testing macros) and the UI has not been run.
 - MTP: not implemented.
 - Hosted CI for this branch has not run.

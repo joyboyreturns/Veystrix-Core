@@ -74,7 +74,7 @@ struct DashboardView: View {
     }
 
     private var checkpointName: String {
-        model.settings.checkpointPath.isEmpty ? "—" : (model.settings.checkpointPath as NSString).lastPathComponent
+        model.settings.activeCheckpointPath.isEmpty ? "—" : (model.settings.activeCheckpointPath as NSString).lastPathComponent
     }
     private var contextDetail: String {
         var parts: [String] = []

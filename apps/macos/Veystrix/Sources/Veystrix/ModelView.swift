@@ -8,21 +8,29 @@ struct ModelView: View {
 
     var body: some View {
         Form {
-            Section("Supported model") {
-                LabeledContent("Model", value: "Qwen 3.8 Flash-Next")
-                Text("This app currently supports Qwen 3.8 Flash-Next checkpoints only.").font(.callout).foregroundStyle(.secondary)
+            Section("Model") {
+                Picker("Model", selection: Binding(get: { model.settings.selectedModel }, set: { model.selectModel($0) })) {
+                    ForEach(ModelFamily.allCases) { Text($0.title).tag($0) }
+                }
+                .disabled(engine.state.isActive)
+                Text(model.settings.selectedModel == .nemotron35
+                     ? "Experimental. Needs the mlx-community affine 4-bit conversion. Nothing has been measured on real weights yet, so expect it to be slower than Flash-Next. Each model keeps its own folder."
+                     : "The default model. Each model keeps its own folder; switching never changes the other one.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Text("The model is chosen by you. Nothing switches models automatically, and only one model is loaded at a time.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
             Section("Model folder") {
                 LabeledContent("Folder") {
-                    Text(model.settings.checkpointPath.isEmpty ? "None chosen" : model.paths.abbreviate(model.settings.checkpointPath))
-                        .textSelection(.enabled).foregroundStyle(model.settings.checkpointPath.isEmpty ? .secondary : .primary)
+                    Text(model.settings.activeCheckpointPath.isEmpty ? "None chosen" : model.paths.abbreviate(model.settings.activeCheckpointPath))
+                        .textSelection(.enabled).foregroundStyle(model.settings.activeCheckpointPath.isEmpty ? .secondary : .primary)
                 }
                 HStack {
                     Button("Choose Folder…") { choose() }.disabled(engine.state.isActive)
-                    Button("Validate Again") { model.revalidateCheckpoint() }.disabled(model.settings.checkpointPath.isEmpty)
+                    Button("Validate Again") { model.revalidateCheckpoint() }.disabled(model.settings.activeCheckpointPath.isEmpty)
                     Button("Show in Finder") {
-                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: model.settings.checkpointPath)])
-                    }.disabled(model.settings.checkpointPath.isEmpty)
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: model.settings.activeCheckpointPath)])
+                    }.disabled(model.settings.activeCheckpointPath.isEmpty)
                 }
             }
             if let c = model.checkpoint {

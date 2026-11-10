@@ -53,15 +53,22 @@ final class AppModel: ObservableObject {
     // MARK: model folder
 
     func chooseCheckpoint(_ url: URL) {
-        settings.checkpointPath = url.path
+        settings.activeCheckpointPath = url.path
+        revalidateCheckpoint()
+    }
+
+    func selectModel(_ family: ModelFamily) {
+        guard settings.selectedModel != family else { return }
+        settings.selectedModel = family
         revalidateCheckpoint()
     }
 
     func revalidateCheckpoint() {
-        let path = settings.checkpointPath
+        let path = settings.activeCheckpointPath
+        let family = settings.selectedModel
         guard !path.isEmpty else { checkpoint = nil; return }
         Task.detached(priority: .utility) {
-            let report = CheckpointValidator.validate(directory: URL(fileURLWithPath: path))
+            let report = CheckpointValidator.validate(directory: URL(fileURLWithPath: path), family: family)
             await MainActor.run { [weak self] in self?.checkpoint = report }
         }
     }

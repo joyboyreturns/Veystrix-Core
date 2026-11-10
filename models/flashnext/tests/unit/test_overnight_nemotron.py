@@ -29,9 +29,8 @@ class NemotronSupervisorTests(unittest.TestCase):
         self.assertIn("--mode", command)
         self.assertIn("agentic", command)
 
-    def test_refuses_to_start_without_authorization(self):
-        with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("VEYSTRIX_NEMOTRON_AUTHORIZED", None)
+    def test_kill_switch_prevents_start(self):
+        with mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_AUTHORIZED": "0"}):
             with mock.patch.object(overnight, "Supervisor") as supervisor:
                 self.assertEqual(overnight.main(["--model", "nemotron35-lightning", "--checkpoint", "/m/n"]), 2)
                 supervisor.assert_not_called()
