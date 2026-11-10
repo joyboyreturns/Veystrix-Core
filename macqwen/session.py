@@ -618,7 +618,9 @@ def _prepare_startup(prefs, benchmarking, display):
     agentic = _agentic_mode()
     recovery = purge_recovery.from_environment()
     if agentic and (memory_policy.is_swap_growth_policy() or memory_waiver.active()):
-        return recovery, readiness.live()
+        # Even when the result is advisory, report and assess the configured
+        # workload, not the unrelated 4K default of readiness.live().
+        return recovery, readiness.live_tiered()
     if recovery is not None and agentic:
         recovery._blocker = readiness.purge_blocker_tiered      # no purge for a refusal that file cache cannot fix
     out = lambda text: print(text, file=display, flush=True)

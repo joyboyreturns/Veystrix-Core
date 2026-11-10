@@ -9,7 +9,7 @@ class FlagNameTests(unittest.TestCase):
     def test_every_flag_name_exists_in_the_production_modules(self):
         from models.flashnext import (auto_reclaim, expert_io_stats, linear_state, memory_manager, pool_lifecycle,
                                       prefill, prefill_scheduler, prefix_profiles, prefix_session, prefill_ring, progress,
-                                      quantized_kv, layer_major, store, expert_pool, ngram)
+                                      quantized_kv, layer_major, store, expert_pool, ngram, memory_controller)
         known = {prefill_ring.FLAG_EXPERTS, prefill_ring.FLAG_SCRATCH, prefill.FLAG_CHUNK_TOKENS,
                  prefill.FLAG_CHUNK_POLICY, pool_lifecycle.FLAG, prefix_session.FLAG, prefix_session.FLAG_DIR,
                  prefix_session.FLAG_RAM_GB, prefix_session.FLAG_DISK_GB, prefix_session.FLAG_BOUNDARIES,
@@ -20,7 +20,8 @@ class FlagNameTests(unittest.TestCase):
                  quantized_kv.FLAG_KV_DTYPE, quantized_kv.FLAG_KV_GROUP_SIZE, quantized_kv.FLAG_KV_BITS,
                  layer_major.FLAG_ORDER, layer_major.FLAG_WINDOW, layer_major.FLAG_HYBRID,
                  store.FLAG_UNCACHED_EXPERT_READS, layer_major.FLAG_PREFETCH,
-                 expert_pool.BUFFERED_FILL_FLAG, ngram.FLAG_DEDUP}
+                 expert_pool.BUFFERED_FILL_FLAG, ngram.FLAG_DEDUP, memory_controller.FLAG_SWAP_CEILING,
+                 memory_controller.FLAG_SWAP_CEILING_MARGIN, "FLASHNEXT_WATCHDOG_MEMORY"}
         self.assertLessEqual(M.OWNED, known)
 
     def test_agentic_prefill_matches_the_real_model_f2br_condition(self):
@@ -103,6 +104,22 @@ class PoolPolicyTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
+    def test_agentic_absolute_swap_guard_cannot_be_disabled(self):
+        with patch.dict(os.environ, {"FLASHNEXT_SWAP_CEILING_MIB": "0",
+                                          "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "0",
+                                          "FLASHNEXT_WATCHDOG_MEMORY": "0"}):
+            plan = M.plan_mode(M.AGENTIC, free_disk_gb=200)
+        self.assertEqual(float(plan.env["FLASHNEXT_SWAP_CEILING_MIB"]), 3072)
+        self.assertEqual(float(plan.env["FLASHNEXT_SWAP_CEILING_MARGIN_MIB"]), 256)
+        self.assertEqual(plan.env["FLASHNEXT_WATCHDOG_MEMORY"], "1")
+
+    def test_agentic_preserves_stricter_swap_guard(self):
+        with patch.dict(os.environ, {"FLASHNEXT_SWAP_CEILING_MIB": "2800",
+                                          "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "768"}):
+            plan = M.plan_mode(M.AGENTIC, free_disk_gb=200)
+        self.assertEqual(float(plan.env["FLASHNEXT_SWAP_CEILING_MIB"]), 2800)
+        self.assertEqual(float(plan.env["FLASHNEXT_SWAP_CEILING_MARGIN_MIB"]), 768)
+
     def test_chat_is_the_exact_reference_path_with_live_state_only(self):
         plan = M.plan_mode(M.CHAT)
         self.assertEqual((plan.profile, plan.serve, plan.context_limit), ("plain", False, None))

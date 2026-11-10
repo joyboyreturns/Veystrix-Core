@@ -142,7 +142,8 @@ OWNED = frozenset({*COMMON, *PREFILL_OFF, *AGENTIC_PREFILL, *EXPERIMENTAL_OFF,
                    "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB", "FLASHNEXT_PREFILL_WINDOW_TOKENS", "FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_BITS",
                    "FLASHNEXT_EXPERT_POOL_GB", "FLASHNEXT_EXPERT_POOL_AUTO", "FLASHNEXT_PREFIX_CACHE_DIR", "FLASHNEXT_PREFIX_CACHE_RAM_GB",
                    "FLASHNEXT_PREFIX_CACHE_DISK_GB", "FLASHNEXT_PREFIX_PROFILES_MAX_GB",
-                   "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB", "FLASHNEXT_WATCHDOG"})
+                   "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB", "FLASHNEXT_WATCHDOG",
+                   "FLASHNEXT_SWAP_CEILING_MIB", "FLASHNEXT_SWAP_CEILING_MARGIN_MIB", "FLASHNEXT_WATCHDOG_MEMORY"})
 
 
 class ModeError(ValueError):
@@ -252,6 +253,24 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
     if mode == AGENTIC:
         env.update(AGENTIC_PREFILL)
         env["FLASHNEXT_WATCHDOG"] = "1"      # out-of-process stall watchdog (AGENTIC serves clients that cannot wait forever)
+        # The supported agentic launch owns these settings: inherited zero or
+        # stale experimental values must not silently disable the absolute guard.
+        try:
+            ceiling = float(os.environ.get("FLASHNEXT_SWAP_CEILING_MIB", "3072"))
+            margin = float(os.environ.get("FLASHNEXT_SWAP_CEILING_MARGIN_MIB", "256"))
+            import math
+            if not math.isfinite(ceiling) or not math.isfinite(margin):
+                raise ValueError
+        except ValueError as exc:
+            raise ModeError("swap ceiling and margin must be finite numbers") from exc
+        # Zero/negative ceilings cannot disable protection. Preserve a stricter
+        # positive ceiling or larger margin requested by the operator.
+        ceiling = min(ceiling, 3072.0) if ceiling > 0 else 3072.0
+        margin = max(margin, 256.0)
+        if margin >= ceiling:
+            raise ModeError("swap safety margin must be smaller than the ceiling")
+        env.update({"FLASHNEXT_SWAP_CEILING_MIB": str(ceiling), "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": str(margin),
+                    "FLASHNEXT_WATCHDOG_MEMORY": "1"})
         directory = os.path.expanduser(prefix_dir or PREFIX_DIR)
         free = _free_disk_gb(directory) if free_disk_gb is None else float(free_disk_gb)
         disk_gb = min(cache_quota_gb(), max(0.0, free - DISK_RESERVE_GB))
