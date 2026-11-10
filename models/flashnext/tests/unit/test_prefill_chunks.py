@@ -294,6 +294,26 @@ class ChunkedPrefillTests(Base):
         (targets,), _ = evaluate.call_args
         self.assertEqual(len(targets), len(caches))
 
+    def test_progress_reports_only_evaluated_chunk_boundaries(self):
+        seen = []
+        prefill.set_chunk_progress(lambda done, total: seen.append((done, total)))
+        try:
+            self.run_prefill(64)
+        finally:
+            prefill.set_chunk_progress(None)
+        self.assertEqual(seen, [(64, 260), (128, 260), (192, 260)])
+
+    def test_failed_chunk_does_not_report_completion(self):
+        seen = []
+        prefill.set_chunk_progress(lambda done, total: seen.append((done, total)))
+        try:
+            with mock.patch.object(prefill, "_prefill_chunk", side_effect=RuntimeError("eval failed")):
+                with self.assertRaisesRegex(RuntimeError, "eval failed"):
+                    self.run_prefill(64)
+        finally:
+            prefill.set_chunk_progress(None)
+        self.assertEqual(seen, [])
+
     def test_decode_after_chunked_prefill_continues(self):
         caches, token = self.run_prefill(64)
         out = self.model(mx.array([[token]]), cache=caches)

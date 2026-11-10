@@ -803,7 +803,7 @@ class FlashNextBackend(Conversation):
         rather than leaving it running over the answer.
         """
         from models.flashnext.expert_cache import set_prefill_progress
-        from models.flashnext.prefill import prefill_language
+        from models.flashnext.prefill import prefill_language, set_chunk_progress
 
         if not self.pending:
             return "", Stats(finish="stop")
@@ -920,27 +920,20 @@ class FlashNextBackend(Conversation):
 
         prefill_began = time.perf_counter()
         self.routing.reset()
-        streamed_layers = sum(
-            hasattr(
-                getattr(getattr(layer, "mlp", None), "switch_mlp", None),
-                "layer_id",
-            )
-            for layer in self.language.model.layers
-        )
-        completed_layers = set()
-
         def layer_completed(layer_id):
             progress.PROGRESS.tick()             # real forward progress for the out-of-process watchdog
             check_cancel()
-            completed_layers.add(layer_id)
-            if on_prefill_progress is not None and streamed_layers:
-                confirmed = max(0, len(completed_layers) - 1)
-                done = prompt_tokens * confirmed // streamed_layers
-                on_prefill_progress(done, prompt_tokens)
+
+        def chunk_completed(done, total):
+            progress.PROGRESS.tick()
+            check_cancel()
+            if on_prefill_progress is not None:
+                on_prefill_progress(done, total)
 
         if on_prefill_progress is not None:
             on_prefill_progress(0, prompt_tokens)
         set_prefill_progress(layer_completed)
+        set_chunk_progress(chunk_completed)
         try:
             check_cancel()
             self.last_pool_release = None
@@ -971,11 +964,13 @@ class FlashNextBackend(Conversation):
             preserve_or_replay()
             raise
         except Exception:
-            if gate_probe is not None:
-                self._mark_replay_needed()
+            # A failed forward/evaluation may have advanced only some cache
+            # layers. Never reuse that partially mutated state on the next turn.
+            self._mark_replay_needed()
             raise
         finally:
             set_prefill_progress(None)
+            set_chunk_progress(None)
         prefill_seconds = time.perf_counter() - prefill_began
         from models.flashnext import flight_recorder
         flight_recorder.record("prefill_backend_return", seconds=round(prefill_seconds, 3))

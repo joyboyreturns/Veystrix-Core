@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -44,6 +45,18 @@ DEFAULT_CHUNK_BUDGET_MB = 1000
 CANDIDATE_CHUNKS = (2048, 1024, 512, 256)
 
 _LOGITS_HOOK = [None]
+_CHUNK_PROGRESS = threading.local()
+
+
+def set_chunk_progress(callback=None) -> None:
+    """Observe evaluated chunk boundaries in the calling generation thread."""
+    _CHUNK_PROGRESS.callback = callback
+
+
+def _chunk_completed(position: int, total: int) -> None:
+    callback = getattr(_CHUNK_PROGRESS, "callback", None)
+    if callback is not None:
+        callback(position, total)
 
 
 def set_logits_hook(callback=None) -> None:
@@ -476,6 +489,7 @@ def _run_chunks(language, ids, cache, want_logits, want_hidden, sampler, boundar
         began, active = time.perf_counter(), _active_memory()
         _prefill_chunk(language, ids[:, start:end], cache)
         flight_recorder.record("prefill_chunk_end", start=offset + start, end=offset + end, seconds=round(time.perf_counter() - began, 3))
+        _chunk_completed(offset + end, absolute_end)
         seconds = time.perf_counter() - began
         if trace is not None:
             trace.edges.append(offset + end)

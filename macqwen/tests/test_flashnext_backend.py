@@ -127,6 +127,19 @@ class FlashNextBackendTests(unittest.TestCase):
         self.assertTrue(backend._replay_needed)
         self.assertEqual(backend.cache[0].offset, 0)
 
+    def test_failed_prefill_invalidates_partially_advanced_cache(self):
+        backend = self.backend()
+        backend.pending = [10]
+        def prefill(_language, _ids, cache, sampler):
+            cache[0].offset = 1
+            raise RuntimeError("Metal evaluation failed")
+        with patch("models.flashnext.prefill.prefill_language", prefill), \
+                patch("models.flashnext.expert_cache.set_prefill_progress", lambda _callback: None):
+            with self.assertRaisesRegex(RuntimeError, "Metal evaluation failed"):
+                backend._generate(1)
+        self.assertTrue(backend._replay_needed)
+        self.assertEqual(backend.cache[0].offset, 0)
+
     def test_routing_change_preserves_an_open_turn_boundary(self):
         backend = self.backend()
         backend.tape = [1, 2, 3]
