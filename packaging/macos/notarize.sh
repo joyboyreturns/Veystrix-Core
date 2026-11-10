@@ -4,7 +4,7 @@
 #   xcrun notarytool store-credentials VEYSTRIX_NOTARY --apple-id <id> --team-id <TEAM> --password <app-specific-password>
 # (or an App Store Connect API key: --key <p8> --key-id <id> --issuer <uuid>). Credentials never go in Git.
 source "$(dirname "$0")/common.sh"
-is_release_signing || die "notarization needs a Developer ID signed build. VEYSTRIX_SIGN_IDENTITY is not set; this is a development build and public distribution is BLOCKED."
+is_release_signing || die "notarization needs a Developer ID signed build and an Apple Developer Program membership. VEYSTRIX_SIGN_IDENTITY is not set: this is the free channel, which is not notarized by design. Skip notarize.sh."
 PROFILE="${VEYSTRIX_NOTARY_PROFILE:-VEYSTRIX_NOTARY}"
 [[ $# -gt 0 ]] || die "usage: notarize.sh <file> ..."
 for f in "$@"; do

@@ -3,13 +3,13 @@
 #   packaging/macos/build_app.sh [--engine DIR]     # DIR = output of packaging/engine/build_engine_bundle.sh
 # Environment: VEYSTRIX_SIGN_IDENTITY (Developer ID Application ...), VEYSTRIX_SPARKLE_PUBLIC_KEY (base64 EdDSA public key),
 #              VEYSTRIX_VERSION, VEYSTRIX_BUILD_NUMBER.
-# Without a signing identity the app is ad-hoc signed and labelled DEVELOPMENT: it must never be published.
+# Without a signing identity the app is ad-hoc signed: the FREE channel (not notarized; Gatekeeper warns on first open).
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 ENGINE_DIR=""
 while [[ $# -gt 0 ]]; do case "$1" in --engine) ENGINE_DIR="$2"; shift 2;; *) die "unknown option $1";; esac; done
 
 APP="$DIST/$APP_NAME.app"
-log "Building $APP_NAME $SHORT_VERSION (build $BUILD_NUMBER) for $ARCH $(is_release_signing || echo '[DEVELOPMENT, ad-hoc signed]')"
+log "Building $APP_NAME $SHORT_VERSION (build $BUILD_NUMBER) for $ARCH [channel: $(channel)]"
 cd "$APP_DIR"
 swift build -c release --arch "$ARCH" --product Veystrix 2>&1 | grep -vE "ld: warning: search path" | tail -5
 BIN_DIR="$(swift build -c release --arch "$ARCH" --show-bin-path)"
@@ -34,10 +34,10 @@ fi
 log "LSMinimumSystemVersion = $MIN_MACOS"
 # Info.plist (Sparkle key injected; empty key => updates disabled in the app)
 sed -e "s/@MIN_MACOS@/$MIN_MACOS/" -e "s/@SHORT_VERSION@/$SHORT_VERSION/" -e "s/@BUILD_NUMBER@/$BUILD_NUMBER/" \
-    -e "s|@SPARKLE_PUBLIC_ED_KEY@|${VEYSTRIX_SPARKLE_PUBLIC_KEY:-}|" \
+    -e "s|@SPARKLE_PUBLIC_ED_KEY@|$SPARKLE_PUBLIC_KEY|" \
     "$APP_DIR/Support/Info.plist.template" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
-[[ -n "${VEYSTRIX_SPARKLE_PUBLIC_KEY:-}" ]] || log "NOTE: no VEYSTRIX_SPARKLE_PUBLIC_KEY: this build has updates disabled"
+[[ -n "$SPARKLE_PUBLIC_KEY" ]] || log "NOTE: no Sparkle public key: this build has updates disabled"
 
 # Icon, licenses, notices
 python3 "$APP_DIR/Support/Icon/make_icon.py" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null \

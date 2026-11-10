@@ -6,7 +6,9 @@
 # Sparkle's tools come from the pinned release tarball, whose SHA-256 is checked before anything is run.
 source "$(dirname "$0")/common.sh"
 RELEASE_DIR="${1:?release directory containing Veystrix-<ver>-arm64.zip}"; TAG="${2:?tag, e.g. v3.8.1}"
-is_release_signing || die "refusing to build an update feed for a development build (no Developer ID identity). Public distribution is BLOCKED."
+# Works in both channels: Sparkle's EdDSA signature (not the Apple signature) is what authenticates an update.
+# Requires the EdDSA PRIVATE key (login keychain or VEYSTRIX_SPARKLE_PRIVATE_KEY); without it generate_appcast fails.
+[[ -n "$SPARKLE_PUBLIC_KEY" ]] || die "no Sparkle public key (packaging/macos/sparkle_public_key.txt): refusing to publish an unsigned update feed."
 TOOLS="$DIST/sparkle-tools"; mkdir -p "$TOOLS"
 if [[ ! -x "$TOOLS/bin/generate_appcast" ]]; then
   TB="$TOOLS/Sparkle-$SPARKLE_VERSION.tar.xz"
@@ -22,6 +24,6 @@ if [[ -n "${VEYSTRIX_SPARKLE_PRIVATE_KEY:-}" ]]; then
 else
   "$TOOLS/bin/generate_appcast" --download-url-prefix "$PREFIX" "$RELEASE_DIR"        # key from the login keychain
 fi
-python3 "$SCRIPT_DIR/validate_appcast.py" "$RELEASE_DIR/appcast.xml" ${VEYSTRIX_SPARKLE_PUBLIC_KEY:+--public-key "$VEYSTRIX_SPARKLE_PUBLIC_KEY" --archive-dir "$RELEASE_DIR"}
+python3 "$SCRIPT_DIR/validate_appcast.py" "$RELEASE_DIR/appcast.xml" --public-key "$SPARKLE_PUBLIC_KEY" --archive-dir "$RELEASE_DIR"
 cp "$RELEASE_DIR/appcast.xml" "$FEED"
 log "Appcast written to updates/appcast.xml. Commit it to the PUBLIC repo only after the release assets are live."

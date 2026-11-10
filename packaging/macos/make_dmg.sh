@@ -10,6 +10,7 @@ log "Creating $ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/"; ln -s /Applications "$STAGE/Applications"
+[[ -f "$DIST/BUILD-INFO.txt" ]] && cp "$DIST/BUILD-INFO.txt" "$STAGE/BUILD-INFO.txt"
 cp "$ROOT/legal/FREEWARE-LICENSE.txt" "$STAGE/LICENSE.txt"; cp "$ROOT/legal/THIRD_PARTY_NOTICES.md" "$STAGE/THIRD_PARTY_NOTICES.md"
 log "Creating $DMG"
 hdiutil create -quiet -volname "Veystrix $SHORT_VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"

@@ -15,7 +15,16 @@ SIGN_IDENTITY="${VEYSTRIX_SIGN_IDENTITY:-}"
 SPARKLE_VERSION="2.10.1"
 SPARKLE_TARBALL_SHA256="1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27"   # matches the digest GitHub publishes for the 2.10.1 release asset
 
+# Sparkle update PUBLIC key (not a secret). The private key lives only in the owner's keychain / CI secret store.
+SPARKLE_PUBLIC_KEY="${VEYSTRIX_SPARKLE_PUBLIC_KEY:-$(tr -d '[:space:]' < "$SCRIPT_DIR/sparkle_public_key.txt" 2>/dev/null || true)}"
+
+# Two release channels, both legitimate:
+#   developer-id  signed with a Developer ID + Hardened Runtime and notarized (needs an Apple Developer Program membership)
+#   free          ad-hoc signed, NOT notarized: no Apple membership needed; macOS Gatekeeper warns on first open.
+#                 Integrity rests on the published SHA-256 and (for updates) the Sparkle EdDSA signature.
+# Same file names in both channels; BUILD-CHANNEL inside the app and BUILD-INFO.txt say which one a build is.
 is_release_signing() { [[ -n "$SIGN_IDENTITY" && "$SIGN_IDENTITY" != "-" ]]; }
-artifact_suffix() { if is_release_signing; then echo ""; else echo "-DEV-UNSIGNED"; fi; }
+channel() { if is_release_signing; then echo "developer-id"; else echo "free"; fi; }
+artifact_suffix() { echo ""; }
 log() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }

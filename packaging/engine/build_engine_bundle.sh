@@ -39,6 +39,9 @@ PYEOF
 # the smoke test asserts it is gone. Features that need it (video input) are unavailable in the packaged app.
 "$PY" -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python >/dev/null 2>&1 || true
 rm -rf "$OUT"/python/lib/python3.12/site-packages/cv2
+# The engine never opens a window: drop Tcl/Tk, IDLE and the stdlib test suite (smaller bundle, fewer files to sign).
+rm -rf "$OUT"/python/lib/python3.12/{test,idlelib,tkinter,turtledemo,turtle.py} "$OUT"/python/lib/python3.12/lib-dynload/_tkinter*.so \
+       "$OUT"/python/lib/{tcl*,tk*,itcl*,thread*,Tix*,sqlite3*} "$OUT"/python/bin/{idle*,2to3*,pydoc*} 2>/dev/null || true
 
 echo "==> Engine sources -> compiled lib"
 for pkg in macqwen veystrix models/__init__.py models/flashnext models/qwen27b; do
