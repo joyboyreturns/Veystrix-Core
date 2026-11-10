@@ -333,6 +333,8 @@ def for_store(store, group_size: int = 32):
                     pool = None
             else:
                 pool = None
+        if pool is None:
+            store._flashnext_pool_declined = "allocation_failed"
         store._flashnext_expert_pool = pool
         if pool is not None and os.environ.get("FLASHNEXT_CHAT_GUARD") == "1":
             print(f"FlashNext expert pool: {len(pool._mm)} bytes "

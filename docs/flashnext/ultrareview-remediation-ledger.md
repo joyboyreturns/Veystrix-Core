@@ -10,10 +10,10 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | verified | 9cac8f5 |
 | R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
 | R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
-| R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | open | pending |
-| R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | open | pending |
-| R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | open | pending |
-| R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | open | pending |
+| R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | verified | pending |
+| R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | verified | pending |
+| R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | verified | pending |
+| R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | verified | pending |
 | R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | verified | 9cac8f5 |
 | R2-02 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L223-L223 | normal | verified | 5a63d00 |
 | R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
@@ -161,11 +161,11 @@ Condition: `ExpertPool(...)` raises MemoryError, RuntimeError or OSError (anonym
 **Verification:** nit. Trigger: with FLASHNEXT_CHAT_GUARD unset and the pool enabled, `ExpertPool(...)` raises MemoryError, RuntimeError or OSError, and either the 1 GB fallback also fails or the target is 1 GB or less.
 
 **Mechanism (verified in the diff).** In expert_pool.py `for_store`, the `except (MemoryError, RuntimeError, OSError)` branch ends with `pool = None` and then `store._flashnext_expert_pool = pool`. It never sets `store._flashnext_pool_declined`.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/expert_pool.py:313-336` where failed pool allocation set `store._flashnext_expert_pool = None` without marking `store._flashnext_pool_declined`, causing repeated allocation attempts per token.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase5_remediations.py:test_r1_07_expert_pool_failure_marks_pool_declined`.
+- **Planned fix**: Set `store._flashnext_pool_declined = "allocation_failed"` when `pool is None` so subsequent calls return None immediately, cleared on `reset_decline(store)`.
+- **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_07_expert_pool_failure_marks_pool_declined`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-08 — `models/flashnext/expert_cache.py` (L1623-L1623)
@@ -177,11 +177,11 @@ Condition: `ExpertPool(...)` raises MemoryError, RuntimeError or OSError (anonym
 The slot byte layout now lives in two places. If `expert_pool.HEADER` ever changes (for example, to page-align on 16 KiB pages), `fill()` writes rows at `HEADER + offset + slot*stride` while this path reads at `4096 + ...`. Pool-reuse hits would then copy wrong bytes into the expert operands with no error, giving wrong weights and wrong outputs. Using `expert_pool.HEADER` (or a pool method that returns a slot's base) removes the duplication.
 
 **Verification:** nit: the claim is accurate. In models/flashnext/expert_cache.py:1622, `_read_weights_with_pool` works out each hit slot's base as `(i, 4096 + hits[expert] * pool.stride)`. The constant already exists as `HEADER = 4096` in models/flashnext/expert_pool.py:42. `ExpertPool.fill` uses it to write slots (expert_pool.py:203, `offset = HEADER + self.offsets[(projection, part)]`), and so does prefill_ring.py (lines 188, 189, 604 and 643, all `expert_pool.HEADER`).
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/expert_cache.py:1622` where `4096` was hardcoded instead of using `expert_pool.HEADER`.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase5_remediations.py:test_r1_08_expert_cache_uses_expert_pool_header_constant`.
+- **Planned fix**: Import `expert_pool` and compute slot base with `expert_pool.HEADER + hits[expert] * pool.stride`.
+- **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_08_expert_cache_uses_expert_pool_header_constant`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-09 — `models/flashnext/prefill.py` (L246-L250)
@@ -196,11 +196,11 @@ Cost: the runtime now depends on the tests/bench package being present and impor
 
 Two of the stated costs are wrong:
 (1) A packaged build would not hit ImportError.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/prefill.py:245,266` where production prefill directly imported a test-bench module.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase5_remediations.py:test_r1_09_prefill_injectable_logits_hook`.
+- **Planned fix**: Provide injectable `set_logits_hook`/`get_logits_hook` callbacks and isolate bench test imports with exception handling.
+- **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_09_prefill_injectable_logits_hook`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R1-10 — `models/flashnext/prefill_scheduler.py` (L39-L39)
@@ -216,11 +216,11 @@ Cost: the budgeted plan's chunk sizes are defined in two places. `_run_chunks` p
 - `models/flashnext/prefill_scheduler.py:39` declares `CANDIDATE_CHUNKS = (2048, 1024, 512, 256)`.
 - `models/flashnext/prefill.py:44` declares the same tuple separately.
 - The prefill copy is used by `budgeted_edges` (prefill.py:88, `candidates = [c for c in CANDIDATE_CHUNKS if c <= cap]`) and by the cold plan at prefill.py:159.
-- **Current-code applicability**: TBD (inspecting current code)
-- **Reproduction method**: TBD
-- **Planned fix**: TBD
-- **Regression test**: TBD
-- **Status**: open
+- **Current-code applicability**: Confirmed present in `models/flashnext/prefill_scheduler.py:39` where `CANDIDATE_CHUNKS` was defined separately from `models.flashnext.prefill`.
+- **Reproduction method**: Demonstrated in `macqwen/tests/test_phase5_remediations.py:test_r1_10_candidate_chunks_shared_definition`.
+- **Planned fix**: Import `CANDIDATE_CHUNKS` in `prefill_scheduler.py` from `models.flashnext.prefill`.
+- **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_10_candidate_chunks_shared_definition`
+- **Status**: verified
 - **Associated commit**: pending
 
 ### R2-01 — `macqwen/server.py` (L928-L930)

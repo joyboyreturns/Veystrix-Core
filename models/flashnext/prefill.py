@@ -42,6 +42,18 @@ CHUNK_POLICIES = ("grid", "balanced", "budgeted")
 FLAG_CHUNK_BUDGET_MB = "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB"
 DEFAULT_CHUNK_BUDGET_MB = 1000
 CANDIDATE_CHUNKS = (2048, 1024, 512, 256)
+
+_LOGITS_HOOK = [None]
+
+
+def set_logits_hook(callback=None) -> None:
+    """Install (or clear, with None) an injectable callback for the final prefill logits."""
+    _LOGITS_HOOK[0] = callback
+
+
+def get_logits_hook():
+    """Return the current prefill logits hook, if any."""
+    return _LOGITS_HOOK[0]
 # Short prompts keep full-sequence logits although the decoder reads only the
 # last row. Projecting only the last row changed those logits by up to 0.125
 # (2026-09-22), so it is not exact and was removed.
@@ -241,9 +253,14 @@ def _prefill_target(
             mx.eval(hidden_states)
         token = pick(logits[:, -1, :])
         mx.eval(token)
-        if os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
-            from models.flashnext.tests.bench.layer_gate_probe import record_logits
-            record_logits(logits[:, -1, :])
+        if _LOGITS_HOOK[0] is not None:
+            _LOGITS_HOOK[0](logits[:, -1, :])
+        elif os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
+            try:
+                from models.flashnext.tests.bench.layer_gate_probe import record_logits
+                record_logits(logits[:, -1, :])
+            except (ImportError, ModuleNotFoundError):
+                pass
         release_cache = int(logits.nbytes) >= PREFILL_RELEASE_BYTES
         if release_cache or (not short_prompt and PREFILL_CLEAR_CACHE):
             mx.clear_cache()
@@ -260,11 +277,18 @@ def _prefill_target(
             final_logits = language.speculative_logits_from_hidden(last_hidden)
             token = pick(final_logits)
         mx.eval(token, [entry.state for entry in cache])
-        if os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
+        if _LOGITS_HOOK[0] is not None:
             if sampler is None:
                 raise RuntimeError("layer gate requires the actual sampler logits")
-            from models.flashnext.tests.bench.layer_gate_probe import record_logits
-            record_logits(final_logits)
+            _LOGITS_HOOK[0](final_logits)
+        elif os.environ.get("VEYSTRIX_LAYER_GATE_PROBE"):
+            if sampler is None:
+                raise RuntimeError("layer gate requires the actual sampler logits")
+            try:
+                from models.flashnext.tests.bench.layer_gate_probe import record_logits
+                record_logits(final_logits)
+            except (ImportError, ModuleNotFoundError):
+                pass
         if sampler is not None:
             del final_logits
         # A short prompt leaves no large temporaries. Keep the allocator's

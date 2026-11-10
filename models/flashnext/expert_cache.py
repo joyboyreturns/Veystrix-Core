@@ -1614,12 +1614,12 @@ class StreamingSwitchGLU(nn.Module):
         return weights
 
     def _read_weights_with_pool(self, projections, wanted, pool, hits):
-        from . import expert_io_stats
+        from . import expert_io_stats, expert_pool
 
         misses = [e for e in wanted if e not in hits]
         dest_indices = [wanted.index(e) for e in misses] if misses else None
         hit_indices_and_bases = [
-            (i, 4096 + hits[expert] * pool.stride)
+            (i, expert_pool.HEADER + hits[expert] * pool.stride)
             for i, expert in enumerate(wanted) if expert in hits
         ]
         t0 = time.perf_counter()
