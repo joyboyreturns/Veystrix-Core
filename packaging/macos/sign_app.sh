@@ -31,11 +31,10 @@ if [[ -d "$ENGINE" ]]; then
     if file "$f" | grep -q "Mach-O.*executable"; then sign --entitlements "$ENT_ENGINE" "$f"; else sign "$f"; fi
   done < <(find "$ENGINE" -type f \( -perm +111 -o -name "*.so" -o -name "*.dylib" -o -name "*.metallib" \) -exec sh -c 'file "$1" | grep -q "Mach-O" && echo "$1"' _ {} \;)
 fi
-# 3. The app
+# 3. The app (the development marker must exist BEFORE sealing, or the signature is invalid)
+is_release_signing || echo "ad-hoc" > "$APP/Contents/Resources/DEVELOPMENT-BUILD"
 sign --entitlements "$ENT_APP" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tail -3
 if is_release_signing; then
   codesign -dv --verbose=2 "$APP" 2>&1 | grep -E "Authority|TeamIdentifier|flags|Timestamp" | head -6
-else
-  echo "ad-hoc" > "$APP/Contents/Resources/DEVELOPMENT-BUILD"
 fi
