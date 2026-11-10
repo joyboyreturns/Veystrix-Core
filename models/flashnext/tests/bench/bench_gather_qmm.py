@@ -36,7 +36,7 @@ import mlx.core as mx
 
 from mlx_vlm.models.switch_layers import SwiGLU, _gather_sort, _scatter_unsort
 
-from macqwen.checkpoints import resolve_flashnext
+from veystrix.checkpoints import resolve_flashnext
 from models.flashnext.diskio import disk_bytes_read, free_memory_mb
 from models.flashnext.store import SafeTensorStore
 

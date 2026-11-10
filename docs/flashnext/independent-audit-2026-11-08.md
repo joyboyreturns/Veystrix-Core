@@ -6,7 +6,7 @@ This is a partial audit, not approval for a real-model run. Existing uncommitted
 
 * Removed the per-process `PrefixCache._verified_keys` shortcut. A disk load with hash verification enabled now hashes the file on each load. A regression test verifies a same-size modification after an earlier successful restore is a miss. This does not eliminate a concurrent replacement race between hashing and `mx.load`, nor establish cross-process lease safety.
 * The memory preflight no longer invokes privileged purge on low memory unless `--force-purge` is explicitly passed. Its `available_gb` now means decimal GB; its legacy threshold is preserved as units of 1000 MiB (9 means 9.437184 decimal GB), including both initial and final checks. This corrects a unit label without lowering the old effective threshold. The runtime harness still reports MB in MiB and applies its existing thresholds; conversion and rounding differences remain to be unified.
-* FlashNext unit suite: 1,241 run, 5 skipped, 1,236 passed. MACQWEN unit suite: 427 passed. Prefix cache suite: 43 passed. Focused preflight suite: 8 passed. An earlier FlashNext run had three failures because it began before the preflight tests were updated; the rerun passed.
+* FlashNext unit suite: 1,241 run, 5 skipped, 1,236 passed. VEYSTRIX unit suite: 427 passed. Prefix cache suite: 43 passed. Focused preflight suite: 8 passed. An earlier FlashNext run had three failures because it began before the preflight tests were updated; the rerun passed.
 
 ## Memory
 

@@ -16,7 +16,7 @@ cd "$(dirname "$0")" || exit 1
 export VEYSTRIX_API_KEY="${VEYSTRIX_API_KEY:-local}"
 if [[ "$1" == "--warm" ]]; then
   shift
-  exec /usr/bin/python3 -m macqwen.warm "$@"
+  exec /usr/bin/python3 -m veystrix.warm "$@"
 fi
 if [[ "$*" == *"--status"* || "$*" == *"--help"* || "$*" == *"-h"* ]]; then
   exec /usr/bin/python3 -m models.flashnext.overnight "$@"

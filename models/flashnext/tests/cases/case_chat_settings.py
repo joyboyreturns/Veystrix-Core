@@ -1,7 +1,7 @@
 """Attribute the chat workload gap to sampling and thinking at 32 tokens."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def command(config, result_path: Path) -> list[str]:
@@ -36,6 +36,6 @@ TEST = TestSpec(
         "pins": "same private snapshot per process",
         "scope": "workload attribution; no quality test or optimization promotion",
     },
-    source="models/flashnext/tests/bench/bench_chat_parity.py and macqwen/session.py",
+    source="models/flashnext/tests/bench/bench_chat_parity.py and veystrix/session.py",
     promotion=False,
 )

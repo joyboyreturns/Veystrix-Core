@@ -22,14 +22,14 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
-from macqwen.results import output_path
+from veystrix.results import output_path
 os.environ.setdefault("FLASHNEXT_RENORM", "1")
 
 import mlx.core as mx
 import numpy as np
 from transformers import AutoTokenizer
 
-from macqwen.checkpoints import resolve_flashnext
+from veystrix.checkpoints import resolve_flashnext
 from models.flashnext.adaptive_topk import (
     set_layer_thresholds,
     set_renorm_blend,

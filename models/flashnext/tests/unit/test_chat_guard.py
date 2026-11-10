@@ -53,6 +53,16 @@ class ChatGuardTests(unittest.TestCase):
         self.start()
         self.assertIn('watchdog_sample', self.guard.path.read_text())
 
+    def test_user_power_settings_reach_running_guard(self):
+        original = self.sampler.sample
+        self.sampler.sample = lambda: dict(original(), power_source="battery", low_power=True, battery_percent=40)
+        with mock.patch.dict("os.environ", {"VEYSTRIX_ALLOW_LOW_POWER": "1", "VEYSTRIX_REQUIRE_AC": "0", "VEYSTRIX_MIN_BATTERY_PERCENT": "30"}):
+            self.start()
+        self.assertEqual(self.guard.watchdog.policy.min_battery_percent, 30)
+        self.assertTrue(self.guard.watchdog.policy.allow_low_power)
+        self.assertFalse(self.guard.watchdog.policy.require_ac)
+        self.assertEqual(self.exits, [])
+
     def test_explicit_two_gb_overrides_chat_default(self):
         from models.flashnext.settings.launch import apply_chat_environment
         environment = {"FLASHNEXT_EXPERT_POOL_GB": "2"}
@@ -61,7 +71,7 @@ class ChatGuardTests(unittest.TestCase):
 
     def test_safe_launcher_overrides_inherited_and_env_file_research_flags(self):
         script = (Path(__file__).resolve().parents[4] / "chat.sh").read_text()
-        script = script.replace('exec /usr/bin/python3 "$(dirname "$0")/macqwen/cli.py" "$@"',
+        script = script.replace('exec /usr/bin/python3 "$(dirname "$0")/veystrix/cli.py" "$@"',
                                 'exec /usr/bin/env')
         with tempfile.TemporaryDirectory() as root:
             dot = Path(root) / ".frankenstein"
@@ -236,8 +246,8 @@ class ChatGuardTests(unittest.TestCase):
 
     def test_guard_runs_during_two_real_small_model_turns(self):
         import mlx.core as mx
-        from macqwen.backends.base import GenerationCancelled
-        from macqwen.tests.test_flashnext_backend import FlashNextBackendTests
+        from veystrix.backends.base import GenerationCancelled
+        from veystrix.tests.test_flashnext_backend import FlashNextBackendTests
         from models.flashnext.tests.unit.test_prefix_cache import build_model
         from models.flashnext import expert_cache
 
@@ -273,7 +283,7 @@ class ChatGuardTests(unittest.TestCase):
 
     def test_chat_starts_guard_before_loading_backend(self):
         import sys
-        from macqwen import session
+        from veystrix import session
         events = []
 
         def start(_guard):
@@ -287,7 +297,7 @@ class ChatGuardTests(unittest.TestCase):
                 mock.patch.object(sys, "argv", ["session.py", "--model", "flashnext",
                     "--model-path", root, "--profile", "plain",
                     "--preferences-file", str(Path(root) / "prefs.json")]), \
-                mock.patch("macqwen.checkpoints.resolve_flashnext", return_value=Path(root)), \
+                mock.patch("veystrix.checkpoints.resolve_flashnext", return_value=Path(root)), \
                 mock.patch.object(ChatGuard, "start", start), \
                 mock.patch.object(session, "build_backend", side_effect=load):
             with self.assertRaisesRegex(RuntimeError, "stop before checkpoint load"):
@@ -295,7 +305,7 @@ class ChatGuardTests(unittest.TestCase):
         self.assertEqual(events, ["guard", "load"])
 
     def test_guarded_request_fences_before_cleanup_and_poison_on_failure(self):
-        from macqwen.tests.test_flashnext_backend import FlashNextBackendTests
+        from veystrix.tests.test_flashnext_backend import FlashNextBackendTests
         from models.flashnext import gpu_sync, pool_lifecycle
 
         backend = FlashNextBackendTests().backend()

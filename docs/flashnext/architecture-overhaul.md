@@ -9,7 +9,7 @@ measurements, not a measurement of the new code. The owner has authorized the co
 ## 1. Execution graph today (what a request does)
 
 ```
-HTTP (macqwen/server.py) -> template render -> _adopt (live state | SSD snapshot | rebuild) -> backend.generate
+HTTP (veystrix/server.py) -> template render -> _adopt (live state | SSD snapshot | rebuild) -> backend.generate
   prefix_session.prefill: lookup snapshot -> plan chunks (balanced, 2048, anchors) -> prefill_target
     for each chunk (CHUNK-MAJOR):                                   models/flashnext/prefill.py _run_chunks
       language(ids_chunk, cache) -> Qwen4ExpModel: embed -> tile x4 hyper-connection streams ->
@@ -201,7 +201,7 @@ Goal: does layer-major prefill beat chunk-major on the real model, with an ident
 4. **Decode route trace** (optional, 128 tokens, pool 0 and 2 GB): feeds the policy replay in section 7.
 
 Expected cost: about 25 to 40 minutes of model time in total for steps 1-2. Run plugged in, Low Power Mode off, swap baseline
-recorded, `FLASHNEXT_CHAT_GUARD=1` (swap +2.5 GiB stop) active. Results go through `macqwen.results` per the measurement standard.
+recorded, `FLASHNEXT_CHAT_GUARD=1` (swap +2.5 GiB stop) active. Results go through `veystrix.results` per the measurement standard.
 
 The existing `prefill-memory` benchmark is not this gate: it directly instantiates the backend instead of using the supervised
 AGENTIC launcher, and its comparison tolerates an unavailable cache hash. A gate must capture and compare all attention and
@@ -257,7 +257,7 @@ New premise, enforced in `bench_layer_gate.py` (`headroom_reason`) before any pr
   result from the stopped arm is reused.
 
 Purge (owner instruction, 2026-11-09: purge automatically whenever RAM is needed). Two parts. **Server:** already built in, no
-new code: `FLASHNEXT_AUTO_PURGE` defaults to 1 for flashnext in `macqwen/cli.py` (so `serve.sh` has it), and
+new code: `FLASHNEXT_AUTO_PURGE` defaults to 1 for flashnext in `veystrix/cli.py` (so `serve.sh` has it), and
 `purge_recovery.py` purges `sudo -n /usr/sbin/purge` at startup, before requests and from an idle monitor, only when the engine
 is idle, memory is short, enough file cache exists and pressure allows (`docs/flashnext/auto-purge.md`, whose "off by default"
 header is stale). The passwordless rule is installed (`/etc/sudoers.d/veystrix-purge`; `sudo -n -l /usr/sbin/purge` lists it).
@@ -482,7 +482,7 @@ Decision: layer-major stays opt-in; it is exact, a small positive (reads -11%), 
 **Process fault (mine).** The gate stopped before round 3 with "checkpoint or source changed during the comparison": while the
 run was in progress I created `models/flashnext/decode_profile.py` and its test under the fingerprinted source tree. The gate
 failed closed as designed. No arm was affected (all four arms and both validations completed before the check), but round 3 was
-not run and the experiment is formally incomplete. Rule from now on: no file creation or edits under `models/` or `macqwen/`
+not run and the experiment is formally incomplete. Rule from now on: no file creation or edits under `models/` or `veystrix/`
 while a gate runs; draft new code in the scratchpad and move it in afterwards.
 
 **Decode time distribution on the current checkpoint (new, 2026-11-09 night;
@@ -729,7 +729,7 @@ process without purge; it stays opt-in; no retry of this scenario until a layer-
 figures) exists and is tested offline. Cancel safety of layer-major is covered by unit tests only so far.
 
 **Integration smoke, third attempt: passed (`results/flashnext/20261110-035709-integration-smoke-manual/`).** Premise changed after the stop above: auto-purge on (production default), the opt-in absolute swap guard live (3072 MiB ceiling, 768 MiB margin, verified through
-`/health` before the first request; the first launch of this attempt failed closed because `/health` did not yet expose the ceiling, a reporting bug fixed in `macqwen/server.py`), and a 4,638-token cancel prompt. Tool turn, streamed follow-up (2,424/2,452 tokens reused),
+`/health` before the first request; the first launch of this attempt failed closed because `/health` did not yet expose the ceiling, a reporting bug fixed in `veystrix/server.py`), and a 4,638-token cancel prompt. Tool turn, streamed follow-up (2,424/2,452 tokens reused),
 **cancel 15 s into the prefill (clean `request_cancelled`, ready after 2 s, next request fine)**, `/v1/messages` and `/v1/responses` all passed; swap flat at about 1.26 GiB, pressure 1. The earlier 8K-after-decode breach is not explained by this run.
 
 Consequence for the roadmap: double-buffering the layer reads (section 10, item 2) adds a 1.5 GiB half on top of a footprint the

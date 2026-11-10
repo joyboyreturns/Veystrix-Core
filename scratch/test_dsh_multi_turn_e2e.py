@@ -24,8 +24,8 @@ from types import SimpleNamespace
 REPO = Path("/Users/vincent/Documents/Veystrix")
 sys.path.insert(0, str(REPO))
 
-from macqwen import server as S
-from macqwen.tests.test_server import FakeBackend, FakeSession
+from veystrix import server as S
+from veystrix.tests.test_server import FakeBackend, FakeSession
 from scratch.fixture_workloads import get_fixture_prompt, TOKENIZER
 
 PORT = 8080

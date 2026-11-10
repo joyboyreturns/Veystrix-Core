@@ -15,7 +15,7 @@ It preserves a private copy of the same pin profile for every 32-token arm.
 """
 from __future__ import annotations
 
-from macqwen.results import output_path
+from veystrix.results import output_path
 
 import argparse
 import hashlib

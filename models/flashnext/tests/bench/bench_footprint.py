@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 
 from models.flashnext.tests.bench.bench_long_states import PROMPT  # noqa: E402
 
@@ -75,13 +75,13 @@ def main() -> int:
         shutil.copy2(item, private / item.name)
     os.environ["FLASHNEXT_PIN_CACHE"] = str(private / "pins.json")
 
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext.checkpoint_policy import resolve_resident_experts
 
-    checkpoint = str(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+    checkpoint = str(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
     resident = resolve_resident_experts(None, checkpoint) or 32
 
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
 
     backend = FlashNextBackend(model_path=checkpoint, resident_experts=resident)
     evidence = {

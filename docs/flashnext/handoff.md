@@ -10,7 +10,7 @@ period; keep them as history and trust this section where they disagree.
 ### Where things stand
 
 - Branch `flashnext-research-vontra`, pushed to `origin`
-  (`github.com/1architect/macqwen-releases`, public).
+  (`the upstream project`, public).
 - Installed checkpoint: `Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP` at
   `~/models/Qwen3.8-Flash-Next-MLX-4bit-MTP` (alias `vontra-mtp`): 48 layers,
   512 routed experts, top-10, Q4/G32, indexed MTP (off). oQ4 and REAP-288 are
@@ -223,7 +223,7 @@ clock lower, no fewer reads), prewarm lost 1.5% to 3.8% and read more, and
 ### Rules the user set this session
 
 - Commits and pushes are allowed; the author is always the user
-  (`1architect`). Add no Claude co-author trailer and no "Generated with"
+  (the repository owner). Add no Claude co-author trailer and no "Generated with"
   line. Check `git remote -v` first: `origin` is public.
 - Run no benchmark without the user's approval of the plan. Keep runs short
   and report the resolution band. Open a live status window during model
@@ -235,14 +235,14 @@ clock lower, no fewer reads), prewarm lost 1.5% to 3.8% and read more, and
 
 - Tests live in `models/<model>/tests/`: `unit/` (checkpoint-free, CI),
   `bench/` (harness scripts, run as `python -m models.flashnext.tests.bench.X`)
-  and `cases/` (terminal cards). Shared unit tests: `macqwen/tests/`.
+  and `cases/` (terminal cards). Shared unit tests: `veystrix/tests/`.
   Guide: `docs/testing.md`.
 - Every run writes to `results/<model>/<YYYYMMDD-HHMMSS>-<name>/` through
-  `macqwen.results.output_path` (set `MACQWEN_RESULTS_DIR` or let the script
-  create a `-manual` folder). `macqwen/tests/test_results_policy.py` rejects
+  `veystrix.results.output_path` (set `VEYSTRIX_RESULTS_DIR` or let the script
+  create a `-manual` folder). `veystrix/tests/test_results_policy.py` rejects
   other destinations.
 - Unit suites: `python -m unittest discover -s models/flashnext/tests/unit -t .
-  -p 'test_*.py'` and `-s macqwen/tests`. Use
+  -p 'test_*.py'` and `-s veystrix/tests`. Use
   `~/models/.venv-qwen4exp/bin/python`.
 
 ### Slab profiles and remaining caveat
@@ -389,8 +389,8 @@ REAP `xhigh` keeps its requested reasoning mode but caps reasoning within the
 existing total generation allowance at 4,096 tokens by default. Historical
 `think_budget=-1` means reasoning shares that total allowance; the guard must
 not add a new 4,096-token allowance to it. We can set a positive
-`MACQWEN_REAP_XHIGH_THINK_BUDGET` for an explicit cap or set
-`MACQWEN_ALLOW_REAP_XHIGH=1` for an explicit diagnostic without the cap.
+`VEYSTRIX_REAP_XHIGH_THINK_BUDGET` for an explicit cap or set
+`VEYSTRIX_ALLOW_REAP_XHIGH=1` for an explicit diagnostic without the cap.
 `/status` reports requested effort and effective budget.
 
 The QSA guard selects the existing bounded-mask path when the projected
@@ -504,8 +504,8 @@ Interrupted generations are incomplete gates, not quality failures.
 
 | Path | Role |
 |---|---|
-| `macqwen/backends/flashnext.py` | Backend adapter and generation loop |
-| `macqwen/session.py` | Session state and chat integration |
+| `veystrix/backends/flashnext.py` | Backend adapter and generation loop |
+| `veystrix/session.py` | Session state and chat integration |
 | `models/flashnext/loader.py` | Checkpoint and streamed-module loading |
 | `models/flashnext/store.py` | Tensor-row reads from checkpoint shards |
 | `models/flashnext/expert_cache.py` | Routed expert residency and reads |
@@ -528,7 +528,7 @@ Set up the local environment with:
 ./chat.sh --model flashnext --checkpoint vontra-mtp
 ```
 
-Use `--model-path` or `MACQWEN_FLASHNEXT_MODEL` for an explicit complete
+Use `--model-path` or `VEYSTRIX_FLASHNEXT_MODEL` for an explicit complete
 checkpoint. The Vontra directory is normally under
 `$HOME/models/Qwen3.8-Flash-Next-MLX-4bit-MTP`.
 

@@ -29,7 +29,7 @@ interface now starts each runtime through its compatible launcher. The managed
 
 ## Package boundary
 
-`macqwen/` contains the shared interface. `models/` contains model-exclusive runtime code. Backends are the only shared modules that import
+`veystrix/` contains the shared interface. `models/` contains model-exclusive runtime code. Backends are the only shared modules that import
 model code.
 
 The current backend interface follows the operations used by `session.py`: conversation setup, append operations, generation, reset, status,
@@ -80,8 +80,7 @@ The progress bar uses filled `█` and unfilled `░` cells. It omits border cha
 `ToolCallStreamFilter` remains model-agnostic and detects the established
 `<tool_call>` contract. The K2-Horizon package translates its native JSON
 protocol to that contract before output reaches the shared chat. K2-specific
-measurements and decisions remain in
-[`docs/k2_horizon/research.md`](../k2_horizon/research.md). The filter
+measurements and decisions were removed with that runtime. The filter
 hides protocol markup and emits the tool name after `<function=NAME>` arrives.
 
 The tool UI uses these states:

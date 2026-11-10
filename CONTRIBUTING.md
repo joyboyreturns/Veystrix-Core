@@ -1,4 +1,9 @@
-# Contributing to MACQWEN
+# Contributing to Veystrix Core
+
+> **This repository is private and proprietary. External contributions are not accepted.**
+> Earlier text about contributions made under the MIT license describes the project as it was
+> published before 2026-11-10. Notes below are internal engineering rules for the owner and
+> people they invite.
 
 ## Before changing code
 
@@ -27,8 +32,7 @@ complete. Keep historical measurements and raw records unchanged.
 - Put current instructions in handoffs, not in research history.
 - Date historical findings and label diagnostic, incomplete, rejected, and
   unverified results explicitly.
-- Use the same runtime names everywhere: Flash-Next, K2-Horizon, Bonsai-2,
-  and Qwen3.8-27B. Keep lowercase identifiers only in code and paths.
+- Use the same runtime names everywhere: Flash-Next and Nemotron. Keep lowercase identifiers only in code and paths.
 - Prefer one short paragraph or table over repeated explanations.
 
 ## Measurement rules
@@ -86,7 +90,7 @@ checkpoint-specific controls to another runtime.
 - Put tests in `models/<model>/tests/`: `unit/`, `bench/` and `cases/`. See
   [docs/testing.md](docs/testing.md).
 - Every test and benchmark run writes to `results/<model>/<run>/` through
-  `macqwen.results`. Keep records append-only.
+  `veystrix.results`. Keep records append-only.
 - Do not add generated `Co-Authored-By` trailers.
 - Use plain commit titles that start with a capital letter; do not use
   conventional-commit prefixes.

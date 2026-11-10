@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec, bench_module
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec, bench_module
 
 
 def command(config, _result_path: Path) -> list[str]:

@@ -16,7 +16,7 @@ import mlx.core as mx
 
 from models.flashnext.loader import load_streaming
 from models.flashnext.sessions import SessionStore
-from macqwen.checkpoints import resolve_flashnext
+from veystrix.checkpoints import resolve_flashnext
 
 
 def main() -> None:

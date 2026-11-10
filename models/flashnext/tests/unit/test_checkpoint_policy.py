@@ -64,7 +64,7 @@ class CheckpointPolicyTests(unittest.TestCase):
                 resolve_resident_experts(16, directory), 16)
 
     def test_build_backend_applies_vontra_policy_when_implicit(self):
-        from macqwen.session import build_backend
+        from veystrix.session import build_backend
 
         seen = {}
 
@@ -77,7 +77,7 @@ class CheckpointPolicyTests(unittest.TestCase):
         prefs = {"thinking_enabled": False, "effort": "medium",
                  "profile": "plain"}
         with unittest.mock.patch(
-            "macqwen.backends.flashnext.FlashNextBackend", FakeBackend), \
+            "veystrix.backends.flashnext.FlashNextBackend", FakeBackend), \
             unittest.mock.patch.object(
                 sys, "argv", ["chat.sh", "--model", "flashnext"]):
             if not os.path.isdir(VONTRA_DIR):
@@ -88,7 +88,7 @@ class CheckpointPolicyTests(unittest.TestCase):
             backend._setting_sources["resident-experts"], "checkpoint policy")
 
     def test_build_backend_keeps_explicit_value(self):
-        from macqwen.session import build_backend
+        from veystrix.session import build_backend
 
         seen = {}
 
@@ -102,7 +102,7 @@ class CheckpointPolicyTests(unittest.TestCase):
         prefs = {"thinking_enabled": False, "effort": "medium",
                  "profile": "plain"}
         with unittest.mock.patch(
-            "macqwen.backends.flashnext.FlashNextBackend", FakeBackend), \
+            "veystrix.backends.flashnext.FlashNextBackend", FakeBackend), \
             unittest.mock.patch.object(
                 sys, "argv",
                 ["chat.sh", "--model", "flashnext", "--resident-experts", "32"]):
@@ -113,7 +113,7 @@ class CheckpointPolicyTests(unittest.TestCase):
 
     def test_abbreviated_flag_counts_as_explicit(self):
         # argparse expands `--pinned 32`; sys.argv never shows the full name.
-        from macqwen.session import build_backend
+        from veystrix.session import build_backend
 
         seen = {}
 
@@ -127,7 +127,7 @@ class CheckpointPolicyTests(unittest.TestCase):
         prefs = {"thinking_enabled": False, "effort": "medium",
                  "profile": "plain"}
         with unittest.mock.patch(
-            "macqwen.backends.flashnext.FlashNextBackend", FakeBackend), \
+            "veystrix.backends.flashnext.FlashNextBackend", FakeBackend), \
             unittest.mock.patch.object(
                 sys, "argv", ["chat.sh", "--pinned", "32"]):
             backend = build_backend("flashnext", args, prefs)
@@ -168,7 +168,7 @@ class CheckpointPolicyTests(unittest.TestCase):
                 content_identity(copies[0]), content_identity(copies[1]))
 
     def test_build_backend_unknown_checkpoint_keeps_default(self):
-        from macqwen.session import build_backend
+        from veystrix.session import build_backend
 
         seen = {}
 
@@ -183,7 +183,7 @@ class CheckpointPolicyTests(unittest.TestCase):
             prefs = {"thinking_enabled": False, "effort": "medium",
                      "profile": "plain"}
             with unittest.mock.patch(
-                "macqwen.backends.flashnext.FlashNextBackend", FakeBackend), \
+                "veystrix.backends.flashnext.FlashNextBackend", FakeBackend), \
                 unittest.mock.patch.object(
                     sys, "argv", ["chat.sh", "--model", "flashnext"]):
                 build_backend("flashnext", args, prefs)

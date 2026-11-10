@@ -16,4 +16,4 @@ mx.metal.get_active_memory is deprecated and will be removed in a future version
 Arm  6/6: Running frozen (prompt 3)...
   -> frozen: 2.14 tok/s, 437.3 MB/tok, 1.2% hits, alloc bd85ded8b69b2cd0, digest 52f977b318db2abc
 mx.metal.get_active_memory is deprecated and will be removed in a future version. Use mx.get_active_memory instead.
-Frozen vs rolling: +6.8% mean (two-SE band ±10.2%). Wrote /Users/gioma/Developer/MACQWEN/results/flashnext/20260922-194807-slab-drift/slab-drift.json
+Frozen vs rolling: +6.8% mean (two-SE band ±10.2%). Wrote /Users/gioma/Developer/VEYSTRIX/results/flashnext/20260922-194807-slab-drift/slab-drift.json

@@ -1,5 +1,7 @@
 # Documentation
 
+> **Status (updated 2026-11-10):** the CHAT and AGENTIC modes (`--mode chat|agentic`, supervised `./serve.sh`) are in this repository (branch `qwen3.8-flash-next`). See the [mode and agentic validation guide](flashnext/agentic-validation.md) for tested CHAT behavior and the AGENTIC acceptance checks; real-checkpoint harness runs are still unverified. Release, packaging and security guides: [release process](release/RELEASE_PROCESS.md), [free channel](release/FREE_CHANNEL.md), [validation status](release/VALIDATION.md), [packaging](packaging/PACKAGING.md), [security audit](security/SECURITY_AUDIT_2026-11-10.md), [manual launch](MANUAL_LAUNCH.md).
+
 Use the component handoff before changing code or running a benchmark. Read
 the research record when you need prior measurements or rejected approaches.
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) defines the shared workflow.
@@ -24,9 +26,7 @@ record rules.
 |---|---|---|---|
 | Shared chat | [Brief](chat/brief.md) | [Research](chat/research.md) | [Handoff](chat/handoff.md) |
 | Flash-Next | [Brief](flashnext/brief.md) | [Research](flashnext/research.md) | [Handoff](flashnext/handoff.md) |
-| K2-Horizon 7B | [Brief](k2_horizon/brief.md) | [Research](k2_horizon/research.md) | [Handoff](k2_horizon/handoff.md) |
-| Bonsai-2 27B | [Brief](bonsai2/brief.md) | [Research](bonsai2/research.md) | [Handoff](bonsai2/handoff.md) |
-| Qwen3.8-27B | [Brief](qwen27b/brief.md) | [Research](qwen27b/research.md) | [Handoff](qwen27b/handoff.md) |
+| Nemotron 3.5 Lightning | [Plan](nemotron35/plan.md) | [Architecture](nemotron35/architecture.md) | [Implementation](nemotron35/implementation.md) |
 
 Flash-Next also has [agent invariants](flashnext/AGENT_INVARIANTS.md), which
 collect runtime-specific correctness and experiment constraints.
@@ -37,8 +37,6 @@ collect runtime-specific correctness and experiment constraints.
 |---|---|
 | [`measurement-standard.md`](measurement-standard.md) | Shared live-test and JSONL evidence rules |
 | [`results/flashnext/`](../results/flashnext/) | Retained Flash-Next records |
-| [`results/k2_horizon/`](../results/k2_horizon/) | Retained K2-Horizon records and diagnostics |
-| [`results/bonsai2/`](../results/bonsai2/) | Retained Bonsai-2 records and diagnostics |
 | [`flashnext/graphics/`](flashnext/graphics/) | Flash-Next trace graphics and plots |
 | [`MLX/`](MLX/) | MLX Metal backend source notes; reference material, not workflow instructions |
 

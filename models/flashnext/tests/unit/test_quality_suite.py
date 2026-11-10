@@ -310,7 +310,7 @@ class CompareTests(unittest.TestCase):
             a.write_text(json.dumps({"quality": result_set({"a": True})}))
             b.write_text(json.dumps(result_set({"a": True})))             # bare quality object also loads
             out = Path(d) / "out.json"
-            with mock.patch("macqwen.results.output_path", return_value=out) as routed:
+            with mock.patch("veystrix.results.output_path", return_value=out) as routed:
                 self.assertEqual(C.main([str(a), str(b), "--json", "results/x.json"]), 0)
             routed.assert_called_once()                                   # never written to a path of its own
             self.assertEqual(json.loads(out.read_text())["verdict"], "PASS")

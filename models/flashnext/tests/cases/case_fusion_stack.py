@@ -1,7 +1,7 @@
 """Frontier 8A plus Up-QMV/SwiGLU versus Frontier 8B plus Up."""
 from pathlib import Path
 
-from macqwen.testsuite.api import IO_METRICS, TestSpec, bench_module
+from veystrix.testsuite.api import IO_METRICS, TestSpec, bench_module
 
 
 def command(config, _result_path: Path) -> list[str]:

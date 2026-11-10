@@ -1,6 +1,33 @@
 # Changelog
 
-## MACQWEN 0.5.1 - 2026-09-23
+## Veystrix 3.8.1 (development, `qwen3.8-flash-next`)
+
+Not released. No hardware validation was done for these changes: no model was loaded.
+
+### Removed
+
+- The Bonsai-2, K2-Horizon and Qwen3.8-27B (Frankenstein) runtimes, their CLI/server/discovery branches, tests, CI steps and
+  research docs. A saved preference naming one now falls back to Flash-Next with a one-line message. Flash-Next is unchanged and
+  stays the default; the experimental Nemotron runtime is the only other supported model.
+
+### Changed
+
+
+- Rebrand to **Veystrix**: the Python package is `veystrix`, the console script is `veystrix`, environment variables are `VEYSTRIX_*`, and `/v1/models` serves the id `veystrix-flashnext`. Clients configured with the previous model id must be updated.
+- Default locations: `~/.veystrix/preferences.json` and `~/Library/Application Support/Veystrix/api_keys.json`.
+  Cache, session and prefix-cache directories are unchanged.
+- License: proprietary freeware (draft) for the combined work; MIT notices retained. See `legal/`.
+
+### Added
+
+- Native macOS app (`apps/macos/Veystrix`), packaging and release automation, Sparkle 2 update
+  support, Hermes Agent integration and test mocks, security and license audits.
+
+### Fixed
+
+- Two stale test expectations (`test_modes`, `test_prefill_ring`) left by the scratch-ring WIP commit.
+
+## VEYSTRIX 0.5.1 - 2026-09-23
 
 ### Added
 
@@ -32,7 +59,7 @@
   tests, 58 K2-Horizon tests, and 175 Bonsai-2 tests (5 skipped), plus
   Python bytecode compilation.
 
-## MACQWEN 0.5.0 - 2026-09-23
+## VEYSTRIX 0.5.0 - 2026-09-23
 
 ### Added
 
@@ -64,12 +91,12 @@
   `fast-quality` for approximate routing with quality recovery.
 - Move every model's tests into `models/<model>/tests/`: checkpoint-free
   tests in `unit/`, benchmark scripts and their helpers in `bench/`, and
-  test-terminal cards in `cases/`. Shared unit tests move to `macqwen/tests/`,
+  test-terminal cards in `cases/`. Shared unit tests move to `veystrix/tests/`,
   and Qwen3.8-27B offline scripts move to `models/qwen27b/tools/`.
-- Discover cases for every model with one loader in `macqwen/testsuite`, and
+- Discover cases for every model with one loader in `veystrix/testsuite`, and
   remove the four per-model catalogs and the old Flash-Next terminal copy.
 - Write every test and benchmark run to `results/<model>/<stamp>-<test-id>/`
-  with `record.jsonl` and `output.log`. `macqwen.results` refuses other
+  with `record.jsonl` and `output.log`. `veystrix.results` refuses other
   destinations, and a policy test enforces the layout. Existing records move
   from `docs/<model>/measurements/` to `results/<model>/`.
 - Start benchmarks as modules, so commands no longer depend on the working
@@ -91,7 +118,7 @@
   tests, 58 K2-Horizon tests, and 175 Bonsai-2 tests (5 skipped), plus
   Python bytecode compilation.
 
-## MACQWEN 0.4.6 - 2026-09-20
+## VEYSTRIX 0.4.6 - 2026-09-20
 
 ### Added
 
@@ -131,7 +158,7 @@
   K2-Horizon tests, 352 Flash-Next tests (2 skipped), and 60 Qwen27B
   tests, plus Python bytecode compilation.
 
-## MACQWEN 0.4.5 - 2026-09-20
+## VEYSTRIX 0.4.5 - 2026-09-20
 
 ### Added
 
@@ -172,7 +199,7 @@
 - Pass 169 checkpoint-free Bonsai-2 tests and 303 checkpoint-free
   shared tests, plus Python bytecode compilation.
 
-## MACQWEN 0.4.3 - 2026-09-19
+## VEYSTRIX 0.4.3 - 2026-09-19
 
 ### Added
 
@@ -197,7 +224,7 @@
   documented short exact-digest promotion exception; long-turn quality stays
   unverified.
 
-## MACQWEN 0.4.2 - 2026-09-17
+## VEYSTRIX 0.4.2 - 2026-09-17
 
 ### Added
 
@@ -208,11 +235,11 @@
 
 ### Tests
 
-- Pass 251 checkpoint-free MACQWEN tests, 352 checkpoint-free FlashNext
+- Pass 251 checkpoint-free VEYSTRIX tests, 352 checkpoint-free FlashNext
   tests (2 skipped), 41 K2-Horizon tests, and 1 Qwen27B test, plus
   Python bytecode compilation and whitespace validation.
 
-## MACQWEN 0.4.1 - 2026-09-16
+## VEYSTRIX 0.4.1 - 2026-09-16
 
 ### Added
 
@@ -252,10 +279,10 @@
 
 ### Tests
 
-- Pass 251 checkpoint-free MACQWEN tests and 323 checkpoint-free FlashNext
+- Pass 251 checkpoint-free VEYSTRIX tests and 323 checkpoint-free FlashNext
   tests, plus Python bytecode compilation and whitespace validation.
 
-## MACQWEN 0.4.0 - 2026-09-04
+## VEYSTRIX 0.4.0 - 2026-09-04
 
 ### Added
 
@@ -300,7 +327,7 @@
   production shapes. The complete-model comparison remains unresolved inside a
   7.8% resolution band.
 
-## MACQWEN 0.3.6 - 2026-09-03
+## VEYSTRIX 0.3.6 - 2026-09-03
 
 ### Fixed
 
@@ -316,7 +343,7 @@
 - Add regression coverage for agent approval and denial, progress cleanup,
   streamed tool-call boundaries, and UI progress state.
 
-## MACQWEN 0.3.5 - 2026-09-02
+## VEYSTRIX 0.3.5 - 2026-09-02
 
 ### Added
 
@@ -346,7 +373,7 @@
   utilization into false GPU milliseconds.
 - Keep session, CLI, loader, and benchmark behavior covered by the new tests.
 
-## MACQWEN 0.3.4 - 2026-09-02
+## VEYSTRIX 0.3.4 - 2026-09-02
 
 ### Added
 
@@ -390,7 +417,7 @@
 - The recorded oQ3-MTP SketchUp failure called `Sketchup::Face#extrude` across 34,203 reasoning characters. oQ4 questioned `pushpull` before settling on the correct API.
 - Keep oQ4 as the quality baseline. REAP-288 remains gated until its reasoning-loop report passes the complete quality check.
 
-## MACQWEN 0.3.3 - 2026-09-01
+## VEYSTRIX 0.3.3 - 2026-09-01
 
 ### Added
 
@@ -432,18 +459,18 @@
 
 - Remove the non-portable `chat-swap.sh` convenience launcher.
 
-## MACQWEN 0.3.2 - 2026-09-01
+## VEYSTRIX 0.3.2 - 2026-09-01
 
 ### Distribution
 
-- Use the public `macqwen-releases` URL in Quick Start and package metadata.
-- Add a Python package, the `macqwen` command, and `macqwen setup`.
+- Use the public `veystrix-releases` URL in Quick Start and package metadata.
+- Add a Python package, the `veystrix` command, and `veystrix setup`.
 - Discover project environments and compatible checkpoints without personal paths.
 - Add Apple Silicon CI for shared and Flash-Next tests.
 - Publish version tags as GitHub Releases after CI passes.
 - Add dependency checks and repository identity tests.
 
-## MACQWEN 0.3.1 - 2026-08-31
+## VEYSTRIX 0.3.1 - 2026-08-31
 
 ### Changed
 
@@ -510,9 +537,9 @@
 - Print a token digest from the pinned-tail benchmark so two runs can be
   compared without diffing prose.
 
-## MACQWEN 0.3.0 - 2026-08-31
+## VEYSTRIX 0.3.0 - 2026-08-31
 
-This release expands FlashNext into MACQWEN, a shared low-memory LLM runtime
+This release expands FlashNext into VEYSTRIX, a shared low-memory LLM runtime
 for Apple Silicon.
 
 ### Performance highlights
@@ -547,11 +574,11 @@ Measurements use the reference M4 Mac with 16 GB of unified memory.
 
 ### Project structure
 
-- Reframe the project as MACQWEN, a low-memory Apple Silicon LLM runtime.
+- Reframe the project as VEYSTRIX, a low-memory Apple Silicon LLM runtime.
 - Keep Qwen3.8-Flash-Next as the primary supported runtime.
 - Add Qwen3.8-27B as a research runtime.
 - Move model runtimes under `models/`.
-- Move shared chat code under `macqwen/`.
+- Move shared chat code under `veystrix/`.
 - Add one launcher for all supported models and profiles.
 - Organize active documentation into briefs, research records, and handoffs.
 
@@ -581,7 +608,7 @@ Measurements use the reference M4 Mac with 16 GB of unified memory.
 - Stream complete words without showing partial token fragments.
 - Fade complete words through four shades of grey.
 - Run word animation on an output worker.
-- Add the `MACQWEN_FADE_MS` animation budget.
+- Add the `VEYSTRIX_FADE_MS` animation budget.
 - Keep prefill animation outside redirected output.
 - Align help columns and show routing and thinking status on the ready line.
 - Handle Ctrl+C during Flash-Next prefill without a traceback.
@@ -667,7 +694,7 @@ Measurements use the reference M4 Mac with 16 GB of unified memory.
 
 ### Compatibility notes
 
-- The old `flashnext/` package layout changes to the shared MACQWEN layout.
+- The old `flashnext/` package layout changes to the shared VEYSTRIX layout.
 - Use `./chat.sh` as the main launcher.
 - Use `./chat.sh --model flashnext` to select Flash-Next explicitly.
 - Model weights remain separate from the source repository.

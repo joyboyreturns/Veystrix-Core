@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT))
 
-from macqwen.results import output_path  # noqa: E402
+from veystrix.results import output_path  # noqa: E402
 
 
 def main() -> int:
@@ -31,13 +31,13 @@ def main() -> int:
     from models.flashnext.settings.launch import apply_chat_environment
 
     apply_chat_environment(os.environ)
-    from macqwen.checkpoints import resolve_flashnext
+    from veystrix.checkpoints import resolve_flashnext
     from models.flashnext import small_sidecar
     from models.flashnext.expert_cache import _slab_allocation
     from models.flashnext.routing import checkpoint_identity_for_store
     from models.flashnext.store import SafeTensorStore
 
-    checkpoint = str(resolve_flashnext(os.environ.get("MACQWEN_FLASHNEXT_MODEL")))
+    checkpoint = str(resolve_flashnext(os.environ.get("VEYSTRIX_FLASHNEXT_MODEL")))
     store = SafeTensorStore(checkpoint)
     identity = checkpoint_identity_for_store(store)
     allocation = _slab_allocation(store, int(os.environ["FLASHNEXT_SLAB_GLOBAL"]), 32)

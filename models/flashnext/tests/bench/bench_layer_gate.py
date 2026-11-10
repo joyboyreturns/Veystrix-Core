@@ -23,14 +23,14 @@ import time
 import urllib.error
 import urllib.request
 
-from macqwen.measurement import MeasurementRun, source_hash
-from macqwen.results import output_path
+from veystrix.measurement import MeasurementRun, source_hash
+from veystrix.results import output_path
 from models.flashnext.tests.bench import prefill_memory_harness as H
 from models.flashnext.tests.bench.bench_prefill_memory import _memory_reading, _vm_counters
 
 ROOT = Path(__file__).resolve().parents[4]
 CHECKPOINT = Path("/Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP")
-SOURCES = ("macqwen/backends/flashnext.py", "macqwen/server.py", "models/flashnext/prefill.py",
+SOURCES = ("veystrix/backends/flashnext.py", "veystrix/server.py", "models/flashnext/prefill.py",
            "models/flashnext/layer_major.py", "models/flashnext/expert_cache.py",
            "models/flashnext/prefix_session.py", "models/flashnext/tests/bench/layer_gate_probe.py",
            "models/flashnext/tests/bench/bench_layer_gate.py", "models/flashnext/overnight.py",
@@ -341,7 +341,7 @@ def make_prompt(checkpoint, source_tokens=600, skip_tokens=0):
     system = H.AGENT_PROMPT_FILE.read_text().strip() + "\nAvailable tool schema for context: " + json.dumps(tool_schema)
     # Real repository source, in a fixed order, cut at a token count (600 reproduces the original 2.7K prompt).
     files = ("models/flashnext/prefill.py", "models/flashnext/expert_cache.py", "models/flashnext/prefix_session.py",
-             "models/flashnext/layer_major.py", "models/flashnext/store.py", "macqwen/server.py")
+             "models/flashnext/layer_major.py", "models/flashnext/store.py", "veystrix/server.py")
     source = "\n\n".join(f"# {name}\n" + (ROOT / name).read_text() for name in files)
     ids = tokenizer.encode(source, add_special_tokens=False)
     if len(ids) < skip_tokens + source_tokens:
@@ -423,7 +423,7 @@ def checkpoint_fingerprint(checkpoint):
 
 def runtime_fingerprint():
     digest = hashlib.sha256()
-    for directory in (ROOT / "macqwen", ROOT / "models/flashnext"):
+    for directory in (ROOT / "veystrix", ROOT / "models/flashnext"):
         for path in sorted(directory.rglob("*.py")):
             if "__pycache__" in path.parts:
                 continue

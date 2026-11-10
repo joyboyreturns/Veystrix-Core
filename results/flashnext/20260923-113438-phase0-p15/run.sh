@@ -2,7 +2,7 @@
 # Phase 0 of the 5 tok/s path: zero-read floor and a decode split at P15,
 # chat defaults (slab, bundle, keep-warm incl. stream-pack waits).
 # Order: floor, split, floor. Fresh process each.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-113438-phase0-p15
 CHAT=($($PY -c "from models.flashnext.settings.launch import CHAT_ENV; print(' '.join(f'{k}={v}' for k,v in CHAT_ENV.items()))"))

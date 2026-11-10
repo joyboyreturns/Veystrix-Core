@@ -204,7 +204,7 @@ def check_competing_workloads():
                 continue
             if "bench_prefill_memory" in cmd and "--child" in cmd:
                 competing.append({"pid": pid, "cmd": cmd})
-            elif "macqwen" in cmd and "generate" in cmd:
+            elif "veystrix" in cmd and "generate" in cmd:
                 competing.append({"pid": pid, "cmd": cmd})
         return competing
     except Exception:

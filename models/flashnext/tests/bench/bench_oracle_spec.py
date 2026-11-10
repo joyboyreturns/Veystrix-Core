@@ -15,7 +15,7 @@ os.environ.setdefault("FLASHNEXT_OVERLAP", "1")
 import mlx.core as mx
 from transformers import AutoTokenizer
 
-from macqwen.checkpoints import resolve_flashnext
+from veystrix.checkpoints import resolve_flashnext
 from models.flashnext.adaptive_topk import set_renorm_blend, set_threshold
 from models.flashnext.loader import load_streaming
 

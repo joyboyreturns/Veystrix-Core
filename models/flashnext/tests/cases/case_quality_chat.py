@@ -1,4 +1,4 @@
-from macqwen.testsuite.api import TestSpec
+from veystrix.testsuite.api import TestSpec
 
 QUALITY_PROMPT = (
     "crie uma extensão para sketchup que extrude várias faces ao mesmo tempo até "

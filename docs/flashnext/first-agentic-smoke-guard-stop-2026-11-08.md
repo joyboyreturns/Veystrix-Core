@@ -2,10 +2,10 @@
 
 Result: **FAIL, resource stop, no retry.** The tool-call round trip did not happen: the cold system-prompt prefill had not finished when the safety guard stopped the process (`memory pressure level 2`, exit 75). The model never produced a token.
 
-Run: `MACQWEN_SERVER_API_KEY=... MACQWEN_REQUEST_LOG=... ./chat.sh --mode agentic --pool-gb 0 --auto-purge`, real `FlashNextBackend`, 127.0.0.1:8080, context limit 4096, guard on, prefix cache on (RAM 0.75 GB / SSD 20 GB), balanced 2048 chunks, 512-expert ring. Harness: real `dsh headless` with `docs/flashnext/dsh/veystrix-agentic.patch.yml` (exposed tools: `glob`, `grep`; request 898 tokens), fresh `DSH_HOME`, workspace with only `alpha.txt` and `beta.md`.
+Run: `VEYSTRIX_SERVER_API_KEY=... VEYSTRIX_REQUEST_LOG=... ./chat.sh --mode agentic --pool-gb 0 --auto-purge`, real `FlashNextBackend`, 127.0.0.1:8080, context limit 4096, guard on, prefix cache on (RAM 0.75 GB / SSD 20 GB), balanced 2048 chunks, 512-expert ring. Harness: real `dsh headless` with `docs/flashnext/dsh/veystrix-agentic.patch.yml` (exposed tools: `glob`, `grep`; request 898 tokens), fresh `DSH_HOME`, workspace with only `alpha.txt` and `beta.md`.
 Preserved: `results/flashnext/20261108-first-agentic-smoke-guard-stop/` (guard trace `veystrix-chat-7444.jsonl`, 302 rows at 0.25 s; `server.log`; `task.jsonl`; `purge-log.jsonl`). The per-request log was never written because the request did not finish.
 
-Before the run: suites green (MACQWEN 465, FlashNext unit 1,335, 3 skipped); gate READY at 10.3 GB after one startup purge (+1.8 GB, 0.18 s); pressure normal, swap used 773.5 MB and flat, Low Power Mode off, battery 69%, no thermal warning. One earlier attempt failed in 1 s on my own harness command-line order (`--patch` must precede `--json`); it sent no request and is not a resource retry.
+Before the run: suites green (VEYSTRIX 465, FlashNext unit 1,335, 3 skipped); gate READY at 10.3 GB after one startup purge (+1.8 GB, 0.18 s); pressure normal, swap used 773.5 MB and flat, Low Power Mode off, battery 69%, no thermal warning. One earlier attempt failed in 1 s on my own harness command-line order (`--patch` must precede `--json`); it sent no request and is not a resource retry.
 
 ## Timeline (GiB; t = seconds from guard start)
 | t | stage | MLX active | anonymous | compressor (growth) | available | process RSS |

@@ -1,4 +1,4 @@
-from macqwen.testsuite.api import script_case
+from veystrix.testsuite.api import script_case
 
 TEST = script_case(
     runtime="flashnext",

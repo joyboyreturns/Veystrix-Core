@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from macqwen.testsuite.api import IO_METRICS, TestSpec, bench_module
+from veystrix.testsuite.api import IO_METRICS, TestSpec, bench_module
 
 
 def _worker_sweep_exists(config) -> bool:

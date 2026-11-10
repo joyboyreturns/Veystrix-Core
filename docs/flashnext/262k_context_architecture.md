@@ -68,7 +68,7 @@ In compliance with the project's non-negotiable verification guidelines:
 | :--- | :--- | :--- |
 | **Checkpoint-Free Cache Unit Suite** | **PROVEN** | 50/50 unit tests passing (`models/flashnext/tests/unit/test_prefix_cache.py`) |
 | **Session Hierarchy & Eviction** | **PROVEN** | 45/45 unit tests passing (`models/flashnext/tests/unit/test_prefix_session.py`, `test_sessions.py`) |
-| **Full MACQWEN Server Test Suite** | **PROVEN** | 598/598 tests passing (`macqwen/tests/`) |
+| **Full VEYSTRIX Server Test Suite** | **PROVEN** | 598/598 tests passing (`veystrix/tests/`) |
 | **Dual-Harness Wire Protocols** | **PROVEN** | 14/14 Qwen Code tests and 5/5 Dual-Harness tests passing |
 | **SSD Persistence & Cross-Process Restore** | **PROVEN** | Real `.safetensors` snapshots (format v3) written and loaded bit-identically |
 | **50 GiB Headroom Safety Guard** | **PROVEN** | Verified by unit tests with mocked disk limits; active server reflects 219 GB free |

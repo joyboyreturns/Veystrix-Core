@@ -29,23 +29,18 @@ trust.
 
 | Path | Responsibility |
 |---|---|
-| `macqwen/cli.py` | Select model, model path, and Python environment |
-| `macqwen/session.py` | Read prompts, run commands, and generate replies |
-| `macqwen/server.py` | Provide local OpenAI and Anthropic API endpoints |
-| `macqwen/commands.py` | Define commands and aliases once |
-| `macqwen/preferences.py` | Validate and save shared preferences |
-| `macqwen/text.py` | Filter reasoning and hidden tool protocol streams |
-| `macqwen/ui.py` | Render word, prefill, and tool animations |
-| `macqwen/agent.py` | Run model and tool segments with separate timing |
-| `macqwen/profiles/` | Define plain and repository-tool behavior |
-| `macqwen/tools/` | Provide repository, API, code, and search tools |
-| `macqwen/backends/` | Adapt each model runtime to the session loop |
-| `models/k2_horizon/` | Own K2 loading, settings, protocol adaptation, and tests |
-| `models/bonsai2/` | Own Bonsai-2 loading, settings, protocol adaptation, and tests |
+| `veystrix/cli.py` | Select model, model path, and Python environment |
+| `veystrix/session.py` | Read prompts, run commands, and generate replies |
+| `veystrix/server.py` | Provide local OpenAI and Anthropic API endpoints |
+| `veystrix/commands.py` | Define commands and aliases once |
+| `veystrix/preferences.py` | Validate and save shared preferences |
+| `veystrix/text.py` | Filter reasoning and hidden tool protocol streams |
+| `veystrix/ui.py` | Render word, prefill, and tool animations |
+| `veystrix/agent.py` | Run model and tool segments with separate timing |
+| `veystrix/profiles/` | Define plain and repository-tool behavior |
+| `veystrix/tools/` | Provide repository, API, code, and search tools |
+| `veystrix/backends/` | Adapt each model runtime to the session loop |
 | `models/flashnext/` | Own Flash-Next loading, routing, streaming, and tests |
-| `models/qwen27b/` | Own Qwen3.8-27B loading, cache, and research utilities |
-| `docs/k2_horizon/` | Hold K2 status, research decisions, operation, and measurements |
-| `docs/bonsai2/` | Hold Bonsai-2 status, research decisions, operation, and measurements |
 
 ## Commands
 
@@ -124,8 +119,8 @@ Changing the profile resets the conversation and rebuilds the toolbox.
 The default preferences path creates these profile files:
 
 ```text
-~/.macqwen/system-prompt-plain.txt
-~/.macqwen/system-prompt-agent.txt
+~/.veystrix/system-prompt-plain.txt
+~/.veystrix/system-prompt-agent.txt
 ```
 
 `/config prompt` prints the active prompt and path. `/config prompt edit` opens that file. `/config prompt default` removes the custom file. Use `/new` after
@@ -144,12 +139,9 @@ Its clauses keep direct answers, reject invented API names and results, request 
 Run the shared suite:
 
 ```bash
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
 .venv/bin/python -m unittest discover -s models/flashnext/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s models/qwen27b/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s models/k2_horizon/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m unittest discover -s models/bonsai2/tests/unit -t . -p 'test_*.py'
-.venv/bin/python -m compileall -q macqwen models/flashnext models/qwen27b models/k2_horizon models/bonsai2
+.venv/bin/python -m compileall -q veystrix models/flashnext models/nemotron35
 git diff --check
 ```
 
@@ -162,7 +154,7 @@ Run model-specific tests in the matching environment. See each model handoff.
 - Checkpoint-supplied runtime code is accepted only through an explicit,
   compatible backend and a documented trusted-code boundary.
 - Every persistent chat setting has one schema entry.
-- Model runtime defaults live in `macqwen/model_settings.py`.
+- Model runtime defaults live in `veystrix/model_settings.py`.
 - Every command has one table entry.
 - Tool subprocesses do not receive API keys.
 - The repository-tool profile requires approval for modifying tools unless configured otherwise.
@@ -172,7 +164,7 @@ the cache when the prompt diverges. Reuse needs the client to echo the previous 
 off and usually does not fire with thinking on.
 - Server mode processes one request at a time.
 - Chat output releases complete words only, and fades each one in. The fade
-runs on an output worker. Its budget is capped by `MACQWEN_FADE_MS` and by half the model's own word time.
+runs on an output worker. Its budget is capped by `VEYSTRIX_FADE_MS` and by half the model's own word time.
 - Prefill progress comes from backend work callbacks, not prompt-size timing
 prediction.
 - Tool protocol stays hidden while its pending state remains visible.
@@ -195,8 +187,8 @@ Flash-Next session validation errors use English. Their schema and payload forma
 ## Adding another model
 
 1. Put its runtime under `models/MODEL/`.
-2. Add one lazy backend under `macqwen/backends/`.
-3. Add model selection and environment resolution to `macqwen/cli.py`.
+2. Add one lazy backend under `veystrix/backends/`.
+3. Add model selection and environment resolution to `veystrix/cli.py`.
 4. Reuse the shared session, profiles, commands, and tools.
 5. Add backend tests and one live smoke test.
 

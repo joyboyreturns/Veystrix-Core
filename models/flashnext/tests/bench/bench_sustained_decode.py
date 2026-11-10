@@ -16,8 +16,8 @@ import time
 import urllib.request
 from pathlib import Path
 
-from macqwen.measurement import MeasurementRun
-from macqwen.results import output_path
+from veystrix.measurement import MeasurementRun
+from veystrix.results import output_path
 from models.flashnext.tests.bench import bench_layer_gate as G
 
 FOLLOW_UPS = ("Now explain in detail how the prefix cache decides whether a snapshot can be restored.",

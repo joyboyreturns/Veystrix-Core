@@ -23,16 +23,16 @@ We performed the end-to-end integration and reliability engineering required to 
    Constructed an isolated test project at `/tmp/veystrix_agentic_4k_fixture/workspace` with real software modules (`service/core/engine.py`, `service/api/auth.py`, `config/settings.yaml`, etc.). Calibrated via the actual model tokenizer to **exactly 4,032 input tokens** (within the 3,900–4,100 target).
 
 3. **End-to-End Scripted Harness Protocol Verification**:
-   Executed real `dsh headless` against `macqwen/server.py` with `ScriptedBackend`:
+   Executed real `dsh headless` against `veystrix/server.py` with `ScriptedBackend`:
    - Turn 1: 4,032 input tokens -> emitted valid XML `<tool_call>` for `glob`.
    - Tool Execution: `dsh` executed read-only `glob`, returning 13 file paths.
    - Turn 2: 4,150 input tokens -> model synthesized final answer verifying batch size (64) and token leeway (30s).
    - Exit code 0, both turns requested 1024 tokens.
 
 4. **Full Offline Regression Passes (Phase 8)**:
-   - `macqwen/tests`: **521 tests passed**, 0 failed.
+   - `veystrix/tests`: **521 tests passed**, 0 failed.
    - `models/flashnext/tests/unit`: **1,433 tests passed**, 3 skipped, 0 failed.
-   - `macqwen/tests/test_agentic_4k_offline.py`: **all 14 Phase 8 requirements passed**.
+   - `veystrix/tests/test_agentic_4k_offline.py`: **all 14 Phase 8 requirements passed**.
 
 5. **Guarded Real-Model Experiment (Phase 9)**:
    Attempted guarded launch with `./chat.sh --mode agentic --pool-gb 0`.

@@ -11,7 +11,7 @@ Status: protocol verified against the real `dsh` client and the real Veystrix HT
 * Tools are standard function schemas. Default set: 23 tools, **5,654-token request**. The default exceeds the AGENTIC 4,096 context limit, so a trimmed profile is required.
 * A second, tool-less request generates a session title from the first prompt. It is a different conversation, so on one live KV session it evicts the main conversation and forces a full re-prefill of the follow-up. The patch turns it off (`session-title-llm`).
 
-## Server changes this required (`macqwen/server.py`, all uncommitted)
+## Server changes this required (`veystrix/server.py`, all uncommitted)
 
 1. **Bug fixed:** string `arguments` in assistant history crashed the Qwen template (`Can only get item pairs from a mapping`), so every turn after a tool call failed. Tool calls are now converted to the mapping the template iterates. Arguments that are not a JSON object are a 400 naming the message.
 2. Silent drops removed. Non-text content parts (images), unknown message fields, `tool_calls` on a non-assistant role, and unknown tool-call fields are refused by name. `reasoning_content` is passed to the template. Empty harmless fields (`refusal: null`) and a tool message's `name` are accepted.
@@ -19,7 +19,7 @@ Status: protocol verified against the real `dsh` client and the real Veystrix HT
 4. Request fields: unsupported ones (`stop`, `n` other than 1, `response_format`, `logprobs`, forced `tool_choice`, legacy `functions`, unknown `stream_options` keys) are a 400 before any stream starts. Sampling controls the server fixes per process (`temperature`, `top_p`, penalties, `seed`, `parallel_tool_calls`) are accepted and listed in the `X-Veystrix-Ignored-Fields` response header.
 5. `stream_options.include_usage` now produces the final usage chunk (`choices: []`, prompt, completion, total tokens), as the harness requests.
 
-Tests: `macqwen/tests/test_server_harness_protocol.py` (19). It includes rendering the harness history through the real checkpoint template when present, tool-call streaming shape, usage chunk, field policy and a client disconnecting mid-stream. Full suites: MACQWEN 464 OK; FlashNext unit 1,335 OK (3 skipped; the earlier note said 5, not investigated).
+Tests: `veystrix/tests/test_server_harness_protocol.py` (19). It includes rendering the harness history through the real checkpoint template when present, tool-call streaming shape, usage chunk, field policy and a client disconnecting mid-stream. Full suites: VEYSTRIX 464 OK; FlashNext unit 1,335 OK (3 skipped; the earlier note said 5, not investigated).
 
 ## Verified with the real client (scripted backend, real tokenizer, no model)
 
@@ -27,11 +27,11 @@ Sequence against the real Veystrix server, in a network-sandboxed (localhost onl
 
 ## Setup
 
-Patch: `docs/flashnext/dsh/veystrix-agentic.patch.yml` (provider `veystrix`, `api: openai-completions`, `baseURL http://127.0.0.1:8080/v1`, model `macqwen-flashnext`, `contextWindow: 4096`, file tools only: read, glob, grep, edit, write, read_image; no bash, goals, todo, web, subagents, workflows, LLM titles).
+Patch: `docs/flashnext/dsh/veystrix-agentic.patch.yml` (provider `veystrix`, `api: openai-completions`, `baseURL http://127.0.0.1:8080/v1`, model `veystrix-flashnext`, `contextWindow: 4096`, file tools only: read, glob, grep, edit, write, read_image; no bash, goals, todo, web, subagents, workflows, LLM titles).
 
 ```sh
 # terminal 1: server (needs your approval to run on the real model; not run yet)
-export MACQWEN_SERVER_API_KEY=local-agentic-key
+export VEYSTRIX_SERVER_API_KEY=local-agentic-key
 ./chat.sh --mode agentic --pool-gb 0 --auto-purge
 
 # terminal 2: a harmless isolated workspace and one task

@@ -384,7 +384,7 @@ class ChunkLogTests(unittest.TestCase):
 
 class BackendReleaseTests(unittest.TestCase):
     def test_release_between_turns_clears_cache_restores_reads_keeps_state_and_never_raises(self):
-        from macqwen.backends import flashnext as B
+        from veystrix.backends import flashnext as B
         store = mock.Mock(_uncached=True)
         calls = []
         stub = SimpleNamespace(language=object(), _prefix=None, turn_memory_before={"rss": 1},
@@ -405,7 +405,7 @@ class BackendReleaseTests(unittest.TestCase):
         self.assertIn("error", broken.last_turn_memory)
 
     def test_small_cache_is_left_alone(self):
-        from macqwen.backends import flashnext as B
+        from veystrix.backends import flashnext as B
         stub = SimpleNamespace(language=object(), _prefix=None, turn_memory_before=None, _turn_memory=lambda: {})
         with mock.patch("models.flashnext.pool_lifecycle.store_of", return_value=None), \
                 mock.patch.object(B.gpu_sync, "synchronize"), mock.patch("models.flashnext.prefill_ring.fence"), \
@@ -417,7 +417,7 @@ class BackendReleaseTests(unittest.TestCase):
 
     def test_release_never_calls_a_gpu_synchronize_other_than_the_safe_one(self):
         import inspect
-        from macqwen.backends import flashnext as B
+        from veystrix.backends import flashnext as B
         source = inspect.getsource(B.FlashNextBackend._release_between_turns)
         self.assertNotIn("mx.synchronize(", source)
         self.assertIn("gpu_sync.synchronize()", source)

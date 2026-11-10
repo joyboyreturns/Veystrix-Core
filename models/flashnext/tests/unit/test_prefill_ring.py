@@ -73,12 +73,24 @@ def build_checkpoint(directory):
         json.dump({"weight_map": {key: shard for key in tensors}}, out)
 
 
+_REAL_METAL_LIMIT = prefill_ring.metal_working_set_limit
+# The ring is only granted when the machine's Metal working-set limit has room for it, so on a small
+# runner these tests got no ring at all. Tests that exercise the admission arithmetic patch the limit
+# themselves; everything else gets this fixed, generous one and no longer depends on the machine.
+TEST_WORKING_SET_LIMIT = 64 * 2**30
+
+
 class RingCase(unittest.TestCase):
     """Builds the store, pool and two streamed layers once per test."""
 
     pool_gb = "0.15"
     create_main_pool = True         # False: a first turn, before any decode pool
     extra_env = {}
+
+    def need_ring(self, ring):
+        """A ring is granted only when this machine has the memory and Metal limits for it (a small CI runner may not)."""
+        if ring is None:
+            self.skipTest(f"scratch ring not granted on this machine: {prefill_ring.LAST_REASON[0]}")
 
     @classmethod
     def setUpClass(cls):
@@ -95,6 +107,10 @@ class RingCase(unittest.TestCase):
             {**ENV, "FLASHNEXT_EXPERT_POOL_GB": self.pool_gb, **self.extra_env})
         patcher.start()
         self.addCleanup(patcher.stop)
+        limit_patch = mock.patch.object(
+            prefill_ring, "metal_working_set_limit", return_value=TEST_WORKING_SET_LIMIT)
+        limit_patch.start()
+        self.addCleanup(limit_patch.stop)
         self.store = SafeTensorStore(self.directory.name)
         self.addCleanup(self.store.close)
         self.layers = [
@@ -253,6 +269,7 @@ class FallbackTests(RingCase):
     def test_read_error_releases_the_half_and_falls_back(self):
         x, indices = self.inputs()
         with prefill_ring.session(self.language, 1024) as ring:
+            self.need_ring(ring)
             with mock.patch.object(prefill_ring, "_read_rows", side_effect=OSError("boom")):
                 got = self.layers[0](x, indices)
                 mx.eval(got)
@@ -345,6 +362,7 @@ class OverlapStagingTests(RingCase):
 
     def test_cancel_waits_for_the_workers_and_frees_the_half(self):
         with prefill_ring.session(self.language, 1024) as ring:
+            self.need_ring(ring)
             staging = ring.stage_begin(self.store, prefix_of(1), list(range(12)))
             self.assertIsNotNone(staging)
             ring.cancel_stage(staging)
@@ -366,6 +384,7 @@ class OverlapStagingTests(RingCase):
     def test_one_half_ring_never_overlaps(self):
         with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_LAYER_PREFETCH": "0"}):
             with prefill_ring.session(self.language, 1024) as ring:
+                self.need_ring(ring)
                 self.assertEqual(ring.ring.halves, 1)
                 self.assertFalse(ring.overlap_capable)
                 self.assertIsNone(ring.stage_begin(self.store, prefix_of(1), [0, 1]))
@@ -457,7 +476,7 @@ class AcquireTests(RingCase):
     def test_requires_the_expert_pool(self):
         with mock.patch.dict(os.environ, {"FLASHNEXT_EXPERT_POOL_GB": "0"}):
             self.assertIsNone(prefill_ring.acquire(self.language, 1024))
-            self.assertEqual(self.reason(), "expert pool is off")
+            self.assertEqual(self.reason(), "expert pool and scratch ring are off")
 
     def test_refuses_when_the_working_set_does_not_fit(self):
         # Active memory is patched: reading the real value twice races with
@@ -539,7 +558,7 @@ class AcquireTests(RingCase):
         self.assertEqual(self.reason(), "no streamed layers")
 
     def test_real_device_reports_a_working_set_limit(self):
-        limit = prefill_ring.metal_working_set_limit()
+        limit = _REAL_METAL_LIMIT()
         self.assertTrue(limit is None or limit > 1_000_000_000)
 
     def test_bad_flag_values_raise(self):

@@ -74,7 +74,7 @@ minutes of prefill it replaces, so it is a memory-efficiency note, not a speed p
   (LRU 1.1/2.1/3.8%); the per-turn split in the table above is from the scratch run.
 * Unit tests: 7 pass. A first run failed one test (my scan case had 10 experts in one event, which the batch-protection rule
   turns into 78% hits); the test was wrong, not the tool, and was changed to a one-expert-per-event cycle.
-* A Haiku agent also ran the 165 existing tests that use `output_path` (OK). The full flashnext and macqwen suites were not re-run,
+* A Haiku agent also ran the 165 existing tests that use `output_path` (OK). The full flashnext and veystrix suites were not re-run,
   because no production file changed.
 
 ## Deliverables in this pass

@@ -1,16 +1,41 @@
-# MACQWEN
+# Veystrix Core
 
-[![CI](https://github.com/1architect/macqwen-releases/actions/workflows/ci.yml/badge.svg)](https://github.com/1architect/macqwen-releases/actions/workflows/ci.yml)
+> **Private repository (`joyboyreturns/Veystrix-Core`).** Veystrix is proprietary freeware. This
+> repository holds the engine, the macOS app, internal documentation and the full development
+> history. The public home (README, releases, update feed, license) is
+> [`joyboyreturns/Veystrix`](https://github.com/joyboyreturns/Veystrix). See
+> [legal/LICENSE_PROVENANCE.md](legal/LICENSE_PROVENANCE.md) for licensing status.
 
-MACQWEN streams sparse Mixture-of-Experts language models from SSD on
+Veystrix streams sparse Mixture-of-Experts language models from SSD on
 low-memory Apple Silicon Macs. The primary runtime keeps the dense model
 core in unified memory while streaming selected expert rows and n-gram
 rows from the checkpoint on demand.
 
-Three resident runtimes (K2-Horizon 7B, Bonsai-2 27B, Qwen3.8-27B, all
-smaller than the primary MoE) are
-supported for comparison and research, but they are not the project's
-focus. Everything below leads with the streamed MoE runtime.
+Two runtimes are supported: Flash-Next (the default) and the experimental
+NVIDIA Nemotron 3.5 Lightning streamed runtime (see `docs/nemotron35/`; real
+inference needs explicit authorization and has not been validated). The earlier
+K2-Horizon, Bonsai-2 and Qwen3.8-27B research runtimes were removed.
+
+## Current status (evidence recorded 2026-11-08, one machine)
+
+Merged from the `docs/chat-agentic-guides-20261108` branch. The `--mode chat|agentic` launcher and the supervised
+`./serve.sh` are present in this tree; the 2026-11-08 "unpublished working tree" warning no longer applies to this
+repository (it applied to the old public MIT repository).
+
+| Capability | Evidence | Status |
+|---|---|---|
+| Q4 checkpoint loading and token generation | Real 113 GB checkpoint on M4 MacBook Air | Demonstrated |
+| Personal multi-turn CHAT with `--pool-gb 0` | Five completed responses; ~2.7-3.0 decode tokens/sec | Works on the development machine |
+| CHAT with a fixed 2 GB decode expert pool | Compressor/available-memory guard stopped the first answer | Not recommended as an initial setting |
+| CHAT auto-purge | Startup recovery executed; no OS purge during inference | Experimental |
+| Balanced 2,048-token prefill | Historical 2K full-model run ~61-64 prefill tokens/sec | Preliminary, specific workload |
+| Same-plan 2K prefix caching | 2,046-token RAM/SSD restores; identical 64-token continuation and 124 state tensors | Validated in isolated full-model experiments |
+| AGENTIC API server + harnesses | Protocol and mock-server tests pass offline (Hermes CLI, Qwen Code); real-model harness runs are not complete | End-to-end on the real checkpoint **unverified** |
+| 4K / 8K / 10K+ long-context operation | See [docs/flashnext/](docs/flashnext/) status files; layer-major runs are preliminary and opt-in | Not verified as a long-lived server |
+
+Data are from a single machine and selected runs; they do not establish general performance or guarantee no quality
+regression. Public performance claims live in the public repository's `docs/performance.md` and only include full
+top-10 routing results.
 
 ## Primary runtime: Flash-Next (SSD-streamed sparse MoE)
 
@@ -28,7 +53,7 @@ needs. `exact-quality` is the normal routing profile; the other profiles
 (`standard`, `cache-aware`, `fast-quality`, `fused-quality`) are research
 controls — see the [Flash-Next brief](docs/flashnext/brief.md).
 
-Current chat defaults live in `models/flashnext/settings/launch.py`:
+Current chat defaults live in `models/flashnext/settings/launch.py` (`launch.py` still sets `FLASHNEXT_EXPERT_POOL_GB=6`, promoted 2026-09-23 from pool measurements; the 2026-11-08 real CHAT runs found a 2 GB pool tripping the memory guard on this 16 GB Mac, so pass `--pool-gb 0` explicitly and see the memory guidance under Quick start):
 Metal runtime, a 6 GB application-owned expert pool read in place by the
 Metal kernels (it replaces the static slab pack and the expert pins),
 GPU keep-warm on, one host sync per decode layer, compiled GatedDeltaNet
@@ -70,21 +95,24 @@ than longer answers. Evidence: [results/flashnext/](results/flashnext/)
 
 ## Quick start
 
-Requirements: Apple Silicon Mac, Python 3.12, a fast SSD, ~120 GB free
-for the checkpoint, and about 10 GB of free memory for the default
-Flash-Next chat (about 3.4 GB model core plus the 6 GB expert pool).
+Requirements: Apple Silicon Mac, Python 3.12, a fast SSD, ~120 GB free for the checkpoint. The startup memory
+check requires **9 GiB (9,663,676,416 bytes)** available; the runtime guards have separate, lower floors and a
+conditional compressor-growth stop. On a 16 GB Mac the optional decode expert pool is the main memory lever: pool-off
+(`--pool-gb 0`) completed real multi-turn chat, while a fixed 2 GB pool tripped the guard in one run. Do not enable a
+6 GB pool just because older text recommends it. Prefer the supervised launcher (`./serve.sh`, see
+[docs/MANUAL_LAUNCH.md](docs/MANUAL_LAUNCH.md)); an unsupervised direct launch once froze the Mac.
 
 ```bash
-git clone https://github.com/1architect/macqwen-releases.git
-cd macqwen-releases
+git clone https://github.com/joyboyreturns/Veystrix-Core.git   # private; needs access
+cd Veystrix-Core
 ./chat.sh setup
 hf download Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP \
   --local-dir "$HOME/models/Qwen3.8-Flash-Next-MLX-4bit-MTP"
 ./chat.sh --model flashnext --checkpoint vontra-mtp
 ```
 
-With exactly one compatible checkpoint installed, MACQWEN selects it
-automatically. Set `MACQWEN_MODEL_ROOT` when checkpoints live outside
+With exactly one compatible checkpoint installed, Veystrix selects it
+automatically. Set `VEYSTRIX_MODEL_ROOT` when checkpoints live outside
 `~/models`. A full path also works with `--checkpoint`, and the
 launcher validates the checkpoint before loading.
 
@@ -97,51 +125,6 @@ Run the project live-test terminal:
 It asks which installed runtime and checkpoint to test, discovers that
 runtime's cases, and writes each run to its own folder under
 `results/<runtime>/`. See [docs/testing.md](docs/testing.md).
-
-## Secondary runtimes (supported, not the focus)
-
-They run resident checkpoints with no SSD streaming. Prefer them only
-for comparison or their own research questions.
-
-### K2-Horizon 7B
-
-Resident 7B MLX model (about 9.6 GB on disk).
-
-```bash
-hf download abenzerps/K2-Horizon-7B-MLX-8bit \
-  --local-dir "$HOME/models/K2-Horizon-7B-MLX-8bit"
-./chat.sh --model k2-horizon --checkpoint k2
-```
-
-The checkpoint supplies executable `model.py`; use a source we trust.
-See the [brief](docs/k2_horizon/brief.md) and
-[handoff](docs/k2_horizon/handoff.md).
-
-### Bonsai-2 27B
-
-Experimental ternary-weight 27B, text-only (Milestone 1), via the
-checkpoint's bundled `runtime/` loader.
-
-```bash
-hf download prism-ml/Ternary-Bonsai-2-27B-mlx-2bit \
-  --local-dir "$HOME/models/Ternary-Bonsai-2-27B-mlx-2bit"
-./chat.sh --model bonsai2 --checkpoint b2
-```
-
-See the [brief](docs/bonsai2/brief.md) and
-[handoff](docs/bonsai2/handoff.md).
-
-### Qwen3.8-27B
-
-Dense research runtime on a compatible local V4 build (must include
-`bf16-ends/` beside its weights). `BUILD` is the directory suffix:
-
-```bash
-./chat.sh BUILD --profile plain
-```
-
-See the [handoff](docs/qwen27b/handoff.md). No V4 checkpoint is
-currently installed.
 
 ## Daily use
 
@@ -160,6 +143,43 @@ Use `/status` for model, profile, routing, context, and memory
 information. Flash-Next extras: `/config model gpu-keepwarm off`
 disables keep-warm and saves the choice. Use
 `/config display animate off` to disable output animation.
+
+## CHAT and AGENTIC modes, memory and cache safety
+
+```bash
+./chat.sh --mode chat --pool-gb 0 --auto-purge     # personal interactive use, one process keeps conversation state
+./chat.sh --mode agentic                           # local API for coding agents (127.0.0.1:8080); supervised: ./serve.sh
+```
+
+* `--auto-purge` enables conditional macOS file-cache recovery at startup/idle only, when authorized by a narrow
+  `sudo -n /usr/sbin/purge` permission; it never runs during inference (purging can hurt SSD-streaming speed).
+  "Cached Files" in Activity Monitor is reclaimable, not permanently unavailable RAM.
+* Interactive commands: `/help`, `/new` or `/reset`, `/session`, `/status`, `/quit`. Use only commands the running
+  version confirms with `/help`.
+* The server speaks OpenAI Chat Completions (`POST /v1/chat/completions`), OpenAI Responses (`/v1/responses`) and
+  Anthropic Messages (`/v1/messages`). An endpoint list is not proof a harness works: check its request protocol,
+  model name, tool-call encoding, streaming and cancellation. Never expose the server without authentication.
+* Acceptance gates before calling AGENTIC "ready": protocol compatibility, exact tool schema and arguments, same-plan
+  cached/uncached state equality, multi-turn tool results, no progressive memory growth, cancellation, error
+  handling, and guarded operation on the full checkpoint. See
+  [docs/flashnext/agentic-validation.md](docs/flashnext/agentic-validation.md).
+* Prefix-cache snapshots must match exact tokens, checkpoint/configuration identity and prefill chunk-plan history; a
+  cache miss is preferable to reused incorrect state. Keep protected active/ancestor snapshots, checksum/manifest
+  validation, GPU ownership and the resource guards intact. Never prune experts; routing, quantization and weights
+  stay unchanged by cache and scheduling work.
+
+## The Veystrix app and releases
+
+* `apps/macos/Veystrix`: native SwiftUI app (dashboard, explicit Start/Stop/Restart, model-folder validation without
+  reading weights, harness settings for Hermes / Qwen Code / DeepSeek Harness / OpenAI-compatible clients, logs and
+  sanitized diagnostics). It never loads a model on launch.
+* Build: `packaging/engine/build_engine_bundle.sh` then `packaging/macos/make_release.sh --engine dist/engine`.
+  Produces `Veystrix-<ver>-arm64.dmg` and `.zip`, `SHA256SUMS.txt` and `BUILD-INFO.txt`.
+* **Free channel (default, no Apple membership):** ad-hoc signed, not notarized; macOS Gatekeeper warns on first open.
+  **Developer ID channel (ready, not activated):** signing + notarization + the same Sparkle EdDSA update feed when
+  credentials exist. See [docs/release/FREE_CHANNEL.md](docs/release/FREE_CHANNEL.md) and
+  [docs/release/RELEASE_PROCESS.md](docs/release/RELEASE_PROCESS.md).
+* Public repository (README, releases, update feed): https://github.com/joyboyreturns/Veystrix. This repo is private.
 
 ## Local API server
 
@@ -183,7 +203,7 @@ Localhost does not require authentication by default. A non-local bind
 requires a shared key:
 
 ```bash
-export MACQWEN_SERVER_API_KEY="PRIVATE_VALUE"
+export VEYSTRIX_SERVER_API_KEY="PRIVATE_VALUE"
 ./chat.sh --server --host 0.0.0.0
 ```
 
@@ -212,15 +232,13 @@ state; keep them private.
 
 | Data | Default location |
 |---|---|
-| Preferences | `~/.macqwen/preferences.json` |
-| API keys | `~/Library/Application Support/MACQWEN/api_keys.json` |
+| Preferences | `~/.veystrix/preferences.json` |
+| API keys | `~/Library/Application Support/Veystrix/api_keys.json` |
 | Flash-Next sessions | `~/.cache/flashnext/sessions/` |
-| K2-Horizon sessions | `~/.cache/k2-horizon/sessions/` |
-| Bonsai-2 sessions | `~/.cache/bonsai2/sessions/` |
-| Qwen3.8-27B sessions | `~/.frankenstein/sessions/` |
+| Nemotron sessions | `~/.cache/veystrix/nemotron35/sessions/` |
 
 The launcher uses `.venv` by default. Developers can provide a validated
-override with `MACQWEN_PYTHON` or a model-specific `MACQWEN_*_PYTHON` variable.
+override with `VEYSTRIX_PYTHON` or a model-specific `VEYSTRIX_*_PYTHON` variable.
 
 ## Troubleshooting
 
@@ -237,7 +255,7 @@ override with `MACQWEN_PYTHON` or a model-specific `MACQWEN_*_PYTHON` variable.
 Run the shared unit tests:
 
 ```bash
-.venv/bin/python -m unittest discover -s macqwen/tests -t . -p 'test_*.py'
+.venv/bin/python -m unittest discover -s veystrix/tests -t . -p 'test_*.py'
 ```
 
 Run a runtime's unit tests with the same pattern, replacing `RUNTIME`:
@@ -255,7 +273,11 @@ running experiments. Do not run benchmarks without approval of the plan.
 ## Documentation and layout
 
 The [documentation index](docs/README.md) lists the current component
-documents. Each active runtime follows the same structure:
+documents. Release, packaging, security and
+launch guides: [release process](docs/release/RELEASE_PROCESS.md), [free channel](docs/release/FREE_CHANNEL.md),
+[validation status](docs/release/VALIDATION.md), [packaging](docs/packaging/PACKAGING.md),
+[security audit](docs/security/SECURITY_AUDIT_2026-11-10.md), [manual launch](docs/MANUAL_LAUNCH.md),
+[Hermes integration](integrations/hermes/README.md), [AGENTIC validation](docs/flashnext/agentic-validation.md). Each active runtime follows the same structure:
 
 - `brief.md`: purpose, scope, status, and main results;
 - `research.md`: dated measurements, decisions, and rejected approaches;
@@ -265,26 +287,29 @@ Historical records are in [docs/archive](docs/archive/README.md). They preserve
 provenance and may contain obsolete commands.
 
 ```text
-macqwen/                    Shared chat, commands, settings, tools, and test engine
+apps/macos/Veystrix/        Native SwiftUI app (VeystrixKit logic + UI + Sparkle)
+packaging/                  engine bundle, macOS app/DMG/ZIP/appcast scripts, legal generators
+integrations/hermes/        Hermes Agent profile configurator and offline mock server
+legal/, LICENSES/           freeware license draft, provenance, SBOM, third-party notices
+scripts/security/           secret scan and public-exposure audit
+veystrix/                    Shared chat, commands, settings, tools, and test engine
 tests/                      Project live-test terminal
 models/flashnext/           Flash-Next streaming runtime and benchmarks
-models/k2_horizon/          K2-Horizon runtime, adapter, settings, and tests
-models/bonsai2/             Bonsai-2 runtime, kernels, settings, and tests
-models/qwen27b/             Qwen3.8-27B runtime and research utilities
+models/nemotron35/         Experimental Nemotron 3.5 Lightning streamed runtime and model-free tests
 docs/                       Current guides, evidence, and historical records
 results/                    Per-run measurement records (one folder per run)
 ```
 
 ## License
 
-MACQWEN source code uses the MIT License. Models and dependencies use their
+Veystrix is proprietary freeware; it is not open source as a whole. Code published earlier as VEYSTRIX under the MIT License keeps that license and notice (see LICENSE, LICENSES/, legal/). Models and dependencies use their
 own licenses. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The Vontra
 checkpoint card carries the Qwen Community License 1.0; review it before
 use or redistribution.
 
 ## Acknowledgements
 
-MACQWEN uses and builds on these third-party projects and platform tools:
+Veystrix uses and builds on these third-party projects and platform tools:
 
 - Apple macOS, Apple Silicon, Metal, Objective-C++ Metal APIs, Xcode, and
   Instruments provide the runtime platform, custom kernels, and trace tools.
@@ -295,12 +320,12 @@ MACQWEN uses and builds on these third-party projects and platform tools:
 - Hugging Face hosts the public checkpoint files and model discussions used in
   this project and its evidence record.
 - The Qwen team provides the Qwen model architecture, tokenizer, sampling
-  guidance, and checkpoint family used by MACQWEN.
+  guidance, and checkpoint family used by Veystrix.
 - Vontra provides the public Flash-Next MLX checkpoints used in this work.
-- IFM provides K2-Horizon, and abenzerps provides its public MLX checkpoint.
+- NVIDIA provides Nemotron 3.5 Lightning, and mlx-community its public MLX 4-bit conversion.
 - Tavily and Context7 provide optional search and documentation tools for the
   repository-tool chat profile.
 - Python provides the runtime and standard-library components.
 - GitHub provides repository hosting, issue tracking, and GitHub Actions CI.
-- The MACQWEN research record credits external reports and source notes where
+- The Veystrix research record credits external reports and source notes where
   they affect a measurement or a decision.

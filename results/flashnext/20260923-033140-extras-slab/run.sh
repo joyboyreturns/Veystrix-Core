@@ -3,7 +3,7 @@
 # extras = 120-slot slab over 20 layers + FLASHNEXT_COMPILE + FLASHNEXT_PREWARM.
 # Order: defaults, extras, extras, defaults. 128 greedy tokens, 8 pins.
 # Expected digest in every arm: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 EXTRAS=(FLASHNEXT_SLAB_GLOBAL=120 FLASHNEXT_SLAB_NUM_LAYERS=20 FLASHNEXT_COMPILE=1 FLASHNEXT_PREWARM=1)
 arm() {

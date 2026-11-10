@@ -542,6 +542,7 @@ class RealProcessTests(unittest.TestCase):
         time.sleep(1.0)
         self.assertIsNone(P.process_identity(result["watchdog_pid"]), "the watchdog outlived its worker")
 
+    @unittest.skipIf(os.environ.get("CI") == "true", "reproduces a deadlock of the real Apple GPU driver; virtualized CI runners do not")
     @unittest.skipUnless(metal_available(), "needs the Metal build of MLX")
     def test_the_known_gpu_gil_deadlock_is_bounded_by_the_watchdog(self):
         result = self.run_worker("real_deadlock", timeout=60)
@@ -569,11 +570,11 @@ class WatchdogWiringTests(unittest.TestCase):
         self.assertIn("BAD []", done.stdout, done.stderr)
 
     def test_the_server_marks_requests_and_responses_for_the_watchdog(self):
-        source = (ROOT / "macqwen/server.py").read_text()
+        source = (ROOT / "veystrix/server.py").read_text()
         self.assertIn("progress.PROGRESS.request_begin", source)
         self.assertIn("progress.PROGRESS.request_end()", source)
         self.assertIn("progress.PROGRESS.response_started()", source)
-        backend = (ROOT / "macqwen/backends/flashnext.py").read_text()
+        backend = (ROOT / "veystrix/backends/flashnext.py").read_text()
         self.assertIn("progress.PROGRESS.tick()", backend)
         self.assertIn("progress.PROGRESS.tick(len(produced) + 1)", backend)
 

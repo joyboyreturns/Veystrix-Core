@@ -12,7 +12,7 @@ Status: F2Bm is **not ready**. No full-checkpoint inference, purge, commit or pu
 ## Evidence and limits
 
 * Real separate-process cache contention and termination tests passed as part of the prefix tests. A 90-test focused prefix/profile run passed after the ownership and manifest changes; a 47-test profile/endurance run passed after preserving foreign entries.
-* The final full FlashNext suite ran 1,251 tests, with 5 skipped and 1,246 passing. MACQWEN: 427 passed.
+* The final full FlashNext suite ran 1,251 tests, with 5 skipped and 1,246 passing. VEYSTRIX: 427 passed.
 * The 100-request small-model workload passed: sampled active memory after warmup 24,891.3 KiB first and 24,939.3 KiB last/max; sampled cache max 2,275.8 KiB. The 300-request workload passed: sampled active first 24,891.3 KiB, last/max 24,955.4 KiB; sampled cache max 2,277.9 KiB. Samples are every ten requests after warmup, not continuous peaks; pressure and pools are simulated. These results are not full-model stability evidence.
 * One warm-cache 32 MiB file microbenchmark took 13.3 ms for a hash-only read and 16.7 ms for hash, private-copy write and reread. The copy adds one logical write and one logical reread per snapshot byte on top of hashing the source; this is not a physical SSD/NVMe traffic measurement and is not a full 172 MiB restore benchmark.
 

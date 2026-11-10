@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-from macqwen import results as macqwen_results
+from veystrix import results as veystrix_results
 
 from models.flashnext.tests.bench import bench_chat_parity as bench
 
@@ -41,7 +41,7 @@ class ChatParityTests(unittest.TestCase):
     def test_failed_child_preserves_status_and_terminal_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.enterContext(patch.object(macqwen_results, "RESULTS_ROOT", root))
+            self.enterContext(patch.object(veystrix_results, "RESULTS_ROOT", root))
             pins = root / "pins.json"
             pins.write_text("{}")
             result_path = root / "result.json"
@@ -50,7 +50,7 @@ class ChatParityTests(unittest.TestCase):
             with patch("sys.argv", argv), \
                  patch.dict("os.environ", {"FLASHNEXT_PIN_CACHE": str(pins)}), \
                  patch.object(bench, "source_fingerprint", return_value="fixed"), \
-                 patch("macqwen.checkpoints.resolve_flashnext", return_value=Path("/reap")), \
+                 patch("veystrix.checkpoints.resolve_flashnext", return_value=Path("/reap")), \
                  patch.object(bench, "checkpoint_runtime_capability", return_value={"group_size": 64}), \
                  patch.object(bench, "capture_arm", return_value=(1, "raw output", "NameError: missing")), \
                  patch("builtins.print"):
@@ -301,7 +301,7 @@ class ChatParityTests(unittest.TestCase):
         for failure in ("tokens", "source"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                self.enterContext(patch.object(macqwen_results, "RESULTS_ROOT", root))
+                self.enterContext(patch.object(veystrix_results, "RESULTS_ROOT", root))
                 pins = root / "pins.json"
                 pins.write_text("{}")
                 result_path = root / "result.json"
@@ -324,7 +324,7 @@ class ChatParityTests(unittest.TestCase):
                      patch.object(bench, "source_fingerprint", return_value="fixed"), \
                      patch.object(bench, "require_unchanged_harness",
                                   side_effect=[None, RuntimeError("harness changed")] if failure == "source" else None), \
-                     patch("macqwen.checkpoints.resolve_flashnext", return_value=Path("/oq4")), \
+                     patch("veystrix.checkpoints.resolve_flashnext", return_value=Path("/oq4")), \
                      patch.object(bench, "checkpoint_runtime_capability", return_value={
                          "group_size": 64, "slab_mode": "reference", "allocated_slots": 0, "mlock_ok": False,
                      }), \

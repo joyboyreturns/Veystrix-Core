@@ -29,7 +29,7 @@ launcher imports its MLX backend only when required.
 ## Target layout
 
 ```text
-macqwen/                 the chat, shared by every model
+veystrix/                 the chat, shared by every model
   cli.py                 parse args, resolve model and profile, exec the venv
   session.py             the loop: prompt, generate, stream, commands
   terminal.py            bracketed paste and line editing (today flashnext/)
@@ -78,11 +78,11 @@ difference stays inside the backend.
 
 The plan used these independently verifiable steps:
 
-1. Create `macqwen/` and copy the shared pieces into it. Change nothing else.
+1. Create `veystrix/` and copy the shared pieces into it. Change nothing else.
    Both chats keep running from their current files.
-2. Point both chats at `macqwen/` for the copied pieces. Delete the duplicates.
+2. Point both chats at `veystrix/` for the copied pieces. Delete the duplicates.
    Verify: both still start, and their token output is unchanged.
-3. Build `macqwen/session.py` from the union of the two command tables, with
+3. Build `veystrix/session.py` from the union of the two command tables, with
    the feature gaps closed in both directions.
 4. Add the two profiles and model selection. `./chat.sh --model flashnext
    --profile plain` and so on.

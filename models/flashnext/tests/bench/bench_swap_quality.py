@@ -55,7 +55,7 @@ def main() -> None:
     os.environ["FLASHNEXT_SWAP_RESIDENT"] = "0"
     os.environ["FLASHNEXT_SWAP_EPSILON"] = str(args.epsilon)
 
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
 
     backend = FlashNextBackend()
 

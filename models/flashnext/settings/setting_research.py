@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from macqwen.backend_settings import Setting
+from veystrix.backend_settings import Setting
 
 
 def env(key, default="0"):

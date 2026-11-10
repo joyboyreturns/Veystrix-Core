@@ -30,7 +30,7 @@ import time
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 )
-from macqwen.results import output_path
+from veystrix.results import output_path
 
 import mlx.core as mx
 
@@ -346,7 +346,7 @@ def run_arm(
         profile_io=profile_io,
     )
 
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
     from models.flashnext.diskio import ReadMeter, free_memory_mb, vm_counters
     from models.flashnext.expert_cache import (
         _POOL,
@@ -522,7 +522,7 @@ def prepare_pack(name: str, definition: tuple) -> dict:
         fuse_shared_parts, stream_pack,
         require_existing_pack=False,
     )
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
 
     backend = FlashNextBackend()
     try:
@@ -546,7 +546,7 @@ def calibrate_routing_profile() -> None:
         require_existing_pack=False,
     )
     os.environ["FLASHNEXT_PREWARM"] = "0"
-    from macqwen.backends.flashnext import FlashNextBackend
+    from veystrix.backends.flashnext import FlashNextBackend
 
     backend = None
     try:

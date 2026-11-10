@@ -44,11 +44,28 @@ GUARD_EXIT = 75
 ADMISSION_EXIT = 69
 CONFIG_EXIT = 70
 PORT_BUSY_EXIT = 71
+from models.flashnext.power_gate import POWER_EXIT_CODE as POWER_EXIT   # 72: battery below the floor
+
+
+def bundled() -> bool:
+    """True inside the packaged app: there is no chat.sh or source tree, only compiled modules and a bundled Python."""
+    return Path(sys.executable).resolve().is_relative_to((REPO.parent / "python").resolve())
 
 
 def server_command(args) -> list:
     """The one supported launch line (see models/flashnext/supervision.py LAUNCH_COMMAND)."""
-    command = [str(REPO / "chat.sh"), "--mode", "agentic",
+    launcher = [sys.executable, "-m", "veystrix.cli"] if bundled() else [str(REPO / "chat.sh")]
+    if getattr(args, "model", "flashnext") == "nemotron35-lightning":
+        # Manual selection only. The CLI applies the same guard/chunking contract; --mode, the prefix cache, layer-major
+        # and the Flash-Next memory-readiness gates do not exist for this model. 32K is the admitted ceiling, and the
+        # backend tightens it further from measured free memory at startup.
+        command = [*launcher, "--server", "--host", args.host, "--port", str(args.port),
+                   "--pool-gb", str(args.pool_gb), "--context-limit", "32768",
+                   "--model", "nemotron35-lightning", "--checkpoint", args.checkpoint]
+        if getattr(args, "preferences_file", None):
+            command += ["--preferences-file", args.preferences_file]
+        return command
+    command = [*launcher, "--mode", "agentic",
                "--pool-gb", str(args.pool_gb),
                "--host", args.host, "--port", str(args.port),
                "--context-limit", "262144",
@@ -127,6 +144,8 @@ class Policy:
             return "stop", 0.0, "stopped by the owner" if owner_stop else "server exited cleanly"
         if exit_code == PORT_BUSY_EXIT:
             return "stop", 0.0, "the port is already served by another process: stop it first (./serve.sh --status shows this supervisor)"
+        if exit_code == POWER_EXIT:
+            return "stop", 0.0, "the battery is below the minimum (exit 72): plug in or charge, then start again; restarting cannot fix it"
         if exit_code == CONFIG_EXIT:
             return "stop", 0.0, "launch configuration refused (exit 70): restarting cannot fix it"
 
@@ -163,7 +182,7 @@ class AutoWarmer:
     """
 
     def __init__(self, args, log, *, power_fn, clock, warm_module=None, thread_factory=None):
-        from macqwen import warm as warm_module_default
+        from veystrix import warm as warm_module_default
         self.w = warm_module or warm_module_default
         self.args, self.log, self.power_fn, self.clock = args, log, power_fn, clock
         self.idle_seconds = float(getattr(args, "warm_idle_minutes", 15.0)) * 60.0
@@ -307,12 +326,14 @@ class Supervisor:
 
     def launch(self):
         self.starts += 1
-        self.prune_launch_logs()
         self.log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         logfile = self.log_dir / f"server-launch-{time.strftime('%Y%m%d-%H%M%S')}-{self.starts}.log"
         handle = open(logfile, "ab")
         env = dict(os.environ)
         env.setdefault("VEYSTRIX_API_KEY", "local")
+        if bundled():
+            env.setdefault("VEYSTRIX_PYTHON", sys.executable)      # the bundled interpreter already has the pinned runtime
+            env["PYTHONPATH"] = os.pathsep.join(p for p in (str(REPO), env.get("PYTHONPATH", "")) if p)
         # An unattended goal must survive one malformed model tool call: the client returns its own tool error and the
         # model retries. Set VEYSTRIX_INVALID_TOOL_CALLS=error to get the strict 400 instead.
         env.setdefault("VEYSTRIX_INVALID_TOOL_CALLS", "pass")
@@ -412,7 +433,13 @@ class Supervisor:
                     self.history.append({"at": time.strftime("%H:%M:%S"), "exit": PORT_BUSY_EXIT, "action": "stop", "reason": "port busy"})
                     self.write_status("stopped", reason="port already in use", exit=PORT_BUSY_EXIT)
                     return PORT_BUSY_EXIT
-            self.launch()
+            try:
+                self.launch()
+            except OSError as exc:
+                reason = f"Unable to start engine launcher: {exc}. Check the bundled runtime and permissions."
+                self.log("launch_failed", reason=reason)
+                self.write_status("stopped", reason=reason, exit=CONFIG_EXIT)
+                return CONFIG_EXIT
             code = self.monitor()
             action, cooldown, reason = self.policy.decide(code, self.clock(), owner_stop=self.owner_stop)
             if action == "restart" and not self.args.overnight:
@@ -442,6 +469,8 @@ def build_parser():
     p.add_argument("--pool-gb", default=os.environ.get("VEYSTRIX_POOL_GB", "0"))
     p.add_argument("--enable", action="append", default=[], metavar="NAME",
                    help="pass an experimental option to chat.sh (see its --help), e.g. --enable layer-major")
+    p.add_argument("--model", choices=("flashnext", "nemotron35-lightning"), default="flashnext",
+                   help="engine to supervise (manual selection; flashnext is the default)")
     p.add_argument("--checkpoint", default=os.environ.get("VEYSTRIX_CHECKPOINT", DEFAULT_CHECKPOINT))
     p.add_argument("--prefix-dir", help="separate prefix-cache directory (default: normal AGENTIC cache)")
     p.add_argument("--preferences-file", help="preferences file for the child server")
@@ -478,7 +507,12 @@ def print_status(log_dir=LOG_DIR) -> int:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.auto_warm is None:
-        args.auto_warm = bool(args.overnight)
+        args.auto_warm = bool(args.overnight) and args.model == "flashnext"   # warming relies on the Flash-Next prefix cache
+    if args.model == "nemotron35-lightning":
+        args.auto_warm = False
+        if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") == "0":
+            print("Nemotron is disabled by VEYSTRIX_NEMOTRON_AUTHORIZED=0. Nothing was started.", file=sys.stderr)
+            return 2
     if args.status:
         return print_status()
     return Supervisor(args).run()

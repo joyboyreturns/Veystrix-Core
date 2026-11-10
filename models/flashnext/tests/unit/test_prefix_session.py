@@ -475,7 +475,7 @@ class BalancedPolicyTests(Base):
                 self.assertNotEqual(S.PrefixSession(encode, compat).store().fp, session.store().fp)
 
     def test_cancelling_after_the_snapshot_keeps_it_valid_and_the_next_request_matches_cold(self):
-        from macqwen.backends.base import GenerationCancelled
+        from veystrix.backends.base import GenerationCancelled
 
         system = self.system_of(200, 11)
         prompt = system + [6] * 90
@@ -499,7 +499,7 @@ class BalancedPolicyTests(Base):
         self.assertTrue(cache_bits(cache) == cache_bits(ref_cache))
 
     def test_cancelling_in_the_first_chunk_leaves_no_snapshot_and_no_stale_state(self):
-        from macqwen.backends.base import GenerationCancelled
+        from veystrix.backends.base import GenerationCancelled
 
         system = self.system_of(200, 12)
         calls = []
@@ -523,7 +523,7 @@ class BalancedPolicyTests(Base):
         self.assertTrue(cache_bits(cache) == cache_bits(ref_cache))
 
     def test_a_cancel_between_chunks_does_not_disturb_a_stored_entry(self):
-        from macqwen.backends.base import GenerationCancelled
+        from veystrix.backends.base import GenerationCancelled
 
         system = self.system_of(200, 13)
         with mock.patch.dict(os.environ, {S.FLAG_DIR: str(self.tmp / "z")}):

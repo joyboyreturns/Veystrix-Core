@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest import mock
 
-from macqwen.backends import flashnext as backend_module
+from veystrix.backends import flashnext as backend_module
 from models.flashnext import prefill_readiness as R
 from models.flashnext import purge_recovery as P
 from models.flashnext import resource_prep as RP
@@ -249,7 +249,7 @@ class WaiverAdmissionTests(unittest.TestCase):
     def run_admit(self, extra):
         import io
         from unittest import mock
-        from macqwen import session as S
+        from veystrix import session as S
         env = {**self.ENV, **extra}
         with mock.patch.dict("os.environ", env), mock.patch.object(S, "_agentic_mode", return_value=True), \
                 mock.patch.object(R, "log"), mock.patch.object(R, "render", return_value="refused"):

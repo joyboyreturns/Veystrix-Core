@@ -1,7 +1,7 @@
 """Locate VM movement during the file-backed expert pin operation."""
 from pathlib import Path
 
-from macqwen.testsuite.api import TestSpec
+from veystrix.testsuite.api import TestSpec
 from .case_chat_workload import command as workload_command
 
 

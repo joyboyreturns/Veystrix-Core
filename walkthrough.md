@@ -110,7 +110,7 @@ This document records the verification steps, executed experiments, and findings
 - **Unit Tests**: `models/flashnext/tests/unit/test_short_prefill_memory_pressure.py` (8 passed).
 
 ### 8.4 Request-Aware Adaptive Memory Management (Phase 2 Goal 3)
-- **Actual Suffix Tokens**: In `macqwen/backends/flashnext.py` and `memory_manager.py`, prefill planning and ring eligibility evaluate actual uncached suffix tokens (`tokens = len(prompt) - reusable`) rather than whole prompt length.
+- **Actual Suffix Tokens**: In `veystrix/backends/flashnext.py` and `memory_manager.py`, prefill planning and ring eligibility evaluate actual uncached suffix tokens (`tokens = len(prompt) - reusable`) rather than whole prompt length.
 - **Pool Retention**: Pure decode (`tokens == 0`) and short prefills (`tokens < 512`) unconditionally retain the warm 2 GB decode pool.
 - **Allocation Failure Recovery**: In `expert_pool.for_store()`, if memory allocation fails for a 2 GB pool (e.g. `MemoryError`), the runtime catches the exception and attempts fallback to 1 GB. If 1 GB fails, it falls back to pure SSD streaming (`pool = None`) without crashing the engine.
 - **Unit Tests**: `models/flashnext/tests/unit/test_expert_pool.py` (6 passed).
@@ -140,7 +140,7 @@ This document records the verification steps, executed experiments, and findings
   - In strict compliance with Non-Negotiable Rules 7, 9, 11, and the Autonomous Failure Policy, execution of the 113 GB Q4 checkpoint remains **BLOCKED** at startup readiness without weakening runtime guards.
 
 ### 8.8 Full Integration & Regression Results (Phase 2 Goal 14)
-- `macqwen/tests`: **427 tests passed** (0 failures).
+- `veystrix/tests`: **427 tests passed** (0 failures).
 - `models/flashnext/tests/unit`: **1,216 tests passed, 5 skipped** (0 failures, 1,221 executed).
 - Total active passing unit tests: **1,643 passed (100% pass rate)**.
 

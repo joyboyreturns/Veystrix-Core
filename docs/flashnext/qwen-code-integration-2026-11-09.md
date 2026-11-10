@@ -12,7 +12,7 @@ version, so they are not written. The file was created (it did not exist); any e
 ```json
 {
   "modelProviders": {"openai": [{
-    "id": "macqwen-flashnext", "name": "Veystrix Qwen3.8 Flash-Next Q4 (local)",
+    "id": "veystrix-flashnext", "name": "Veystrix Qwen3.8 Flash-Next Q4 (local)",
     "baseUrl": "http://127.0.0.1:8080/v1", "envKey": "VEYSTRIX_API_KEY",
     "generationConfig": {"timeout": 3600000, "streamIdleTimeoutMs": 900000, "maxRetries": 0, "contextWindowSize": 45056}}]},
   "tools": {"exclude": ["agent", "skill", "tool_search", "list_agents", "get_goal", "update_goal", "todo_write", "cron_create",
@@ -20,7 +20,7 @@ version, so they are not written. The file was created (it did not exist); any e
                         "report_findings", "web_fetch", "zoom_image", "read_mcp_resource", "task_stop", "send_message",
                         "monitor", "notebook_edit"]},
   "security": {"auth": {"selectedType": "openai"}},
-  "model": {"name": "macqwen-flashnext"},
+  "model": {"name": "veystrix-flashnext"},
   "memory": {"enableManagedAutoMemory": false, "enableManagedAutoDream": false, "enableAutoSkill": false},
   "ui": {"enableFollowupSuggestions": false}
 }
@@ -95,7 +95,7 @@ Measured against the real client with a capture server: `/effort low|medium|high
 generic OpenAI provider sends a nested `reasoning: {"effort": "<level>"}` on each request (`max` is clamped to `xhigh` by the
 client). A non-empty `samplingParams` suppresses that injection, which is why none is configured.
 
-Server side (`macqwen/reasoning.py`, `macqwen/server.py`):
+Server side (`veystrix/reasoning.py`, `veystrix/server.py`):
 
 | Request | Result |
 |---|---|
@@ -121,7 +121,7 @@ their reasoning and the template re-renders those turns as empty think blocks (t
 `test_with_thinking_on_a_resent_history_rebuilds_...`; the first difference is after the system prompt, not in the effort text).
 With thinking off the live state is reused across turns.
 
-Tests: `macqwen/tests/test_reasoning.py` (14, real tokenizer and template): per-level rendered prompts differ, low→high→medium→
+Tests: `veystrix/tests/test_reasoning.py` (14, real tokenizer and template): per-level rendered prompts differ, low→high→medium→
 xhigh→low follows each request and stores nothing on the session, auxiliary request does not leak.
 
 ## 4. Long-prefill stall (preserved 8K attempt)
@@ -142,9 +142,9 @@ would not be a fix; the watchdog, limits and cancellation are unchanged.
 
 ## 5. What was verified offline (real Qwen Code 0.22.0, real server, real tokenizer, scripted model)
 
-`macqwen/tests/test_qwen_code_client.py`, 14 tests, all pass (31 s):
+`veystrix/tests/test_qwen_code_client.py`, 14 tests, all pass (31 s):
 
-* `/v1/models`: id `macqwen-flashnext`, four context numbers, reasoning capability block.
+* `/v1/models`: id `veystrix-flashnext`, four context numbers, reasoning capability block.
 * Bearer auth: wrong key gives `401 invalid API key` surfaced as `[API Error: ...]`, nothing generated; right key works.
 * Streaming and usage: SSE with `include_usage` reaches the client; exactly one request per prompt once background features are off.
 * Tools: sequential `glob` then `read_file` continuation (live state reused, no XML leaks), two parallel `read_file` calls in one reply with both results returned, an argument the tool does not accept is refused by the server (`tool 'read_file' has no parameter ...`) and nothing runs, `write_file` is blocked in plan mode and works in yolo mode in a temp repo.
@@ -153,7 +153,7 @@ would not be a fix; the watchdog, limits and cancellation are unchanged.
 * Overflow: a prompt over the server limit gets a visible context error and no generation.
 * Cancellation: killing the client process group stops the server-side generation (a `SIGKILL` of only one pid leaves Qwen Code's child alive, so the connection stays open: use Ctrl-C or kill the group).
 
-Regression: MACQWEN 571 tests OK; FlashNext 1,532 tests, 3 skipped, 1 failure (`FLASHNEXT_UNCACHE_WHEN_ELEVATED` not in the settings registry), fixed by registering it; the registry and memory-controller suites pass afterwards. The full FlashNext suite has not been re-run since that one-line registry fix.
+Regression: VEYSTRIX 571 tests OK; FlashNext 1,532 tests, 3 skipped, 1 failure (`FLASHNEXT_UNCACHE_WHEN_ELEVATED` not in the settings registry), fixed by registering it; the registry and memory-controller suites pass afterwards. The full FlashNext suite has not been re-run since that one-line registry fix.
 
 ## 6. Launch
 

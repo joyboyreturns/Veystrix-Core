@@ -1,7 +1,7 @@
 """Compare the short benchmark workload with the real plain-chat path."""
 from pathlib import Path
 
-from macqwen.testsuite.api import COMMON_METRICS, TestSpec
+from veystrix.testsuite.api import COMMON_METRICS, TestSpec
 
 
 def command(config, result_path: Path) -> list[str]:
@@ -32,6 +32,6 @@ TEST = TestSpec(
         "pins": "same private snapshot per process",
         "terminal": "PTY keeps the actual renderer active under suite capture",
     },
-    source="models/flashnext/tests/bench/bench_chat_parity.py and macqwen/session.py",
+    source="models/flashnext/tests/bench/bench_chat_parity.py and veystrix/session.py",
     promotion=False,
 )

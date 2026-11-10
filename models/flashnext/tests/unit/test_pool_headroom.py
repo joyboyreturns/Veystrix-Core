@@ -118,7 +118,7 @@ class ForStoreTests(unittest.TestCase):
             self.assertIsNone(getattr(store, "_flashnext_expert_pool", None))
 
     def test_cancellation_during_construction_propagates_and_a_retry_can_succeed(self):
-        from macqwen.backends.base import GenerationCancelled
+        from veystrix.backends.base import GenerationCancelled
         with Env():
             E._HEADROOM_READER[0] = reader(7.0)
             store = Store()
@@ -166,7 +166,7 @@ class DecodeRoutingTests(unittest.TestCase):
 class ChatTurnsWithoutAPoolTests(unittest.TestCase):
     def test_repeated_short_chat_turns_continue_correctly_when_the_pool_is_declined(self):
         import mlx.core as mx
-        from macqwen.tests.test_flashnext_backend import FlashNextBackendTests
+        from veystrix.tests.test_flashnext_backend import FlashNextBackendTests
         from models.flashnext.tests.unit.test_prefix_cache import build_model
 
         with Env():
@@ -193,7 +193,7 @@ if __name__ == "__main__":
 
 class TracePhaseTests(unittest.TestCase):
     def test_generate_labels_prefill_decode_and_idle_even_when_cancelled(self):
-        from macqwen.tests.test_flashnext_backend import FlashNextBackendTests
+        from veystrix.tests.test_flashnext_backend import FlashNextBackendTests
         from models.flashnext import trace_phase
 
         seen = []

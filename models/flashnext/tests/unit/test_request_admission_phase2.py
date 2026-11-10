@@ -58,8 +58,8 @@ class RequestAdmissionTests(unittest.TestCase):
         A.check(8192, environ={"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_REQUEST_ADMISSION": "0"}, read=lambda: None)
 
     def test_service_maps_refusal_to_retriable_error_and_can_retry(self):
-        from macqwen.server import ModelService, RequestError
-        from macqwen.tests.test_server import FakeSession
+        from veystrix.server import ModelService, RequestError
+        from veystrix.tests.test_server import FakeSession
 
         session = FakeSession(["answer"])
         service = ModelService(session)
@@ -74,7 +74,7 @@ class RequestAdmissionTests(unittest.TestCase):
         self.assertEqual(service.complete([{"role": "user", "content": "hello"}], [], 10).text, "answer")
 
     def test_candidate_backend_missing_request_state_refuses_before_generation(self):
-        from macqwen.backends.flashnext import FlashNextBackend
+        from veystrix.backends.flashnext import FlashNextBackend
 
         backend = object.__new__(FlashNextBackend)
         backend._generate = mock.Mock()

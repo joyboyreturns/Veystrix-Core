@@ -191,7 +191,7 @@ def gate():
     check("heavy applications (advisory: the product's own admission decides; nothing is closed)", True,
           ", ".join(heavy) or "none", hard=False)
     stray = [l.strip()[:100] for l in sh("ps", "-axo", "pid=,command=").splitlines()
-             if re.search(r"(macqwen/cli\.py|models\.flashnext\.watchdog|unittest)", l) and "gate_a" not in l and "grep" not in l]
+             if re.search(r"(veystrix/cli\.py|models\.flashnext\.watchdog|unittest)", l) and "gate_a" not in l and "grep" not in l]
     check("no stray Veystrix/test processes", not stray, "; ".join(stray) or "none")
     check(f"port {PORT} free", not sh("lsof", "-nP", f"-iTCP:{PORT}", "-sTCP:LISTEN").strip(), f"port {PORT}")
     check("free SSD >= 60 GB", shutil.disk_usage(Path.home()).free / 1e9 >= 60, f"{shutil.disk_usage(Path.home()).free / 1e9:.0f} GB")
@@ -416,10 +416,10 @@ def analyze(out: Path) -> dict:
 def serve_stub(port: int, key: str) -> None:
     """A scripted real-tokenizer server with the same HTTP surface. Never loads the checkpoint."""
     from transformers import AutoTokenizer
-    from macqwen import preferences, server as S
-    from macqwen.scheduler import Scheduler
-    from macqwen.tests.test_agentic_long_fixtures import RealTokenizerBackend
-    from macqwen.tests.test_server import FakeSession
+    from veystrix import preferences, server as S
+    from veystrix.scheduler import Scheduler
+    from veystrix.tests.test_agentic_long_fixtures import RealTokenizerBackend
+    from veystrix.tests.test_server import FakeSession
     from models.flashnext.tests.bench.fixtures import agentic_fixture as F
 
     tokenizer = AutoTokenizer.from_pretrained(str(CHECKPOINT))
@@ -429,7 +429,7 @@ def serve_stub(port: int, key: str) -> None:
     session.backend = RealTokenizerBackend(tokenizer, replies)
     session.preferences = dict(preferences.DEFAULTS, model="flashnext", thinking_enabled=False)
     service = S.ModelService(session, context_limit=PROFILE["context"])
-    server = S.MacqwenHTTPServer(("127.0.0.1", port), service, api_key=key, scheduler=Scheduler())
+    server = S.VeystrixHTTPServer(("127.0.0.1", port), service, api_key=key, scheduler=Scheduler())
     signal.signal(signal.SIGINT, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
     print(f"server ready at http://127.0.0.1:{port}", flush=True)
     server.serve_forever(poll_interval=0.05)
@@ -507,7 +507,7 @@ def main() -> int:
                       "git_status_lines": len(sh("git", "-C", str(REPO), "status", "--short").splitlines()),
                       "fixture_tokens": fixture["tokens"], "harness_overhead_tokens": overhead,
                       "checkpoint": str(CHECKPOINT)}
-    env = {**os.environ, "MACQWEN_SERVER_API_KEY": key, "MACQWEN_REQUEST_LOG": str(out / "requests.jsonl")}
+    env = {**os.environ, "VEYSTRIX_SERVER_API_KEY": key, "VEYSTRIX_REQUEST_LOG": str(out / "requests.jsonl")}
     env["FLASHNEXT_CHUNK_LOG"] = str(out / "chunks.jsonl")        # one line per finished prefill chunk, written live
     if WAIVER["on"]:
         env["FLASHNEXT_MEMORY_WAIVER"] = "swap-only"
@@ -623,7 +623,7 @@ def main() -> int:
                     keep.append(line)
             (out / name).write_text("\n".join(keep) + ("\n" if keep else ""))
     summary["leftover_processes"] = [l for l in sh("ps", "-axo", "pid=,command=").splitlines()
-                                     if "models.flashnext.watchdog" in l or "macqwen/cli.py" in l or "--serve-stub" in l]
+                                     if "models.flashnext.watchdog" in l or "veystrix/cli.py" in l or "--serve-stub" in l]
     summary["outcome"] = summary["outcome"] or "completed"
     save()
     result = analyze(out)

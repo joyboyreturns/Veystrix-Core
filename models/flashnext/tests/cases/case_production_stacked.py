@@ -1,2 +1,2 @@
-from macqwen.testsuite.api import production_case
+from veystrix.testsuite.api import production_case
 TEST = production_case("stacked", "Tests whether weak pin-parts and prewarm signals add when stacked.")

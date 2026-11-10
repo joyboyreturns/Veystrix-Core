@@ -36,7 +36,7 @@ When clients drop reasoning tokens in subsequent turns, standard inference engin
 sequenceDiagram
     autonumber
     actor Client as Client (Qwen Code / DSH)
-    participant Server as Veystrix Server (macqwen)
+    participant Server as Veystrix Server (veystrix)
     participant Ledger as Reasoning Ledger
     participant Engine as MLX Inference Engine
 

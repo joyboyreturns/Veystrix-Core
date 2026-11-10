@@ -18,7 +18,7 @@
         api: openai-completions
         baseURL: http://127.0.0.1:8080/v1
         models:
-          - id: macqwen-flashnext
+          - id: veystrix-flashnext
             name: Qwen3.8 Flash-Next Q4
             # DeepSeek Harness (via pi-ai / pi-messages.js clampMaxTokensToContext) uses:
             #   available = model.contextWindow - estimateContextTokens(context).tokens - CONTEXT_SAFETY_TOKENS
@@ -35,7 +35,7 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: veystrix
-    model: macqwen-flashnext
+    model: veystrix-flashnext
 - id: tool-bash
   disabled: true
 - id: tool-pwsh

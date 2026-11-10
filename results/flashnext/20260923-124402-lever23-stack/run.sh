@@ -3,7 +3,7 @@
 # read pool, compiled GDN q/k normalization and gated norm (C) against chat
 # defaults (D). Fresh process per arm, 128 greedy tokens, 8 pins.
 # Order: D C C D D C. Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-124402-lever23-stack
 arm() {

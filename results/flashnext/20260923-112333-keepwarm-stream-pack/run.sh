@@ -4,7 +4,7 @@
 # Chat defaults otherwise (slab on, bundle on, keep-warm on), 8 pins.
 # Fresh process per arm, 128 greedy tokens. Order: C F F C C F.
 # Expected digest: e19af44d5268e9d1.
-cd /Users/gioma/Developer/MACQWEN
+cd /Users/gioma/Developer/VEYSTRIX
 PY=~/models/.venv-qwen4exp/bin/python
 OUT=results/flashnext/20260923-112333-keepwarm-stream-pack
 arm() {

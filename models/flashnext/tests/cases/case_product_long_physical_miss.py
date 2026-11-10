@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from macqwen.testsuite.api import TestSpec, bench_module
+from veystrix.testsuite.api import TestSpec, bench_module
 from .case_product_long import interpret as interpret_product
 from .case_product_long import live_parser
 
