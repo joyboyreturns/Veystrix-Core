@@ -10,10 +10,10 @@ Tracking all 30 Ultra Review findings across reviews 1, 2, and 3.
 | R1-04 | Phase 4: Supervision & Failure Recovery | `models/flashnext/flight_recorder.py` | L43-L43 | normal | verified | 9cac8f5 |
 | R1-05 | Phase 2: Correctness & Tool-Calling | `models/flashnext/expert_cache.py` | L1836-L1844 | normal | verified | 5a63d00 |
 | R1-06 | Phase 2: Correctness & Tool-Calling | `models/flashnext/prefill.py` | L392-L394 | nit | verified | 5a63d00 |
-| R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | verified | pending |
-| R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | verified | pending |
-| R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | verified | pending |
-| R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | verified | pending |
+| R1-07 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_pool.py` | L313-L332 | nit | verified | 9f7985c |
+| R1-08 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/expert_cache.py` | L1623-L1623 | nit | verified | 9f7985c |
+| R1-09 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill.py` | L246-L250 | nit | verified | 9f7985c |
+| R1-10 | Phase 5: Lower-Risk Engine Findings | `models/flashnext/prefill_scheduler.py` | L39-L39 | nit | verified | 9f7985c |
 | R2-01 | Phase 4: Supervision & Failure Recovery | `macqwen/server.py` | L928-L930 | normal | verified | 9cac8f5 |
 | R2-02 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L223-L223 | normal | verified | 5a63d00 |
 | R2-03 | Phase 2: Correctness & Tool-Calling | `macqwen/server.py` | L419-L419 | normal | verified | 5a63d00 |
@@ -166,7 +166,7 @@ Condition: `ExpertPool(...)` raises MemoryError, RuntimeError or OSError (anonym
 - **Planned fix**: Set `store._flashnext_pool_declined = "allocation_failed"` when `pool is None` so subsequent calls return None immediately, cleared on `reset_decline(store)`.
 - **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_07_expert_pool_failure_marks_pool_declined`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9f7985c
 
 ### R1-08 — `models/flashnext/expert_cache.py` (L1623-L1623)
 - **Phase**: Phase 5: Lower-Risk Engine Findings
@@ -182,7 +182,7 @@ The slot byte layout now lives in two places. If `expert_pool.HEADER` ever chang
 - **Planned fix**: Import `expert_pool` and compute slot base with `expert_pool.HEADER + hits[expert] * pool.stride`.
 - **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_08_expert_cache_uses_expert_pool_header_constant`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9f7985c
 
 ### R1-09 — `models/flashnext/prefill.py` (L246-L250)
 - **Phase**: Phase 5: Lower-Risk Engine Findings
@@ -201,7 +201,7 @@ Two of the stated costs are wrong:
 - **Planned fix**: Provide injectable `set_logits_hook`/`get_logits_hook` callbacks and isolate bench test imports with exception handling.
 - **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_09_prefill_injectable_logits_hook`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9f7985c
 
 ### R1-10 — `models/flashnext/prefill_scheduler.py` (L39-L39)
 - **Phase**: Phase 5: Lower-Risk Engine Findings
@@ -221,7 +221,7 @@ Cost: the budgeted plan's chunk sizes are defined in two places. `_run_chunks` p
 - **Planned fix**: Import `CANDIDATE_CHUNKS` in `prefill_scheduler.py` from `models.flashnext.prefill`.
 - **Regression test**: `macqwen/tests/test_phase5_remediations.py:test_r1_10_candidate_chunks_shared_definition`
 - **Status**: verified
-- **Associated commit**: pending
+- **Associated commit**: 9f7985c
 
 ### R2-01 — `macqwen/server.py` (L928-L930)
 - **Phase**: Phase 4: Supervision & Failure Recovery
