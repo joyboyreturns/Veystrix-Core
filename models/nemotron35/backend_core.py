@@ -40,7 +40,7 @@ class EngineCore:
         out = self.model.backbone(mx.array([tokens], dtype=mx.int32), cache=self.cache)
         return self.model.lm_head(out[:, -1:, :])[:, -1, :]
 
-    def prefill(self, tokens, *, cancelled=lambda: False, progress=None):
+    def prefill(self, tokens, *, cancelled=lambda: False, progress=None, boundary=None):
         """Feed ``tokens`` in bounded chunks and return logits for the next token.
 
         Any interruption leaves recurrent/KV state partially advanced and
@@ -65,6 +65,8 @@ class EngineCore:
                 done += len(chunk)
                 if progress:
                     progress(done, len(tokens))
+                if boundary:          # state now holds exactly the tokens processed so far
+                    boundary(done)
             return logits
         except BaseException:
             self.reset()
