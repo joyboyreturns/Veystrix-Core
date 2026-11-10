@@ -69,6 +69,24 @@ class NemotronServerTests(unittest.TestCase):
         for key in ("pool", "prefetch", "prefill", "expert_gb_read"):
             self.assertIn(key, engine)
 
+    def test_finished_requests_are_recorded_in_the_usage_log(self):
+        import os, tempfile
+        from pathlib import Path
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "requests.jsonl"
+            with mock.patch.dict(os.environ, {"VEYSTRIX_USAGE_LOG": str(log)}):
+                status, raw, _ = call(self.port, "POST", "/v1/chat/completions", {
+                    "model": "x", "messages": [{"role": "user", "content": "count me"}], "max_tokens": 3})
+                usage = json.loads(raw)["usage"]
+            self.assertEqual(status, 200)
+            row = json.loads(log.read_text().splitlines()[-1])
+            self.assertEqual(row["model"], "veystrix-nemotron35-lightning")
+            self.assertEqual((row["prompt"], row["completion"]), (usage["prompt_tokens"], usage["completion_tokens"]))
+            self.assertFalse(row["warm"])
+            self.assertEqual(set(row), {"ts", "model", "prompt", "cached", "uncached", "completion", "total", "wall_s",
+                                        "prefill_s", "decode_s", "finish", "warm"})
+
     def test_cache_diagnostics_carry_the_last_prefill_the_warmup_client_reads(self):
         call(self.port, "POST", "/v1/chat/completions", {
             "model": "x", "messages": [{"role": "user", "content": "hi there"}], "max_tokens": 2})

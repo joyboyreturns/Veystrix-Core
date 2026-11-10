@@ -114,6 +114,13 @@ private func tempDir() -> URL {
     }
     private let exists: (String) -> Bool = { _ in true }
 
+    @Test func tellsTheEngineWhereToWriteLifetimeStatistics() throws {
+        let (s, c) = try good(tempDir())
+        let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil,
+                                       fileExists: exists, isExecutable: exists)
+        #expect(plan.environment["VEYSTRIX_USAGE_LOG"]?.hasSuffix("Veystrix/usage/requests.jsonl") == true)
+    }
+
     @Test func buildsLoopbackOnlyPlanWithoutStartingAnything() throws {
         let (s, c) = try good(tempDir())
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: "local",
@@ -499,5 +506,50 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
                                        source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(!plan.arguments.contains("--model")); #expect(plan.arguments.contains("--prefix-dir"))
         #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == nil)
+    }
+}
+
+// MARK: lifetime usage statistics
+@Suite struct UsageStatsTests {
+    private let cal = Calendar(identifier: .gregorian)
+    private var now: Date { DateComponents(calendar: cal, year: 2026, month: 11, day: 11, hour: 12).date! }
+    private func at(_ daysAgo: Int) -> Date { cal.date(byAdding: .day, value: -daysAgo, to: now)! }
+    private var records: [UsageRecord] { [
+        UsageRecord(time: at(0), model: "veystrix-nemotron35-lightning", prompt: 1000, cached: 600, completion: 50, wallSeconds: 20, prefillSeconds: 8, decodeSeconds: 10),
+        UsageRecord(time: at(0), model: "veystrix-flashnext", prompt: 500, cached: 0, completion: 100, wallSeconds: 30, prefillSeconds: 5, decodeSeconds: 20),
+        UsageRecord(time: at(3), model: "veystrix-nemotron35-lightning", prompt: 200, cached: 200, completion: 10, wallSeconds: 4),
+        UsageRecord(time: at(40), model: "veystrix-flashnext", prompt: 70, cached: 10, completion: 5, wallSeconds: 2),
+        UsageRecord(time: at(0), model: "veystrix-flashnext", prompt: 999, cached: 0, completion: 999, wallSeconds: 99, warm: true),
+    ] }
+
+    @Test func lifetimeTotalsSplitByModelAndExcludeWarmups() {
+        let loaded = ["2026-11-11": ["veystrix-nemotron35-lightning": 600.0], "2026-11-01": ["veystrix-flashnext": 1000.0]]
+        let s = UsageStats.summarize(records: records, loaded: loaded, range: .allTime, now: now, calendar: cal)
+        #expect(s.total.requests == 4); #expect(s.total.inputTokens == 1770); #expect(s.total.cachedTokens == 810)
+        #expect(s.total.outputTokens == 165); #expect(s.total.totalTokens == 1935); #expect(s.total.loadedSeconds == 1600)
+        #expect(s.warmupRequestsExcluded == 1); #expect(s.models.first?.model == "veystrix-flashnext")
+    }
+    @Test func periodsNarrowTheWindowAndRatesIgnoreUntimedRecords() {
+        let week = UsageStats.summarize(records: records, range: .week, now: now, calendar: cal)
+        #expect(week.total.requests == 3)
+        let all = UsageStats.summarize(records: records, range: .allTime, now: now, calendar: cal)
+        let nemotron = all.models.first { $0.model.contains("nemotron") }!
+        #expect(abs(nemotron.decodeTokensPerSecond! - 5.0) < 1e-9)
+        #expect(abs(nemotron.cacheHitRate! - 800.0 / 1200.0) < 1e-9)
+    }
+    @Test func storeReadsArchivesSkipsBadLinesAndLoadedTimeAccumulatesAcrossSessions() throws {
+        let dir = tempDir(); let store = UsageStore(directory: dir)
+        let line = #"{"ts":1700000000,"model":"veystrix-flashnext","prompt":10,"cached":4,"uncached":6,"completion":3,"wall_s":1.5}"#
+        try (line + "\nnot json\n" + line + "\n").write(to: dir.appendingPathComponent("requests.1699999999.jsonl"), atomically: true, encoding: .utf8)
+        try (line + "\n").write(to: dir.appendingPathComponent("requests.jsonl"), atomically: true, encoding: .utf8)
+        #expect(store.loadRecords().count == 3)
+        let t0 = Date(); let day = UsageStats.dayKey(t0)
+        let first = LoadedTimeRecorder(store: store, flushEvery: 1)
+        first.sample(model: "veystrix-flashnext", now: t0); first.sample(model: "veystrix-flashnext", now: t0.addingTimeInterval(10)); first.flush(now: t0)
+        let second = LoadedTimeRecorder(store: store, flushEvery: 1)
+        second.sample(model: "veystrix-flashnext", now: t0.addingTimeInterval(100)); second.sample(model: "veystrix-flashnext", now: t0.addingTimeInterval(105)); second.flush(now: t0)
+        #expect(abs((store.loadLoadedTime()[day]?["veystrix-flashnext"] ?? 0) - 15) < 1e-6)
+        try store.reset()
+        #expect(store.loadRecords().isEmpty)
     }
 }

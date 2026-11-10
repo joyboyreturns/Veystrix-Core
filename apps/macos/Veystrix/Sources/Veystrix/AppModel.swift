@@ -25,6 +25,7 @@ final class AppModel: ObservableObject {
         keyStore = APIKeyStore(paths: paths)
         logs = LogStore(fileURL: paths.engineLogFile)
         engine = EngineController(logs: logs)
+        engine.loadedTimeRecorder = LoadedTimeRecorder(store: UsageStore(paths: paths))
         settings = settingsStore.load()
         apiKey = keyStore.load()
         try? paths.ensureDirectories()

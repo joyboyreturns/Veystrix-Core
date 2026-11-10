@@ -39,6 +39,7 @@ public struct LaunchPlan: Equatable, Sendable {
                             source: Source,
                             apiKey: String?,
                             parentEnvironment: [String: String] = ProcessInfo.processInfo.environment,
+                            paths: Paths = Paths(),
                             fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
                             isExecutable: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }) throws -> LaunchPlan {
         let problems = settings.validationProblems()
@@ -90,6 +91,8 @@ public struct LaunchPlan: Equatable, Sendable {
         env["VEYSTRIX_REQUIRE_AC"] = settings.allowBattery ? "0" : "1"
         env["VEYSTRIX_ALLOW_LOW_POWER"] = settings.allowLowPowerMode ? "1" : "0"
         env["VEYSTRIX_PORT"] = String(settings.port)
+        // Lifetime statistics: the engine appends one counts-only line per finished request here.
+        env["VEYSTRIX_USAGE_LOG"] = UsageStore(paths: paths).requestsFile.path
         env["VEYSTRIX_CACHE_GB"] = String(settings.cacheQuotaGB)
         // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;
         // needs the narrow `sudo -n /usr/sbin/purge` permission, otherwise it records that and backs off).

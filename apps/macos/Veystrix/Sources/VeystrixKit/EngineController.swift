@@ -15,6 +15,8 @@ public final class EngineController: ObservableObject {
     @Published public private(set) var advisories: [String] = []
 
     public let logs: LogStore
+    /// Adds lifetime "model loaded and ready" time to the statistics. Optional: tests and headless use leave it nil.
+    public var loadedTimeRecorder: LoadedTimeRecorder?
     private let launcher: EngineProcessLauncher
     private let healthFactory: @Sendable (Int, String?) -> HealthChecking
     private var process: EngineProcess?
@@ -127,6 +129,7 @@ public final class EngineController: ObservableObject {
             lost = 0
             health = report
             if state == .starting { state = .running; logs.append("Engine ready.", source: .app) }
+            if state == .running { loadedTimeRecorder?.sample(model: report.model) }
         case .unhealthy(let report):
             lost = 0
             health = report
@@ -136,6 +139,7 @@ public final class EngineController: ObservableObject {
             state = .error("The engine rejected the API key. Rotate the key in Settings or restart the engine.")
         case .unreachable:
             lost += 1
+            loadedTimeRecorder?.interrupt()
             if state == .starting, Date().timeIntervalSince(begun) > startupTimeout {
                 logs.append("Startup timed out after \(Int(startupTimeout / 60)) minutes; stopping the engine.", source: .app)
                 state = .error("The engine did not become ready in \(Int(startupTimeout / 60)) minutes.")
@@ -157,6 +161,7 @@ public final class EngineController: ObservableObject {
 
     private func processExited(_ status: Int32) {
         lastExitStatus = status
+        loadedTimeRecorder?.interrupt()
         monitor?.cancel(); monitor = nil
         process = nil
         health = nil
@@ -212,6 +217,7 @@ public final class EngineController: ObservableObject {
 
     /// Called when the app quits: do not leave an orphaned model process holding memory.
     public func shutdownForQuit() {
+        loadedTimeRecorder?.interrupt()          // write the loaded time not yet saved
         guard let process, process.isRunning else { return }
         stopRequested = true
         process.interrupt()
