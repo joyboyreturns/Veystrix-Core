@@ -1,6 +1,6 @@
 # Veystrix — CHAT and AGENTIC validation guide
 
-> **Development note (8 November 2026; updated 2026-11-10):** this guide was written while `--mode chat|agentic` was an uncommitted working tree. The implementation is now committed in this repository (`development3.81`), but the **AGENTIC acceptance checks below have not all been run on the real checkpoint**: treat it as an acceptance guide, not proof of readiness.
+> **Development note (8 November 2026; updated 2026-11-10):** this guide was written while `--mode chat|agentic` was an uncommitted working tree. The implementation is now committed in this repository (`qwen3.8-flash-next`), but the **AGENTIC acceptance checks below have not all been run on the real checkpoint**: treat it as an acceptance guide, not proof of readiness.
 
 ## Why two modes?
 

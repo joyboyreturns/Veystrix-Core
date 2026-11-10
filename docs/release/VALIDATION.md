@@ -1,4 +1,4 @@
-# Validation checklist and last recorded status (2026-11-10, development3.81)
+# Validation checklist and last recorded status (2026-11-10, qwen3.8-flash-next)
 
 Run before every release. "Ran" means executed on this repo state; "NOT RUN" means not executed and **not** claimed.
 

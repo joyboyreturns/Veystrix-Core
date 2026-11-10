@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, development3.81]
+    branches: [main, qwen3.8-flash-next]
   pull_request:
   workflow_dispatch:
 

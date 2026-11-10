@@ -1,4 +1,4 @@
-# Security and provenance audit — 2026-11-10 (development3.81)
+# Security and provenance audit — 2026-11-10 (qwen3.8-flash-next)
 
 Scope: the private engine repository (`Veystrix-Core`), the new macOS app, the packaging scripts and the public
 repository content. Method: source inspection and automated pattern scans only. **No model was loaded, no engine

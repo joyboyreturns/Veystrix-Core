@@ -1,6 +1,6 @@
 # Changelog
 
-## Veystrix 3.8.1 (development, `development3.81`)
+## Veystrix 3.8.1 (development, `qwen3.8-flash-next`)
 
 Not released. No hardware validation was done for these changes: no model was loaded.
 

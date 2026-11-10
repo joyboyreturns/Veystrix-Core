@@ -58,7 +58,7 @@ class DistributionTests(unittest.TestCase):
         self.assertIn("--draft", release)                     # the public release is never published automatically
         self.assertIn("PUBLIC_RELEASES_TOKEN", release)
         self.assertNotIn("github.token", release)            # the default token must never publish
-        self.assertIn("development3.81", ci)
+        self.assertIn("qwen3.8-flash-next", ci)
         self.assertIn("swift test", ci)
 
 
