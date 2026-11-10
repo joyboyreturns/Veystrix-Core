@@ -507,77 +507,6 @@ def build_backend(name: str, args, prefs: dict):
         backend._setting_sources["gpu-keepwarm"] = "preferences"
         mirror_preferences(backend, prefs, prefs["profile"])
         return backend
-    if name == "qwen27b":
-        if not args.model_path:
-            raise SystemExit("--model-path is required for model 'qwen27b'")
-        from veystrix.backends.frankenstein import FrankensteinBackend
-
-        backend = FrankensteinBackend(
-            model_path=args.model_path,
-            prefill_step_size=args.prefill_step_size,
-            kv_bits=args.kv_bits,
-            kv_group_size=args.kv_group_size,
-            quantized_kv_start=args.quantized_kv_start,
-            temperature=args.temperature,
-            repetition_penalty=args.repetition_penalty,
-            repetition_context_size=args.repetition_context_size,
-            backtrack_bias=args.backtrack_bias,
-            paged=args.paged,
-            page_size=args.page_size,
-            top_k_pages=args.top_k_pages,
-            resident_pages=args.resident_pages,
-            spill_dir=args.spill_dir,
-            min_context=args.min_context,
-            lm_head_last=args.lm_head_opt,
-            wired_limit_gb=args.wired_limit_gb,
-            layer_indices=args.layer_indices,
-            bf16_ends=args.bf16_ends,
-            shortlist_k=args.shortlist_k,
-            session_dir=(args.session_dir or "~/.frankenstein/sessions"),
-        )
-        from models.qwen27b.settings import get_registry as get_qwen_registry
-        cli_args = set(sys.argv[1:])
-        backend._setting_sources = {
-            setting.name: "CLI"
-            for setting in get_qwen_registry().for_backend("qwen27b")
-            if any(flag in cli_args for flag in setting.cli_flags)
-        }
-        mirror_preferences(backend, prefs, prefs["profile"])
-        return backend
-    if name == "bonsai2":
-        if not args.model_path:
-            raise SystemExit("--model-path is required for model 'bonsai2'")
-        from models.bonsai2.backend import (
-            BonsaiBackend, PRODUCTION_ALLOCATOR_CACHE_MB,
-        )
-        from models.bonsai2.settings import SESSION_DIR
-
-        prepared_raw = getattr(args, "prepared_qmm", "on")
-        if isinstance(prepared_raw, bool):
-            prepared_qmm = prepared_raw
-        else:
-            prepared_qmm = str(prepared_raw).lower() == "on"
-        backend = BonsaiBackend(
-            model_path=args.model_path,
-            prefill_step_size=args.prefill_step_size,
-            allocator_cache_mb=PRODUCTION_ALLOCATOR_CACHE_MB,
-            prepared_qmm_metadata=prepared_qmm,
-            session_dir=(args.session_dir or SESSION_DIR),
-        )
-        cli_args = set(sys.argv[1:])
-        backend._setting_sources = {
-            "prepared-qmm": (
-                "CLI"
-                if any(
-                    item == "--prepared-qmm"
-                    or item.startswith("--prepared-qmm=")
-                    for item in cli_args
-                )
-                else "default"
-            )
-        }
-        mirror_preferences(backend, prefs, prefs["profile"])
-        return backend
     if name == NEMOTRON:
         if not args.model_path:
             raise SystemExit("--model-path is required for model 'nemotron35-lightning'")
@@ -589,21 +518,8 @@ def build_backend(name: str, args, prefs: dict):
         )
         mirror_preferences(backend, prefs, prefs["profile"])
         return backend
-    if name == "k2-horizon":
-        if not args.model_path:
-            raise SystemExit("--model-path is required for model 'k2-horizon'")
-        from models.k2_horizon.backend import K2HorizonBackend
-        from models.k2_horizon.settings import SESSION_DIR
-
-        backend = K2HorizonBackend(
-            model_path=args.model_path,
-            prefill_step_size=args.prefill_step_size,
-            session_dir=(args.session_dir or SESSION_DIR),
-        )
-        mirror_preferences(backend, prefs, prefs["profile"])
-        return backend
     raise SystemExit(
-        f"unknown model {name!r}. Use 'flashnext', 'nemotron35-lightning', 'bonsai2', 'k2-horizon', or 'qwen27b'.")
+        f"unknown model {name!r}. Use 'flashnext' or 'nemotron35-lightning'.")
 
 
 NEMOTRON = "nemotron35-lightning"
@@ -820,7 +736,7 @@ def main() -> int:
     from veystrix.model_settings import FLASHNEXT_DEFAULTS
     parser.add_argument(
         "--model", default=None,
-        choices=("flashnext", NEMOTRON, "bonsai2", "k2-horizon", "qwen27b"),
+        choices=("flashnext", NEMOTRON),
     )
     parser.add_argument("--profile", default=None, choices=("plain", "agent"))
     parser.add_argument("--model-path", "--checkpoint", dest="model_path", default=None)
@@ -881,26 +797,10 @@ def main() -> int:
     parser.add_argument(
         "--fusion-model", default=FLASHNEXT_DEFAULTS["fusion_model"]
     )
-    parser.add_argument("--prefill-step-size", type=int, default=512)
-    parser.add_argument("--prepared-qmm", choices=("on", "off"), default="on")
-    parser.add_argument("--kv-bits", type=int, default=None)
-    parser.add_argument("--kv-group-size", type=int, default=64)
-    parser.add_argument("--quantized-kv-start", type=int, default=8192)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--repetition-penalty", type=float, default=1.12)
     parser.add_argument("--repetition-context-size", type=int, default=512)
     parser.add_argument("--backtrack-bias", type=float, default=0.0)
-    parser.add_argument("--paged", action="store_true")
-    parser.add_argument("--page-size", type=int, default=256)
-    parser.add_argument("--top-k-pages", type=int, default=16)
-    parser.add_argument("--resident-pages", type=int, default=24)
-    parser.add_argument("--min-context", type=int, default=16384)
-    parser.add_argument("--spill-dir", default="/tmp/frankenstein_pages")
-    parser.add_argument("--wired-limit-gb", type=float, default=None)
-    parser.add_argument("--bf16-ends", action="store_true")
-    parser.add_argument("--shortlist-k", type=int, default=1024)
-    parser.add_argument("--lm-head-opt", action="store_true")
-    parser.add_argument("--layer-indices", default=None)
     parser.add_argument("--session-dir", default=None)
     parser.add_argument("--workspace", default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
@@ -1039,28 +939,6 @@ def main() -> int:
         except ValueError as exc:
             parser.error(str(exc))
         prefs["nemotron35_checkpoint"] = args.model_path
-    elif prefs["model"] == "bonsai2":
-        from models.bonsai2.checkpoint import resolve_bonsai2
-        from models.bonsai2.settings import CHECKPOINT_ENV
-
-        explicit_checkpoint = args.model_path
-        environment_checkpoint = os.environ.get(CHECKPOINT_ENV)
-        choice = explicit_checkpoint or environment_checkpoint or None
-        try:
-            args.model_path = str(resolve_bonsai2(choice))
-        except ValueError as exc:
-            parser.error(str(exc))
-    elif prefs["model"] == "k2-horizon":
-        from models.k2_horizon.checkpoint import resolve_k2_horizon
-        from models.k2_horizon.settings import CHECKPOINT_ENV
-
-        explicit_checkpoint = args.model_path
-        environment_checkpoint = os.environ.get(CHECKPOINT_ENV)
-        choice = explicit_checkpoint or environment_checkpoint or None
-        try:
-            args.model_path = str(resolve_k2_horizon(choice))
-        except ValueError as exc:
-            parser.error(str(exc))
     if benchmarking and prefs["profile"] != "plain":
         parser.error("benchmark mode requires --profile plain")
     if args.benchmark_chat_parity and prefs["model"] != "flashnext":

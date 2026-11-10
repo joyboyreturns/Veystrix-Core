@@ -1,8 +1,0 @@
-"""Launch and runtime defaults owned by the Bonsai-2 model package."""
-
-MODEL_NAME = "bonsai2"
-PYTHON_ENV = "VEYSTRIX_BONSAI2_PYTHON"
-CHECKPOINT_ENV = "VEYSTRIX_BONSAI2_MODEL"
-SESSION_DIR = "~/.cache/bonsai2/sessions"
-CHECKPOINT_DIR = "Ternary-Bonsai-2-27B-mlx-2bit"
-ALIASES = {"b2": CHECKPOINT_DIR, "bonsai2": CHECKPOINT_DIR}

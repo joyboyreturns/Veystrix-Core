@@ -1,8 +1,0 @@
-"""Launch and runtime defaults owned by the K2-Horizon model package."""
-
-MODEL_NAME = "k2-horizon"
-PYTHON_ENV = "VEYSTRIX_K2_HORIZON_PYTHON"
-CHECKPOINT_ENV = "VEYSTRIX_K2_HORIZON_MODEL"
-SESSION_DIR = "~/.cache/k2-horizon/sessions"
-CHECKPOINT_DIR = "K2-Horizon-7B-MLX-8bit"
-ALIASES = {"k2": CHECKPOINT_DIR, "k2-horizon": CHECKPOINT_DIR}

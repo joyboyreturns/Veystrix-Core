@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from veystrix.checkpoints import installed_flashnext, resolve_flashnext, resolve_qwen27b
+from veystrix.checkpoints import installed_flashnext, resolve_flashnext
 
 
 def flashnext(root: Path, name: str, model_type: str = "qwen4_exp") -> Path:
@@ -23,35 +23,12 @@ def flashnext(root: Path, name: str, model_type: str = "qwen4_exp") -> Path:
     return path
 
 
-def qwen27b(root: Path, name: str = "qwen") -> Path:
-    path = root / name
-    path.mkdir()
-    (path / "config.json").write_text(json.dumps({"vocab_size": 248320}))
-    for filename in (
-        "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
-        "model-00001-of-00001.safetensors",
-    ):
-        (path / filename).touch()
-    (path / "model.safetensors.index.json").write_text(json.dumps({
-        "weight_map": {"weight": "model-00001-of-00001.safetensors"}
-    }))
-    assets = path / "bf16-ends"
-    assets.mkdir()
-    (assets / "embed.bf16").write_bytes(b"\0\0")
-    (assets / "head.bf16").write_bytes(b"\0\0")
-    (assets / "meta.json").write_text(json.dumps({
-        "embed_shape": [1, 1], "head_shape": [1, 1],
-    }))
-    return path
-
-
 class CheckpointTests(unittest.TestCase):
     def setUp(self) -> None:
         self._environment = patch.dict(os.environ, {}, clear=False)
         self._environment.start()
         for name in (
             "VEYSTRIX_FLASHNEXT_MODEL",
-            "VEYSTRIX_QWEN27B_MODEL",
             "VEYSTRIX_MODEL_ROOT",
         ):
             os.environ.pop(name, None)
@@ -146,21 +123,6 @@ class CheckpointTests(unittest.TestCase):
             with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
                 self.assertEqual(
                     resolve_flashnext("vontra-mtp"), expected.resolve())
-
-    def test_qwen27b_discovery_uses_config_instead_of_a_local_name(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            expected = qwen27b(root, "any-name")
-            with patch.dict(os.environ, {"VEYSTRIX_MODEL_ROOT": str(root)}, clear=False):
-                self.assertEqual(resolve_qwen27b(), expected.resolve())
-
-    def test_qwen27b_incomplete_bf16_assets_explain_the_repair(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            expected = qwen27b(root)
-            (expected / "bf16-ends" / "head.bf16").unlink()
-            with self.assertRaisesRegex(ValueError, "bf16-ends/head.bf16"):
-                resolve_qwen27b(expected)
 
 
 if __name__ == "__main__":

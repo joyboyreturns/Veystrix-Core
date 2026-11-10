@@ -44,9 +44,10 @@ class DistributionTests(unittest.TestCase):
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
         release = (ROOT / ".github" / "workflows" / "release.yml").read_text()
         self.assertIn("models/flashnext", ci)
-        self.assertIn("models/qwen27b", ci)
-        self.assertIn("models/k2_horizon", ci)
-        self.assertIn("models/bonsai2", ci)
+        self.assertIn("models.nemotron35", ci)
+        for removed in ("models/qwen27b", "models/k2_horizon", "models/bonsai2"):
+            self.assertNotIn(removed, ci)
+            self.assertNotIn(removed, release)
         self.assertNotIn("gh release create", ci)
         self.assertIn("tags: ['v*']", release)
         self.assertIn("needs: test", release)

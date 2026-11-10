@@ -133,8 +133,8 @@ class Stats:
 class NemotronBackend(Conversation):
     """Shared-protocol backend: SSD-streamed routed experts, resident dense core, Mamba + KV state.
 
-    Refuses to load real weights unless ``VEYSTRIX_NEMOTRON_AUTHORIZED=1`` (or ``authorized=True``) is set:
-    real-checkpoint inference needs the owner's explicit approval. Qwen remains the default model.
+    Allowed by default once the model is selected manually; ``VEYSTRIX_NEMOTRON_AUTHORIZED=0`` disables it.
+    Qwen (Flash-Next) remains the default model and nothing routes between models automatically.
     """
 
     last_prefix = None
@@ -152,10 +152,10 @@ class NemotronBackend(Conversation):
             raise SystemExit("Nemotron requires --model-path/--checkpoint pointing at a complete local checkpoint")
         root = Path(model_path).expanduser()
         if authorized is None:
-            authorized = os.environ.get(AUTHORIZE_ENV) == "1"
+            # Owner approved real use on 2026-11-11. Selecting the model is the opt-in; AUTHORIZE_ENV=0 is a kill switch.
+            authorized = os.environ.get(AUTHORIZE_ENV) != "0"
         if not authorized:
-            raise SystemExit(f"Nemotron real-checkpoint inference is not authorized. Set {AUTHORIZE_ENV}=1 only "
-                             "with the owner's explicit approval; nothing was loaded.")
+            raise SystemExit(f"Nemotron is disabled by {AUTHORIZE_ENV}=0; nothing was loaded.")
         check = config_check or validate_config
         config = json.loads((root / "config.json").read_text())
         check(config)

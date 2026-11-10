@@ -76,7 +76,7 @@ class ModeLaunchTests(unittest.TestCase):
 
     def test_mode_is_for_flashnext_only(self):
         with self.assertRaisesRegex(SystemExit, "flashnext"):
-            self.launch("--model", "qwen27b", "--mode", "chat")
+            self.launch("--model", "nemotron35-lightning", "--mode", "chat")
 
 
 if __name__ == "__main__":

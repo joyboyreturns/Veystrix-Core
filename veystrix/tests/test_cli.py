@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+import io
 import json
 
 from veystrix import cli
@@ -21,12 +22,12 @@ class LauncherTests(unittest.TestCase):
     def test_default_launch_uses_the_only_installed_checkpoint(self):
         checkpoint = Path("/models/only")
         with patch("veystrix.cli.installed_checkpoints", return_value=[
-            ("bonsai2", checkpoint),
+            ("nemotron35-lightning", checkpoint),
         ]):
             self.assertEqual(
                 cli._default_checkpoint_args(["--profile", "plain"]),
                 [
-                    "--profile", "plain", "--model", "bonsai2",
+                    "--profile", "plain", "--model", "nemotron35-lightning",
                     "--checkpoint", str(checkpoint),
                 ],
             )
@@ -34,7 +35,7 @@ class LauncherTests(unittest.TestCase):
     def test_default_launch_asks_when_multiple_checkpoints_exist(self):
         choices = [
             ("flashnext", Path("/models/oq4")),
-            ("bonsai2", Path("/models/bonsai2")),
+            ("nemotron35-lightning", Path("/models/nemotron")),
         ]
         with patch("veystrix.cli.installed_checkpoints", return_value=choices), \
                 patch.object(cli.sys.stdin, "isatty", return_value=True), \
@@ -42,7 +43,7 @@ class LauncherTests(unittest.TestCase):
             selected = cli._default_checkpoint_args([])
         self.assertEqual(
             selected,
-            ["--model", "bonsai2", "--checkpoint", "/models/bonsai2"],
+            ["--model", "nemotron35-lightning", "--checkpoint", "/models/nemotron"],
         )
 
     def test_flashnext_child_environment_has_backend_chat_preset(self):
@@ -60,16 +61,16 @@ class LauncherTests(unittest.TestCase):
             if key not in OWNED:      # the launch mode owns these (the decode pool is 2 GB, not the old 6 GB)
                 self.assertEqual(child_env[key], value)
 
-    def test_bonsai_uses_the_shared_runtime_environment(self):
+    def test_nemotron_uses_the_shared_runtime_environment(self):
         shared = cli.MANAGED_PYTHON
         with patch.dict(os.environ, {
             "VEYSTRIX_PYTHON": "",
-            "VEYSTRIX_BONSAI2_PYTHON": "",
+            "VEYSTRIX_NEMOTRON_PYTHON": "",
             "VIRTUAL_ENV": "/unrelated/venv",
         }, clear=False), \
                 patch("veystrix.cli._supports_python", side_effect=lambda path, model: path == shared), \
                 patch("veystrix.cli.setup_environment"):
-            self.assertEqual(cli._interpreter("bonsai2"), shared)
+            self.assertEqual(cli._interpreter("nemotron35-lightning"), shared)
 
     def test_first_launch_prepares_the_managed_environment_and_retries(self):
         with patch("veystrix.cli._supports_python", side_effect=(False, True)), \
@@ -81,7 +82,7 @@ class LauncherTests(unittest.TestCase):
         with patch("veystrix.cli._supports_python", return_value=True), \
                 patch("veystrix.cli.setup_environment") as setup:
             self.assertEqual(cli._interpreter("flashnext"), cli.MANAGED_PYTHON)
-            self.assertEqual(cli._interpreter("bonsai2"), cli.MANAGED_PYTHON)
+            self.assertEqual(cli._interpreter("nemotron35-lightning"), cli.MANAGED_PYTHON)
         setup.assert_not_called()
 
     def test_explicit_override_is_rejected_when_its_runtime_is_wrong(self):
@@ -228,39 +229,32 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("--server", command)
         self.assertEqual(command[command.index("--model") + 1], "flashnext")
 
-    def test_qwen27b_uses_the_given_checkpoint_and_safe_kernel_defaults(self):
+    def test_removed_positional_model_argument_is_refused(self):
+        with self.assertRaisesRegex(SystemExit, "unexpected argument"):
+            cli.command(["qwen27b"])
+
+    def test_removed_models_are_not_selectable(self):
+        with patch("sys.stderr", new_callable=io.StringIO):
+            for name in ("bonsai2", "k2-horizon", "qwen27b"):
+                with self.subTest(model=name), self.assertRaises(SystemExit):
+                    cli.command(["--model", name])
+        self.assertEqual(sorted(cli.PYTHON_ENV), ["flashnext", "nemotron35-lightning", "shared"])
+
+    def test_nemotron_server_launch_is_supervised_and_forwards_the_checkpoint(self):
         with tempfile.TemporaryDirectory() as root:
             python = Path(root, "python")
             python.touch()
-            model = Path(root, "model")
-            model.mkdir()
-            (model / "config.json").write_text(json.dumps({"vocab_size": 248320}))
-            for filename in (
-                "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
-                "model-00001-of-00001.safetensors",
-            ):
-                (model / filename).touch()
-            (model / "model.safetensors.index.json").write_text(json.dumps({
-                "weight_map": {"weight": "model-00001-of-00001.safetensors"}
-            }))
-            assets = model / "bf16-ends"
-            assets.mkdir()
-            (assets / "embed.bf16").write_bytes(b"\0\0")
-            (assets / "head.bf16").write_bytes(b"\0\0")
-            (assets / "meta.json").write_text(json.dumps({
-                "embed_shape": [1, 1], "head_shape": [1, 1],
-            }))
-            environment = {
-                "VEYSTRIX_QWEN27B_PYTHON": str(python),
-                "VEYSTRIX_MODEL": str(model),
-            }
+            environment = {"VEYSTRIX_NEMOTRON_PYTHON": str(python)}
             with patch.dict(os.environ, environment, clear=False), \
                     patch("veystrix.cli._supports_python", return_value=True):
-                command, child_env = cli.command(["--model", "qwen27b"])
-        selected = Path(command[command.index("--model-path") + 1])
-        self.assertEqual(selected, model.resolve())
-        self.assertIn("--bf16-ends", command)
-        self.assertEqual(child_env["MLX_QMM_BK"], "32")
+                command, child_env = cli.command(
+                    ["--model", "nemotron35-lightning", "--checkpoint", "/models/n", "--server", "--pool-gb", "1"])
+        self.assertEqual(command[command.index("--model") + 1], "nemotron35-lightning")
+        self.assertEqual(command[command.index("--model-path") + 1], "/models/n")
+        self.assertEqual(child_env["VEYSTRIX_MODE"], "agentic")
+        self.assertEqual(child_env["FLASHNEXT_CHAT_GUARD"], "1")
+        self.assertEqual(child_env["FLASHNEXT_PREFILL_CHUNK_TOKENS"], "2048")
+        self.assertEqual(child_env["VEYSTRIX_NEMOTRON_POOL_GB"], "1")
 
 
 if __name__ == "__main__":

@@ -132,7 +132,7 @@ class SettingRegistry:
         return result + (f"\nwarning: {warning}" if warning else "")
 
     def render(self, backend_obj: Any, backend: str, include_research: bool = False) -> str:
-        title = "Flash-Next settings" if backend == "flashnext" else "Qwen27B startup settings"
+        title = "Flash-Next settings"
         rows = [title]
         groups: dict[str, list[Setting]] = {}
         for setting in self.for_backend(backend):
@@ -170,6 +170,4 @@ class SettingRegistry:
                 "routing: standard, fast-quality, exact-quality, cache-aware, fused-quality",
                 "research-only settings are visible with /config model all",
             ])
-        if backend == "qwen27b":
-            rows.append("change these with CLI options, then restart the model")
         return "\n".join(rows)

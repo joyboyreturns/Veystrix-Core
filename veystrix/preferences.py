@@ -12,6 +12,7 @@ line, and there is nowhere else to disagree with it.
 from __future__ import annotations
 
 import json
+import sys
 import os
 from pathlib import Path
 import tempfile
@@ -142,10 +143,21 @@ def generation_limit(values: dict, default: int = DEFAULT_ANSWER_TOKENS) -> int:
 RENAMED = {"show_think": "show_thinking"}
 
 
+# Models that were removed. A saved preference naming one falls back to the default, with one visible line.
+REMOVED_MODELS = {"bonsai2", "k2-horizon", "k2_horizon", "qwen27b"}
+_NOTIFIED: set = set()
+
+
 def _accept(saved: dict) -> dict:
     """Keep the values that pass their own validator, drop the rest."""
     values = dict(DEFAULTS)
     for key, value in saved.items():
+        if key == "model" and isinstance(value, str) and value.strip() in REMOVED_MODELS:
+            if value.strip() not in _NOTIFIED:
+                _NOTIFIED.add(value.strip())
+                print(f"veystrix: saved model {value.strip()!r} is no longer supported; using {DEFAULTS['model']}.",
+                      file=sys.stderr)
+            continue
         key = RENAMED.get(key, key)
         entry = SCHEMA.get(key)
         if entry is None:

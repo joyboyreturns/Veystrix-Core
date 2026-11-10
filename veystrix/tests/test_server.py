@@ -645,7 +645,7 @@ class FakeFlashNextBackend(FakeBackend):
         self.tokenizer = FakeFlashNextTokenizer()
 
 
-class FakeBonsaiBackend(FakeBackend):
+class FakeWindowBackend(FakeBackend):
     context_window = 65536
 
 
@@ -700,11 +700,11 @@ class ModelCardTests(unittest.TestCase):
         self.assertEqual(card["display_name"], "Veystrix Flash-Next")
         self.assertEqual(card["context_window"], 131072)
 
-    def test_bonsai_card_reads_backend_window(self):
-        backend = FakeBonsaiBackend(["hi"])
-        service = _service_with_backend("veystrix-bonsai2", backend)
+    def test_nemotron_card_reads_backend_window(self):
+        backend = FakeWindowBackend(["hi"])
+        service = _service_with_backend("veystrix-nemotron35-lightning", backend)
         caps = capabilities(service)
-        self.assertEqual(caps["display_name"], "Veystrix Bonsai-2")
+        self.assertEqual(caps["display_name"], "Veystrix Nemotron 3.5 Lightning")
         self.assertEqual(caps["context_window"], 65536)
 
     def test_missing_config_falls_back_to_default_window(self):
@@ -718,21 +718,21 @@ class ModelCardTests(unittest.TestCase):
         self.assertEqual(capabilities(service)["context_window"], 32768)
 
     def test_models_route_renders_from_helper(self):
-        backend = FakeBonsaiBackend(["hi"])
-        service = _service_with_backend("veystrix-bonsai2", backend)
+        backend = FakeWindowBackend(["hi"])
+        service = _service_with_backend("veystrix-nemotron35-lightning", backend)
         handler = _make_get_handler(service)
         handler.do_GET()
         self.assertEqual(len(handler.json_calls), 1)
         body = handler.json_calls[0][0]
         self.assertEqual(body["object"], "list")
-        self.assertEqual(body["data"][0]["id"], "veystrix-bonsai2")
+        self.assertEqual(body["data"][0]["id"], "veystrix-nemotron35-lightning")
         self.assertEqual(body["models"][0], model_card(service))
-        self.assertEqual(body["models"][0]["display_name"], "Veystrix Bonsai-2")
+        self.assertEqual(body["models"][0]["display_name"], "Veystrix Nemotron 3.5 Lightning")
         self.assertEqual(body["models"][0]["context_window"], 65536)
 
     def test_limit_caps_at_backend_window(self):
-        backend = FakeBonsaiBackend(["hi"])
-        service = _service_with_backend("veystrix-bonsai2", backend)
+        backend = FakeWindowBackend(["hi"])
+        service = _service_with_backend("veystrix-nemotron35-lightning", backend)
         handler = _make_get_handler(service)
         self.assertEqual(handler._limit({"max_tokens": 200000}), 65536)
         self.assertEqual(handler._limit({"max_tokens": 100}), 100)

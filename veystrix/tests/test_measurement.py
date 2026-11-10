@@ -24,7 +24,7 @@ class MeasurementTests(unittest.TestCase):
     def test_lifecycle_is_append_only_and_durable(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "run.jsonl"
-            run = MeasurementRun(path, runtime="k2_horizon", experiment="baseline")
+            run = MeasurementRun(path, runtime="flashnext", experiment="baseline")
             run.start()
             run.arm(arm_id="a", condition="control", round_index=0, command=["python"],
                     metrics={"common": {"rate_tps": 1.0}}, tokens=[1, 2], token_digest="x")

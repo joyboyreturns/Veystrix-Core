@@ -14,24 +14,13 @@ sys.path.insert(0, str(ROOT))
 
 from veystrix import preferences
 from models.flashnext.settings import modes
-from veystrix.checkpoints import installed_checkpoints, resolve_qwen27b
-from models.bonsai2.settings import (
-    MODEL_NAME as BONSAI2,
-    PYTHON_ENV as BONSAI2_PYTHON_ENV,
-)
-from models.k2_horizon.settings import (
-    MODEL_NAME as K2_HORIZON,
-    PYTHON_ENV as K2_HORIZON_PYTHON_ENV,
-)
+from veystrix.checkpoints import installed_checkpoints
 
 
 PYTHON_ENV = {
     "shared": "VEYSTRIX_PYTHON",
     "flashnext": "VEYSTRIX_FLASHNEXT_PYTHON",
     "nemotron35-lightning": "VEYSTRIX_NEMOTRON_PYTHON",
-    BONSAI2: BONSAI2_PYTHON_ENV,
-    K2_HORIZON: K2_HORIZON_PYTHON_ENV,
-    "qwen27b": "VEYSTRIX_QWEN27B_PYTHON",
 }
 MANAGED_ENV = ROOT / ".venv"
 MANAGED_PYTHON = MANAGED_ENV / "bin" / "python"
@@ -53,21 +42,6 @@ from mlx_vlm.utils import (apply_generation_config_defaults, get_model_and_args,
 from mlx_lm.models.nemotron_h import Model, ModelArgs
 from mlx_lm.models.cache import ArraysCache, KVCache
 from transformers import AutoTokenizer
-""",
-    BONSAI2: """
-from mlx_vlm.models.qwen3_5 import Model, ModelConfig
-from mlx_vlm.utils import load_config
-""",
-    K2_HORIZON: """
-from mlx_lm import load, stream_generate
-from mlx_lm.models.cache import KVCache, RotatingKVCache, make_prompt_cache
-""",
-    "qwen27b": """
-from mlx_lm import load, stream_generate
-from mlx_lm.models.cache import (ArraysCache, KVCache, QuantizedKVCache,
-                                 make_prompt_cache)
-from mlx_lm.sample_utils import make_logits_processors, make_sampler
-from mlx_lm.utils import load_tokenizer
 """,
 }
 
@@ -104,13 +78,6 @@ def _split_build(argv: list[str]) -> tuple[str | None, list[str]]:
     if argv and not argv[0].startswith("-"):
         return argv[0], argv[1:]
     return None, argv
-
-
-def _qwen27b_path(requested: str | None, build: str | None) -> Path:
-    try:
-        return resolve_qwen27b(requested or build or os.environ.get("VEYSTRIX_MODEL"))
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
 
 
 def _runtime_probe(model: str) -> str:
@@ -266,8 +233,10 @@ def _default_checkpoint_args(argv: list[str]) -> list[str]:
 def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     argv = ["--server" if value == "/server" else value for value in argv]
     build, argv = _split_build(list(argv))
+    if build:
+        raise SystemExit(f"veystrix: unexpected argument {build!r}; model selection is --model flashnext|nemotron35-lightning")
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--model", choices=("flashnext", "nemotron35-lightning", BONSAI2, K2_HORIZON, "qwen27b"))
+    parser.add_argument("--model", choices=("flashnext", "nemotron35-lightning"))
     parser.add_argument("--profile", choices=("plain", "agent"))
     parser.add_argument("--model-path", "--checkpoint", dest="model_path")
     parser.add_argument("--preferences-file", default=preferences.DEFAULT_PATH)
@@ -286,7 +255,7 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
                         help="turn off the automatic memory preparation purge (on by default for flashnext)")
     known, remaining = parser.parse_known_args(argv)
 
-    model = known.model or ("qwen27b" if build else "flashnext")
+    model = known.model or "flashnext"
     if known.mode and model != "flashnext":
         raise SystemExit("--mode applies to the flashnext model only")
     # A benchmark launch states its own conditions and must not be re-configured by a mode.
@@ -316,25 +285,10 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     ]
     if known.profile or plan:
         chat_args += ["--profile", known.profile or plan.profile]
-    if model == "qwen27b":
-        model_path = _qwen27b_path(known.model_path, build)
-        chat_args += [
-            "--model-path", str(model_path),
-            "--bf16-ends",
-            "--kv-bits", os.environ.get("KV_BITS", "4"),
-            "--quantized-kv-start", os.environ.get("KV_START", "0"),
-            "--prefill-step-size", os.environ.get("PREFILL_STEP", "256"),
-        ]
-    elif known.model_path:
+    if known.model_path:
         chat_args += ["--model-path", known.model_path]
     if os.environ.get("VEYSTRIX_WORKSPACE") and "--workspace" not in remaining:
         chat_args += ["--workspace", os.environ["VEYSTRIX_WORKSPACE"]]
-    if os.environ.get("SPEED_LAYER_INDICES") and "--layer-indices" not in remaining:
-        chat_args += ["--layer-indices", os.environ["SPEED_LAYER_INDICES"]]
-    if os.environ.get("WIRED") and "--wired-limit-gb" not in remaining:
-        chat_args += ["--wired-limit-gb", os.environ["WIRED"]]
-    if os.environ.get("PAGED") == "1" and "--paged" not in remaining:
-        chat_args.append("--paged")
     chat_args.extend(remaining)
     if plan and plan.mode == modes.AGENTIC and "--server" not in chat_args:
         chat_args.append("--server")
@@ -368,10 +322,6 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
             environment["VEYSTRIX_NEMOTRON_POOL_GB"] = known.pool_gb
         if known.context_limit:
             environment["VEYSTRIX_CONTEXT_LIMIT"] = str(known.context_limit)
-    if model == "qwen27b":
-        environment.setdefault("MLX_QMM_BM", "64")
-        environment.setdefault("MLX_QMM_BK", "32")
-        environment.setdefault("MLX_QMM_BN", "64")
     if not session_script.is_file():
         environment["PYTHONPATH"] = os.pathsep.join(p for p in (str(ROOT), environment.get("PYTHONPATH", "")) if p)
     return ["/usr/bin/caffeinate", "-i", *chat_args], environment

@@ -555,18 +555,11 @@ ARCHITECTURAL_CONTEXT_MAXIMUM = 262144
 _MODEL_DISPLAY_NAMES = {
     "flashnext": "Veystrix Flash-Next",
     "nemotron35-lightning": "Veystrix Nemotron 3.5 Lightning",
-    "bonsai2": "Veystrix Bonsai-2",
-    "k2-horizon": "Veystrix K2-Horizon",
-    "k2_horizon": "Veystrix K2-Horizon",
-    "qwen27b": "Veystrix Qwen3.8-27B",
 }
 
 _BACKEND_DISPLAY_NAMES = {
     "FlashNextBackend": "Veystrix Flash-Next",
     "NemotronBackend": "Veystrix Nemotron 3.5 Lightning",
-    "BonsaiBackend": "Veystrix Bonsai-2",
-    "K2HorizonBackend": "Veystrix K2-Horizon",
-    "FrankensteinBackend": "Veystrix Qwen3.8-27B",
 }
 
 _WINDOW_ATTRS = (

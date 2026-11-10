@@ -35,7 +35,7 @@ def build_backend(name: str, args):
         )
     raise SystemExit(
         f"unknown model {name!r}. This hand-test entry point supports flashnext. "
-        "Use chat.sh for the qwen27b backend."
+        "Use chat.sh for other models."
     )
 
 

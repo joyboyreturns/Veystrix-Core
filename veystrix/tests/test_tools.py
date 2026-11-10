@@ -1,10 +1,4 @@
-"""Tool-call parsing, including a differential test against the original.
-
-veystrix.tools was extracted from frankenstein_engine.py. Extraction is only
-safe if the behaviour is identical, so where the original can still be
-imported these tests compare the two directly on the awkward inputs that
-motivated the parser's leniency.
-"""
+"""Tool-call parsing, including the awkward inputs that motivated the parser's leniency."""
 from __future__ import annotations
 
 import json
@@ -291,37 +285,6 @@ class ParseCoercionTests(unittest.TestCase):
             tools.ToolCallValidationError, "start_line"
         ):
             tools.parse_tool_calls(bad)
-
-
-class DifferentialTests(unittest.TestCase):
-    """The extracted parser must agree with the one it came from."""
-
-    @classmethod
-    def setUpClass(cls):
-        try:
-            from models.qwen27b import frankenstein_engine
-        except Exception as exc:  # the 27B venv may not be present
-            raise unittest.SkipTest(f"original engine unavailable: {exc}")
-        cls.original = frankenstein_engine
-
-    def test_parse_matches_the_original(self):
-        for case in CASES:
-            with self.subTest(case=case[:40]):
-                self.assertEqual(
-                    tools.parse_tool_calls(case),
-                    self.original.parse_tool_calls(case),
-                )
-
-    def test_split_think_matches(self):
-        for case in ("<think>a</think>b", "no tags", "<think>unclosed"):
-            with self.subTest(case=case):
-                self.assertEqual(
-                    tools.split_think(case), self.original.split_think(case)
-                )
-
-    def test_schema_matches(self):
-        self.assertEqual(tools.TOOLS, self.original.TOOLS)
-        self.assertEqual(tools.MUTATING_TOOLS, self.original.MUTATING_TOOLS)
 
 
 if __name__ == "__main__":

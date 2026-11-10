@@ -70,14 +70,8 @@ def model_root() -> Path:
 
 def installed_checkpoints(root: Path | None = None) -> list[tuple[str, Path]]:
     """Return every complete checkpoint that this checkout can load."""
-    from models.bonsai2.checkpoint import installed as installed_bonsai2
-    from models.k2_horizon.checkpoint import installed as installed_k2
-
     choices = [("flashnext", path) for path in installed_flashnext(root)]
     choices.extend(("nemotron35-lightning", path) for path in installed_nemotron35(root))
-    choices.extend(("bonsai2", path) for path in installed_bonsai2(root))
-    choices.extend(("k2-horizon", path) for path in installed_k2(root))
-    choices.extend(("qwen27b", path) for path in installed_qwen27b(root))
     return sorted(choices, key=lambda item: (item[0], str(item[1])))
 
 
@@ -187,70 +181,3 @@ def resolve_flashnext(
         raise ValueError("no complete Flash-Next checkpoint found; use --checkpoint PATH")
     lines = "\n".join(f"  --checkpoint {path}" for path in choices)
     raise ValueError("choose a Flash-Next checkpoint:\n" + lines)
-
-
-def qwen27b_compatible(path: Path) -> bool:
-    config = _json(path / "config.json")
-    if config.get("vocab_size") != 248320:
-        return False
-    if not all((path / name).is_file() for name in _TOKENIZER_FILES) or not _has_chat_template(path):
-        return False
-    if _missing_shards(path):
-        return False
-    assets = path / "bf16-ends"
-    meta = _json(assets / "meta.json")
-    return all(
-        _valid_bf16_asset(assets / filename, meta.get(shape_name))
-        for filename, shape_name in (
-            ("embed.bf16", "embed_shape"),
-            ("head.bf16", "head_shape"),
-        )
-    )
-
-
-def installed_qwen27b(root: Path | None = None) -> list[Path]:
-    root = root or model_root()
-    children = root.iterdir() if root.is_dir() else ()
-    return [path for path in sorted(children) if path.is_dir() and qwen27b_compatible(path)]
-
-
-def resolve_qwen27b(requested: str | os.PathLike[str] | None = None) -> Path:
-    root = model_root()
-    value = str(requested or os.environ.get("VEYSTRIX_QWEN27B_MODEL", "")).strip()
-    if value:
-        path = Path(value).expanduser()
-        if not path.is_absolute():
-            path = root / path
-        if not qwen27b_compatible(path):
-            missing = [name for name in _TOKENIZER_FILES if not (path / name).is_file()]
-            if not _has_chat_template(path):
-                missing.append("chat template")
-            if path.is_dir() and _json(path / "config.json").get("vocab_size") == 248320:
-                missing.extend(_missing_shards(path))
-                meta = _json(path / "bf16-ends" / "meta.json")
-                missing.extend(
-                    f"bf16-ends/{name}"
-                    for name in ("embed.bf16", "head.bf16", "meta.json")
-                    if not (path / "bf16-ends" / name).is_file()
-                )
-                if not _valid_bf16_asset(
-                    path / "bf16-ends" / "embed.bf16", meta.get("embed_shape")
-                ):
-                    missing.append("bf16-ends/embed.bf16")
-                if not _valid_bf16_asset(
-                    path / "bf16-ends" / "head.bf16", meta.get("head_shape")
-                ):
-                    missing.append("bf16-ends/head.bf16")
-                if not meta:
-                    missing.append("bf16-ends/meta.json")
-            if _json(path / "config.json").get("vocab_size") != 248320:
-                missing.append("compatible config.json")
-            raise _checkpoint_error("Qwen27B", path, sorted(set(missing)))
-        return path.resolve()
-    choices = installed_qwen27b(root)
-    if len(choices) == 1:
-        return choices[0].resolve()
-    if not choices:
-        raise ValueError("no compatible Qwen27B checkpoint found; use --model-path PATH")
-    lines = "\n".join(f"  --model-path {path}" for path in choices)
-    raise ValueError("choose a Qwen27B checkpoint:\n" + lines)

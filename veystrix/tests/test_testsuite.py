@@ -21,17 +21,16 @@ class TestSuiteDiscoveryTests(unittest.TestCase):
     def test_discovers_runtime_providers(self):
         runtimes = runtime_directories()
         self.assertIn("flashnext", runtimes)
-        self.assertIn("bonsai2", runtimes)
-        self.assertIn("k2_horizon", runtimes)
-        self.assertIn("qwen27b", runtimes)
+        for removed in ("bonsai2", "k2_horizon", "qwen27b"):
+            self.assertNotIn(removed, runtimes)
         for runtime in runtimes:
             self.assertTrue(build_catalog(runtime))
 
     def test_explicit_checkpoint_skips_installed_checkpoint_prompt(self):
         checkpoint = Path("/tmp/test-checkpoint")
         with patch("veystrix.testsuite.terminal.installed_checkpoints", return_value=[]):
-            self.assertEqual(choose_model("qwen27b", str(checkpoint)),
-                             ("qwen27b", checkpoint.resolve()))
+            self.assertEqual(choose_model("nemotron35-lightning", str(checkpoint)),
+                             ("nemotron35-lightning", checkpoint.resolve()))
 
     def test_runner_records_explicit_interrupted_outcome(self):
         class InterruptingOutput:
@@ -55,7 +54,7 @@ class TestSuiteDiscoveryTests(unittest.TestCase):
             explanation="", why="", script=lambda _context, _path: ["fake"],
         )
         output = StringIO()
-        context = TestContext("bonsai2", "/tmp/checkpoint", "/tmp/python")
+        context = TestContext("flashnext", "/tmp/checkpoint", "/tmp/python")
         runner = Runner(context, output)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "cancelled.jsonl"
