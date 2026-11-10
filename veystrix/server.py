@@ -872,6 +872,12 @@ def health(service, scheduler) -> dict:
     state = getattr(service, "cache_state", None)
     if callable(state):
         report["cache"] = state()
+    engine = getattr(_service_backend(service), "health_snapshot", None)
+    if callable(engine):
+        try:
+            report["engine"] = engine()
+        except Exception:
+            pass                                     # telemetry never fails a health probe
     mem = _memory_ledger()
     if mem is not None:
         report["memory_policy"] = {

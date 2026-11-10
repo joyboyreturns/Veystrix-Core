@@ -189,10 +189,20 @@ class AutoWarmer:
         self.enabled = bool(getattr(args, "auto_warm", False)) and self.idle_seconds > 0
         self.refresh_seconds = float(getattr(args, "warm_refresh_hours", 6.0)) * 3600.0
         self.directory = None
+        # Warm state is per model: warming Qwen's prefix says nothing about Nemotron's cache. Flash-Next keeps the
+        # original unprefixed keys; other models use a "<model>|" prefix in the same file.
+        model = getattr(args, "model", "flashnext")
+        self.key_prefix = "" if model == "flashnext" else f"{model}|"
         self.stopped_until_restart = False
         self.thread = None
         self.abort = None
         self._thread_factory = thread_factory or (lambda target: __import__("threading").Thread(target=target, daemon=True))
+
+    def _state_view(self) -> dict:
+        full = self.w.load_state(self.directory)
+        if self.key_prefix:
+            return {k[len(self.key_prefix):]: v for k, v in full.items() if k.startswith(self.key_prefix)}
+        return {k: v for k, v in full.items() if "|" not in k}
 
     def reset_for_new_server(self):
         self.stopped_until_restart = False
@@ -228,8 +238,10 @@ class AutoWarmer:
         entries = self.w.load(self.directory)
         if not entries:
             return
-        state = self.w.load_state(self.directory)
-        jobs = self.w.due_jobs(entries, self.w.DEFAULT_EFFORTS, state, self.clock(), self.refresh_seconds)
+        state = self._state_view()
+        # Flash-Next has four reasoning-effort prompt variants; Nemotron's template has no effort control, so one prefix.
+        efforts = self.w.DEFAULT_EFFORTS if not self.key_prefix else ("medium",)
+        jobs = self.w.due_jobs(entries, efforts, state, self.clock(), self.refresh_seconds)
         if not jobs:
             return
         entry, effort = jobs[0]
@@ -256,7 +268,7 @@ class AutoWarmer:
             self.log("auto_warm_failed", client=entry["family"], effort=effort, error=f"{type(exc).__name__}: {exc}"[:200])
             return
         state = self.w.load_state(self.directory)
-        state[self.w.job_key(entry, effort)] = self.clock()
+        state[self.key_prefix + self.w.job_key(entry, effort)] = self.clock()
         self.w.save_state(state, self.directory)
         self.log("auto_warm_done", client=entry["family"], effort=effort, seconds=round(self.clock() - began, 1), **{
             k: result.get(k) for k in ("prompt_tokens", "hit_tokens", "prefilled_tokens", "outcome")})
@@ -507,9 +519,8 @@ def print_status(log_dir=LOG_DIR) -> int:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.auto_warm is None:
-        args.auto_warm = bool(args.overnight) and args.model == "flashnext"   # warming relies on the Flash-Next prefix cache
+        args.auto_warm = bool(args.overnight)       # warming relies on the model's persistent prefix cache (both have one)
     if args.model == "nemotron35-lightning":
-        args.auto_warm = False
         if os.environ.get("VEYSTRIX_NEMOTRON_AUTHORIZED") == "0":
             print("Nemotron is disabled by VEYSTRIX_NEMOTRON_AUTHORIZED=0. Nothing was started.", file=sys.stderr)
             return 2

@@ -120,7 +120,10 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
     if pool_bytes is None:
         base = build(0, chunk_tokens).total_bytes
         room = limit - base - AUTO_POOL_HEADROOM
-        pool_bytes = max(0, min(AUTO_POOL_MAX, room)) // (64 * 2**20) * (64 * 2**20)
+        # Swap already in use means the machine is short of memory right now (measured: a 4 GiB pool plus a long
+        # prefill pushed swap from 0.8 to 2.4 GiB): size the pool down instead of adding to the pressure.
+        cap = AUTO_POOL_MAX if machine.swap_used < GIB else GIB if machine.swap_used < 2 * GIB else GIB // 4
+        pool_bytes = max(0, min(cap, room)) // (64 * 2**20) * (64 * 2**20)
     pool, chunk = pool_bytes, chunk_tokens
     while True:
         est = build(pool, chunk)

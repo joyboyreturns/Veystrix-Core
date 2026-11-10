@@ -33,7 +33,12 @@ from .runtime import Cancelled
 
 _NP = {'U32': np.uint32, 'F32': np.float32, 'F16': np.float16, 'BF16': np.uint16}
 _PARTS = ('weight', 'scales', 'biases')
+_STACK_NAMES = ('fc1.weight', 'fc1.scales', 'fc1.biases', 'fc2.weight', 'fc2.scales', 'fc2.biases')
 PREDICT_EXTRA = int(os.environ.get('VEYSTRIX_NEMOTRON_PREDICT_EXTRA', '4'))   # predicted beyond top-k (spare bandwidth)
+# Opt-in: the stock gather_qmm kernel over the stacked selected experts. Bit-identical to the stock mlx-lm layer on the
+# synthetic checkpoints, but measured slower on the real model (stacking copies ~34 MB per layer): 4.4/5.6 vs 6.5 tok/s.
+GATHER = os.environ.get('VEYSTRIX_NEMOTRON_GATHER', '0') == '1'
+GATHER_MAX_EXPERTS = 24      # beyond this (large prefill chunks) the per-expert path avoids a large stacking copy
 PREFILL_PREDICT_CAP = 40     # experts staged per layer during prefill (nearly all are needed there anyway)
 
 
@@ -210,6 +215,29 @@ class ExpertPool:
         self.prefetch_issued = self.prefetch_used = self.prefetch_wasted = 0
         self.wait_seconds = 0.0
         self.cancel_check = lambda: False
+        self.speculate = True        # False: layer-major prefill stages whole layers instead of predicting
+        self._held = None            # layer-major prefill: experts of the layer in flight, released when it ends
+        self._held_layer = None
+
+    # -- layer scope (layer-major prefill) ---------------------------------------------------------------------
+    def begin_layer(self, layer: int) -> None:
+        """Keep every expert fetched for ``layer`` until ``end_layer``: the layer's token chunks then share one read.
+        Held experts bypass the LRU so a long prefill does not evict what decode needs."""
+        self._held, self._held_layer = {}, layer
+
+    def end_layer(self) -> None:
+        self._held, self._held_layer = None, None
+
+    def held_bytes(self) -> int:
+        held = self._held
+        return sum(sum(a.nbytes for a in arrays.values()) for arrays in list(held.values())) if held else 0
+
+    def prefetch_layer(self, layer: int) -> int:
+        """Stage every expert of ``layer`` in the background (layer-major prefill: nearly all are needed).
+        The staging area is raised to one full layer for the duration of the call's reads."""
+        need = self.reader.expert_count * self.reader.expert_bytes + self.reader.expert_bytes
+        self.staged_budget = max(self.staged_budget, need)
+        return self.prefetch(layer, range(self.reader.expert_count))
 
     # -- prefetch ----------------------------------------------------------------------------------------------
     def prefetch(self, layer: int, experts) -> int:
@@ -253,9 +281,14 @@ class ExpertPool:
         if self.cancel_check():
             raise Cancelled()
         out, waiting, direct = {}, {}, {}
+        held = self._held if self._held_layer == layer else None
         for expert in experts:
             expert = int(expert)
             key = (layer, expert)
+            if held is not None and expert in held:
+                self.hits += 1
+                out[expert] = held[expert]
+                continue
             if key in self._items:
                 self.hits += 1
                 self._items.move_to_end(key)
@@ -298,6 +331,9 @@ class ExpertPool:
     def _admit(self, key, arrays):
         arrays = {n: (a.view(mx.bfloat16) if a.dtype == mx.uint16 else a) for n, a in arrays.items()}
         size = sum(a.nbytes for a in arrays.values())
+        if self._held is not None and key[0] == self._held_layer:
+            self._held[key[1]] = arrays
+            return arrays
         if size <= self.budget:
             while self._items and self.resident_bytes + size > self.budget:
                 _, (_, old) = self._items.popitem(last=False)
@@ -328,7 +364,8 @@ class ExpertPool:
                 'budget_bytes': self.budget, 'bytes_read': self.reader.bytes_read,
                 'prefetch_issued': self.prefetch_issued, 'prefetch_used': self.prefetch_used,
                 'prefetch_wasted': self.prefetch_wasted, 'staged_bytes': self._staged_total,
-                'wait_seconds': round(self.wait_seconds, 4), 'read_seconds': round(self.reader.read_seconds, 4)}
+                'wait_seconds': round(self.wait_seconds, 4), 'read_seconds': round(self.reader.read_seconds, 4),
+                'held_bytes': self.held_bytes()}
 
 
 class NextGate:
@@ -348,7 +385,7 @@ class StreamedSwitchMLP(nn.Module):
 
     def _prefetch_next(self, flat, rows_n):
         nxt = self.next_gate
-        if nxt is None:
+        if nxt is None or not self.pool.speculate:
             return
         scores = mx.sigmoid((flat @ nxt.weight.T).astype(mx.float32)) + nxt.bias
         k = min(nxt.top_k + PREDICT_EXTRA, scores.shape[-1])
@@ -360,6 +397,28 @@ class StreamedSwitchMLP(nn.Module):
             ids = ids[counts[ids] > 0]
         self.pool.prefetch(nxt.layer, [int(e) for e in ids])
 
+    def _gather(self, flat, ids, unique, arrays, lead, dtype):
+        """The stock mlx-lm ``SwitchMLP`` computation (``gather_qmm``) over just the selected experts: they are stacked
+        in ``unique`` order and the router indices are remapped to positions in that stack. Same kernel and index
+        semantics as the stock layer, one launch per projection instead of a matmul per expert."""
+        from mlx_lm.models.switch_layers import _gather_sort, _scatter_unsort
+        order = [int(e) for e in unique]
+        stacked = {n: mx.stack([arrays[e][n] for e in order]) for n in _STACK_NAMES}
+        local = mx.array(np.searchsorted(unique, ids).astype(np.int32))
+        x = mx.expand_dims(flat, (-2, -3))
+        do_sort = local.size >= 64
+        idx, inv = local, None
+        if do_sort:
+            x, idx, inv = _gather_sort(x, local)
+        h = mx.gather_qmm(x, stacked['fc1.weight'], stacked['fc1.scales'], stacked['fc1.biases'], rhs_indices=idx,
+                          transpose=True, group_size=self.group_size, bits=4, mode='affine', sorted_indices=do_sort)
+        y = mx.gather_qmm(nn.relu2(h), stacked['fc2.weight'], stacked['fc2.scales'], stacked['fc2.biases'],
+                          rhs_indices=idx, transpose=True, group_size=self.group_size, bits=4, mode='affine',
+                          sorted_indices=do_sort)
+        if do_sort:
+            y = _scatter_unsort(y, inv, local.shape)
+        return y.squeeze(-2).reshape(*lead, local.shape[-1], flat.shape[-1]).astype(dtype)
+
     def __call__(self, x, indices):
         lead = x.shape[:-1]
         hidden = x.shape[-1]
@@ -369,6 +428,8 @@ class StreamedSwitchMLP(nn.Module):
         self._prefetch_next(flat, rows_n)
         unique = np.unique(ids)
         arrays = self.pool.fetch(self.layer, unique.tolist())
+        if GATHER and len(unique) <= GATHER_MAX_EXPERTS:
+            return self._gather(flat, ids, unique, arrays, lead, x.dtype)
         ys, positions, batch = [], [], []
         for expert in unique:
             rows, slots = np.nonzero(ids == expert)

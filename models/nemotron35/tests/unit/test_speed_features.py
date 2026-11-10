@@ -2,6 +2,7 @@
 import shutil
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import mlx.core as mx
@@ -30,7 +31,7 @@ def tearDownModule():
 def make(**kw):
     args = dict(authorized=True, config_check=permissive_config_check, machine=machine(), tokenizer=StubTokenizer(),
                 pool_bytes=64 * 1024, chunk_tokens=4, session_dir=str(Path(_dir) / "sessions"),
-                prefix_dir=str(Path(_dir) / "prefix"), snapshot_tokens=8)
+                prefix_dir=str(Path(_dir) / "prefix"), snapshot_tokens=8, layer_major_tokens=8)
     args.update(kw)
     backend = NemotronBackend(Path(_dir) / "ck", **args)
     backend._current_machine = lambda: machine()
@@ -94,6 +95,17 @@ class AutoPoolTests(unittest.TestCase):
         self.assertLessEqual(plan.pool_bytes, admission.AUTO_POOL_MAX)
         self.assertLessEqual(plan.estimate.total_bytes + admission.AUTO_POOL_HEADROOM, plan.budget_bytes + 1)
 
+    def test_auto_pool_shrinks_when_swap_is_already_in_use(self):
+        gib = 2**30
+        sizes = [admission.make_plan(self.cfg, machine(swap_used=int(g * gib)), dense_bytes=1_252_009_856,
+                                     pool_bytes=None).pool_bytes for g in (0, 1.2, 2.2)]
+        self.assertEqual(sizes[0], admission.AUTO_POOL_MAX)
+        self.assertLessEqual(sizes[1], gib)
+        self.assertLessEqual(sizes[2], gib // 4)
+        explicit = admission.make_plan(self.cfg, machine(swap_used=int(2.2 * gib)), dense_bytes=1_252_009_856,
+                                       pool_bytes=2 * gib).pool_bytes
+        self.assertEqual(explicit, 2 * gib)       # an explicit size is never overridden
+
     def test_auto_pool_is_zero_when_memory_is_tight(self):
         tight = machine(available=int(2.6 * 2**30))
         plan = admission.make_plan(self.cfg, tight, dense_bytes=1_252_009_856, pool_bytes=None)
@@ -147,7 +159,7 @@ class PrefixCacheTests(unittest.TestCase):
         seen = []
         a.append_tokens(self.PROMPT)
         with self.assertRaises(GenerationCancelled):
-            a.generate(3, on_prefill_progress=lambda d, t: seen.append(d), should_cancel=lambda: len(seen) > 20)
+            a.generate(3, on_prefill_progress=lambda d, t: seen.append(d), should_cancel=lambda: bool(seen) and seen[-1] >= 16)
         a.close()
         self.assertTrue(any(m["tokens"] >= 8 for m in a.prefix_cache._disk.values()))
         b = self.backend()
@@ -235,3 +247,123 @@ class PrefixCacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LayerMajorTests(unittest.TestCase):
+    TOKENS = [1, 5, 9, 3, 7, 2, 11, 4, 6, 8, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+
+    def core(self, layer_major, pool_bytes=64 * 1024, chunk=4):
+        from models.nemotron35.backend_core import EngineCore
+        streamed = load_streamed(Path(_dir) / "ck", pool_bytes=pool_bytes, config_check=permissive_config_check)
+        return streamed, EngineCore(streamed, chunk_tokens=chunk, layer_major_tokens=layer_major)
+
+    def test_layer_major_logits_and_state_are_bit_identical_to_chunk_major(self):
+        for segment in (8, 12, 16, 100):     # segment sizes are rounded down to whole chunks (min one chunk)
+            a_s, a = self.core(0)
+            b_s, b = self.core(segment)
+            try:
+                la, lb = a.prefill(self.TOKENS), b.prefill(self.TOKENS)
+                self.assertTrue(bool(mx.all(f32(la) == f32(lb))), segment)
+                self.assertEqual(a.cached_tokens, b.cached_tokens)
+                for x, y in zip(a.state_arrays(), b.state_arrays()):
+                    self.assertTrue(bool(mx.all(f32(x) == f32(y))), segment)
+                nxt = [3, 9]
+                for t in nxt:       # decoding continues identically from the layer-major state
+                    self.assertTrue(bool(mx.all(f32(a.decode(t)) == f32(b.decode(t)))))
+            finally:
+                a_s.close()
+                b_s.close()
+
+    def test_each_layers_experts_are_read_once_per_segment(self):
+        a_s, a = self.core(0, pool_bytes=0)
+        b_s, b = self.core(len(self.TOKENS) + 4, pool_bytes=0)
+        try:
+            a.prefill(self.TOKENS)
+            b.prefill(self.TOKENS)
+            chunk_reads, layer_reads = a_s.reader.reads, b_s.reader.reads
+            moe_layers, experts = 2, TINY_CONFIG["n_routed_experts"]
+            self.assertLessEqual(layer_reads, moe_layers * experts)
+            self.assertLess(layer_reads, chunk_reads)
+            self.assertEqual(b_s.pool.stats()["held_bytes"], 0)       # released after every layer
+        finally:
+            a_s.close()
+            b_s.close()
+
+    def test_progress_and_boundaries_are_per_segment_and_state_matches_each_boundary(self):
+        s, core = self.core(8)
+        try:
+            seen, marks = [], []
+            core.prefill(self.TOKENS, progress=lambda d, t: seen.append(d), boundary=lambda d: marks.append((d, core.cached_tokens)))
+            self.assertEqual(seen, [8, 16, 23])
+            self.assertEqual(marks, [(8, 8), (16, 16), (23, 23)])
+        finally:
+            s.close()
+
+    def test_cancel_mid_layer_major_prefill_resets_and_next_run_is_exact(self):
+        from models.nemotron35.runtime import Cancelled
+        s, core = self.core(8)
+        ref_s, ref = self.core(0)
+        try:
+            calls = [0]
+
+            def cancel():
+                calls[0] += 1
+                return calls[0] > 6
+
+            with self.assertRaises(Cancelled):
+                core.prefill(self.TOKENS, cancelled=cancel)
+            self.assertEqual(core.cached_tokens, 0)
+            self.assertIsNone(s.pool._held)
+            self.assertTrue(s.pool.speculate)
+            self.assertTrue(bool(mx.all(f32(core.prefill(self.TOKENS)) == f32(ref.prefill(self.TOKENS)))))
+        finally:
+            s.close()
+            ref_s.close()
+
+    def test_backend_layer_major_generation_equals_chunk_major(self):
+        text = "".join(chr(65 + (i * 7) % 26) for i in range(40))
+        outputs = []
+        for segment in (0, 8):
+            backend = make(layer_major_tokens=segment, prefix_cache=False)
+            try:
+                backend.append_text(text)
+                outputs.append(backend.generate(6)[0])
+            finally:
+                backend.close()
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertTrue(outputs[0])
+
+
+class StockKernelTests(unittest.TestCase):
+    """The decode path runs the stock mlx-lm ``gather_qmm`` computation over the selected experts."""
+
+    def test_streamed_model_is_bit_identical_to_the_stock_in_memory_model(self):
+        from models.nemotron35.tiny_checkpoint import build_reference
+        from models.nemotron35 import streamed_experts as se
+        ref = build_reference(TINY_CONFIG)
+        streamed = load_streamed(Path(_dir) / "ck", pool_bytes=0, config_check=permissive_config_check)
+        patch = unittest.mock.patch.object(se, "GATHER", True)
+        patch.start()
+        self.addCleanup(patch.stop)
+        try:
+            c1, c2 = ref.make_cache(), streamed.model.make_cache()
+            tokens = mx.array([[3, 9, 1, 5, 7, 2, 11, 4]])
+            self.assertTrue(bool(mx.all(ref(tokens, cache=c1) == streamed.model(tokens, cache=c2))))
+            for t in (3, 9, 1, 5, 7, 2):
+                x = mx.array([[t]])
+                self.assertTrue(bool(mx.all(ref(x, cache=c1) == streamed.model(x, cache=c2))))
+        finally:
+            streamed.close()
+
+    def test_per_expert_fallback_for_large_chunks_matches_within_rounding(self):
+        from models.nemotron35 import streamed_experts as se
+        streamed = load_streamed(Path(_dir) / "ck", pool_bytes=0, config_check=permissive_config_check)
+        try:
+            tokens = mx.array([[3, 9, 1, 5, 7, 2, 11, 4, 6, 8, 10, 12]])
+            with unittest.mock.patch.object(se, "GATHER", True):
+                fast = f32(streamed.model(tokens, cache=streamed.model.make_cache()))
+            with unittest.mock.patch.object(se, "GATHER_MAX_EXPERTS", 0):
+                slow = f32(streamed.model(tokens, cache=streamed.model.make_cache()))
+            self.assertLess(float(mx.max(mx.abs(fast - slow))), 0.05)
+        finally:
+            streamed.close()

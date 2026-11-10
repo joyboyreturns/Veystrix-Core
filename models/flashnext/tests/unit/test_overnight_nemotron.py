@@ -42,5 +42,38 @@ class NemotronSupervisorTests(unittest.TestCase):
         self.assertIsNone(supervision.check(ok, model="nemotron35-lightning", server=True))
 
 
+class NemotronAutoWarmTests(unittest.TestCase):
+    def warmer(self, model, fake):
+        from models.flashnext.tests.unit.test_overnight import FakeClock, FakeThread
+        clock = FakeClock()
+        clock.now = 1.7e9
+        events = []
+        ns = args(model=model, auto_warm=True, warm_idle_minutes=15.0, warm_refresh_hours=6.0)
+        return overnight.AutoWarmer(ns, lambda e, **f: events.append(e), power_fn=lambda: {"source": "ac", "percent": 90},
+                                    clock=clock, warm_module=fake, thread_factory=FakeThread), events
+
+    def test_overnight_enables_auto_warm_for_nemotron_by_default(self):
+        with mock.patch.object(overnight, "Supervisor") as supervisor:
+            supervisor.return_value.run.return_value = 0
+            overnight.main(["--model", "nemotron35-lightning", "--checkpoint", "/m/n", "--overnight"])
+            self.assertTrue(supervisor.call_args[0][0].auto_warm)
+            overnight.main(["--model", "nemotron35-lightning", "--checkpoint", "/m/n", "--overnight", "--no-auto-warm"])
+            self.assertFalse(supervisor.call_args[0][0].auto_warm)
+
+    def test_nemotron_warms_one_effort_and_keeps_its_state_apart_from_flashnext(self):
+        from models.flashnext.tests.unit.test_overnight import FakeWarm, QUIET
+        fake = FakeWarm([{"family": "hermes"}])
+        warmer, events = self.warmer("nemotron35-lightning", fake)
+        warmer.tick(QUIET)
+        warmer.tick(QUIET)
+        self.assertEqual([(c[0], c[1]) for c in fake.calls], [("hermes", "medium")])
+        self.assertEqual(list(fake.state), ["nemotron35-lightning|hermes:medium"])
+        # Qwen's view of the same file does not see Nemotron's record, so Qwen still warms its own variants.
+        qwen, _ = self.warmer("flashnext", fake)
+        qwen.tick(QUIET)
+        self.assertEqual([(c[0], c[1]) for c in fake.calls][1], ("hermes", "low"))
+        self.assertIn("auto_warm_done", events)
+
+
 if __name__ == "__main__":
     unittest.main()

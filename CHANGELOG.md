@@ -20,6 +20,14 @@ Not released. No hardware validation was done for these changes: no model was lo
 
 ### Added
 
+- Nemotron 3.5 Lightning speed and Qwen-parity features (measured on one 16 GB M4 Air, on battery with Low Power Mode on):
+  parallel slice reads, next-layer expert prefetch, an auto-sized expert pool (shrinks when swap is in use), a persistent
+  exact prefix cache with mid-prefill checkpoints, **layer-major prefill** (default 8192-token segments,
+  `VEYSTRIX_NEMOTRON_LAYER_MAJOR_TOKENS=0` turns it off; bit-identical to chunk-major in tests; on a 3,935-token prompt
+  39 s -> 33.5 s, 33.8 -> 20.7 GB of SSD reads, peak 5.5 -> 3.3 GB), per-request memory readiness (owned-memory release and the
+  conditional `sudo -n purge`, refused only under pressure), auto-warm for `--overnight` (one prefix, own state), pool /
+  prefetch / prefix-cache / readiness telemetry in `/health` (`engine`), and `python -m models.nemotron35.verify_real`
+  (layer-at-a-time stock reference vs the streamed engine on the real checkpoint). Decode is ~3 tok/s and compute-bound.
 - Native macOS app (`apps/macos/Veystrix`), packaging and release automation, Sparkle 2 update
   support, Hermes Agent integration and test mocks, security and license audits.
 
