@@ -29,6 +29,8 @@ Before continuation, full MacQwen suite passed 725 tests in 69.195 seconds and F
 
 ## Next actions, in order
 
+Latest candidate: `PrefixSession.snapshot` retains only the latest parent rather than every intermediate `Entry`, and `_evict_ram` may release the RAM copy of a leased entry only if its entire chain is durable on SSD. Original PID 81972 trace shows active allocation rising from about 3.45 GB to 7.77 GB during continued prefill and swap reaching 2963 MiB. Snapshot retention is a substantiated contributor to memory residency, not a proven sole root cause. This candidate is unverified on the real Harness and must not be described or pushed as a verified fix. The user intends to perform the Harness test themselves. Inspect `git status` and `git log` for the candidate's exact state.
+
 1. Read `prefill.py::_run_chunks`, `_prefill_target`, `expert_cache.py` progress callback, and `prefix_session.py::snapshot`; add missing stage/memory/expert and transport instrumentation, verify actual chunk progress and bounded cancellation. Finish safe cache failure behavior and tests.
 2. On AC with adequate measured headroom and unchanged guard, run `./serve.sh`, inspect server logs and diagnostics. Progress through short, 2K, 4K, 8K and 9K cold requests; stop at safety margin or stall. Trace the real failing workload and establish a root cause before claiming a fix. Check previously saved snapshots without deleting them.
 3. Locate installed DeepSeek CLI and config (see `docs/flashnext/dsh/veystrix-262k.patch.yml` and incident report), run real file read/search/edit/test/fix tool workflow; then run real Qwen Code multi-file workflow with two continuation turns. Test cancellation and streaming. Do not alter unrelated providers.

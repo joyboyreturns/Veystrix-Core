@@ -792,12 +792,15 @@ class PrefixCache:
 
     def _evict_ram(self) -> None:
         # Restoring a child needs its whole chain in RAM or on disk, so without an SSD tier a parent stays while a
-        # child is resident; with one, a parent is written out first and may leave RAM. A leased entry stays.
+        # child is resident; with one, a parent is written out first and may leave RAM. A lease protects the
+        # snapshot from loss, but its RAM copy can be released when its complete chain is durable on SSD.
         spill = self.directory is not None
         newest = next(reversed(self._ram), None)
         while self._ram_bytes > self.ram_budget and len(self._ram) > 1:
             victim = next((k for k in self._ram_order()
-                           if k != newest and k not in self._leases and (spill or not self._has_resident_child(k))),
+                           if k != newest and (k not in self._leases or
+                                               (k in self._disk and self._ancestors_present(k)))
+                           and (spill or not self._has_resident_child(k))),
                           None)
             if victim is None:
                 break
@@ -808,7 +811,8 @@ class PrefixCache:
                 # A failed spill is not durable, even for a leaf. Keep it and try
                 # other candidates once; never silently discard the only copy.
                 candidates = [k for k in self._ram_order()
-                              if k != newest and k != victim and k not in self._leases]
+                              if k != newest and k != victim and (k not in self._leases or
+                                                                  (k in self._disk and self._ancestors_present(k)))]
                 victim = None
                 for key in candidates:
                     candidate = self._ram[key]
@@ -825,8 +829,7 @@ class PrefixCache:
 
     # ---- leases ----
     def lease(self, keys):
-        """Context manager that keeps these entries (a hit's chain, the snapshots a running prefill extends) from being
-        evicted or dropped until it exits, whatever raises inside it."""
+        """Protect entries from loss while in use; durable RAM copies may be released and restored from SSD."""
         return _Lease(self, tuple(keys))
 
     def _acquire(self, keys) -> None:

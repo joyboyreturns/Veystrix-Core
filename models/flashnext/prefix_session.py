@@ -343,7 +343,10 @@ class PrefixSession:
                 flight_recorder.record("prefix_snapshot_plan_conflict", position=position)
                 return
             held.enter_context(store.lease((entry.key,)))   # the next snapshot chains to it: keep it until we finish
-            last.append(entry)
+            # Only the most recent parent is needed for the next delta. The
+            # leases protect earlier chain members on disk without keeping
+            # every snapshot tensor alive through this local list.
+            last[:] = [entry]
             report.snapshots.append(position)
 
         suffix = mx.array(prompt[offset:])[None]
