@@ -259,7 +259,7 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     argv = ["--server" if value == "/server" else value for value in argv]
     build, argv = _split_build(list(argv))
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--model", choices=("flashnext", BONSAI2, K2_HORIZON, "qwen27b"))
+    parser.add_argument("--model", choices=("flashnext", "nemotron35-lightning", BONSAI2, K2_HORIZON, "qwen27b"))
     parser.add_argument("--profile", choices=("plain", "agent"))
     parser.add_argument("--model-path", "--checkpoint", dest="model_path")
     parser.add_argument("--preferences-file", default=preferences.DEFAULT_PATH)
@@ -279,6 +279,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     known, remaining = parser.parse_known_args(argv)
 
     model = known.model or ("qwen27b" if build else "flashnext")
+    if model == "nemotron35-lightning":
+        raise SystemExit("Nemotron inference is not implemented yet. Use --check to inspect local checkpoint metadata; no model was loaded.")
     if known.mode and model != "flashnext":
         raise SystemExit("--mode applies to the flashnext model only")
     # A benchmark launch states its own conditions and must not be re-configured by a mode.
@@ -353,6 +355,27 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
 
 
 def main() -> int:
+    # Keep this check before runtime discovery or setup: it must never download
+    # dependencies or load the user's model.
+    probe = argparse.ArgumentParser(add_help=False)
+    probe.add_argument("--model")
+    probe.add_argument("--model-path", "--checkpoint", dest="checkpoint")
+    probe.add_argument("--check", action="store_true")
+    options, _ = probe.parse_known_args(sys.argv[1:])
+    if options.model == "nemotron35-lightning":
+        if not options.checkpoint:
+            raise SystemExit("Nemotron requires --checkpoint /path/to/model; no download was attempted.")
+        if not Path(options.checkpoint).expanduser().is_dir():
+            raise SystemExit(f"Nemotron checkpoint folder does not exist: {options.checkpoint}; no download was attempted.")
+        if not options.check:
+            raise SystemExit("Nemotron inference is not implemented yet. Use --check to inspect local checkpoint metadata; no model was loaded.")
+        import json
+        from models.nemotron35.config import ConfigurationError, inspect_checkpoint
+        try:
+            print(json.dumps(inspect_checkpoint(options.checkpoint), indent=2))
+        except ConfigurationError as exc:
+            raise SystemExit(f"Nemotron check: {exc}") from exc
+        return 0
     if len(sys.argv) > 1 and sys.argv[1] == "setup":
         return setup_environment(sys.argv[2:])
     warning = branch_sync_warning()
