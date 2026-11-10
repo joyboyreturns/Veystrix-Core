@@ -1,21 +1,24 @@
-MIT License
+Veystrix Core — proprietary source. All rights reserved.
 
-Copyright (c) 2026 1architect
+This repository is private. Unless a file or directory says otherwise, the Veystrix
+engine, the macOS application and their documentation are the proprietary work of
+the owner named in legal/LICENSE_PROVENANCE.md. No license to copy, modify or
+redistribute the source is granted by this file.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+IMPORTANT — retained open-source material
+-----------------------------------------
+Large parts of this code base descend from code that was published under the MIT
+license as MACQWEN / FlashNext. That license is reproduced in LICENSES/MIT-1architect.txt.
+It was granted when the code was published, it is not withdrawn by this file, and its
+notice must accompany every copy of that code. Copies already published remain available
+under it. This file does NOT claim that the MIT-licensed portions are exclusively owned
+by the Veystrix owner. See legal/LICENSE_PROVENANCE.md for what is established and what
+is unresolved (legal review required).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Third-party components keep their own licenses: see legal/THIRD_PARTY_NOTICES.md and
+legal/dependency-licenses.md.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Binary distribution
+-------------------
+Official Veystrix application builds are distributed free of charge under the
+Veystrix Freeware License: see legal/FREEWARE-LICENSE.txt (DRAFT, not yet reviewed by a lawyer).

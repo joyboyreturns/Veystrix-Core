@@ -1,21 +1,35 @@
-MACQWEN
+VEYSTRIX
 
 This repository does not include model weights.
 
-The current research checkpoint is `sh0wie/Qwen3.8-Flash-Next-REAP-288-MLX-4bit`.
-Qwen3.8-Flash-Next-MLX-oQ3-MTP, Qwen3.8-Flash-Next-MLX-oQ4, and Qwen3.8-27B
-checkpoints are distributed separately by their publishers. Review each
-checkpoint license before download, use, modification, or redistribution.
+Veystrix is the current name of the project previously published as MACQWEN
+(and, for the first runtime, FlashNext). The earlier name remains in historical
+documents, commit history, measurement records and a few internal module paths
+(`macqwen/`) that are kept for compatibility with existing scripts, caches and
+harness clients.
 
-K2-Horizon-7B-MLX-8bit is distributed separately by abenzerps and includes a
-checkpoint-supplied MLX model implementation. Its own license terms apply.
+Copyright and license provenance
+--------------------------------
+Code published earlier under the MIT license (copyright holder "1architect") keeps that
+license and notice: see LICENSES/MIT-1architect.txt. Do not remove or alter it.
+legal/LICENSE_PROVENANCE.md records what is known about authorship and what is open.
 
-Ternary-Bonsai-2-27B-mlx-2bit is distributed separately by prism-ml under
-Apache-2.0 and includes a checkpoint-supplied runtime loader. Its own license
-terms apply.
+Model checkpoints
+-----------------
+The research checkpoint used in measurements is distributed by its publisher.
+Other checkpoints (Qwen3.8-Flash-Next variants, Qwen3.8-27B, K2-Horizon-7B,
+Ternary-Bonsai-2-27B) are also distributed separately by their publishers.
+K2-Horizon-7B-MLX-8bit is published by abenzerps and includes a checkpoint-supplied
+MLX model implementation. Ternary-Bonsai-2-27B-mlx-2bit is published by prism-ml
+under Apache-2.0 and includes a checkpoint-supplied runtime loader. Review each
+checkpoint's license before download, use, modification or redistribution. Veystrix
+does not bundle or redistribute any of them.
 
-MLX, MLX-LM, MLX-VLM, Transformers, NumPy, Requests, Hugging Face Hub, and
-other dependencies are separate projects. Their own license terms apply.
+Dependencies
+------------
+MLX, MLX-LM, MLX-VLM, Transformers, NumPy, Requests, Hugging Face Hub, Sparkle and
+other dependencies are separate projects under their own licenses; see
+legal/THIRD_PARTY_NOTICES.md and legal/dependency-licenses.md.
 
-MACQWEN includes local compatibility and runtime patches. These patches do not
+Veystrix includes local compatibility and runtime patches. These patches do not
 change the licenses of upstream projects or model checkpoints.

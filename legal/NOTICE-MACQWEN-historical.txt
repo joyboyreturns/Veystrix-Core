@@ -1,0 +1,21 @@
+MACQWEN
+
+This repository does not include model weights.
+
+The current research checkpoint is `sh0wie/Qwen3.8-Flash-Next-REAP-288-MLX-4bit`.
+Qwen3.8-Flash-Next-MLX-oQ3-MTP, Qwen3.8-Flash-Next-MLX-oQ4, and Qwen3.8-27B
+checkpoints are distributed separately by their publishers. Review each
+checkpoint license before download, use, modification, or redistribution.
+
+K2-Horizon-7B-MLX-8bit is distributed separately by abenzerps and includes a
+checkpoint-supplied MLX model implementation. Its own license terms apply.
+
+Ternary-Bonsai-2-27B-mlx-2bit is distributed separately by prism-ml under
+Apache-2.0 and includes a checkpoint-supplied runtime loader. Its own license
+terms apply.
+
+MLX, MLX-LM, MLX-VLM, Transformers, NumPy, Requests, Hugging Face Hub, and
+other dependencies are separate projects. Their own license terms apply.
+
+MACQWEN includes local compatibility and runtime patches. These patches do not
+change the licenses of upstream projects or model checkpoints.
