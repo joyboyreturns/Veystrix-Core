@@ -466,12 +466,16 @@ class CheckpointCompletenessTests(unittest.TestCase):
         from .config import EXPECTED, LAYER_ORDER, inspect_checkpoint, ConfigurationError
         with tempfile.TemporaryDirectory() as root:
             path = Path(root)
-            (path / 'config.json').write_text(json.dumps(dict(EXPECTED, layers_block_type=list(LAYER_ORDER))))
-            (path / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {'x': 'part.safetensors'}}))
+            from .inventory import expected_tensors
+            config = dict(EXPECTED, layers_block_type=list(LAYER_ORDER), vocab_size=131072,
+                          quantization={'group_size': 64, 'bits': 4, 'mode': 'affine'})
+            names = list(expected_tensors(config))
+            (path / 'config.json').write_text(json.dumps(config))
+            (path / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {n: 'part.safetensors' for n in names}}))
             report = inspect_checkpoint(path)
             self.assertFalse(report['checkpoint_complete'])
             self.assertEqual(report['missing_shards'], ['part.safetensors'])
             self.assertFalse(report['inference_ready'])
-            (path / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {'x': '../outside.safetensors'}}))
+            (path / 'model.safetensors.index.json').write_text(json.dumps({'weight_map': {n: '../outside.safetensors' for n in names}}))
             with self.assertRaisesRegex(ConfigurationError, 'unsafe'):
                 inspect_checkpoint(path)

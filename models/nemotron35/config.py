@@ -35,7 +35,13 @@ def validate_config(config: dict) -> None:
     if isinstance(q, dict) and ("nvfp4" in json.dumps(q).lower()):
         raise ConfigurationError("NVFP4 requires conversion; Apple MLX affine 4-bit is not NVFP4")
 
-def inspect_checkpoint(path: str | Path) -> dict:
+def inspect_checkpoint(path: str | Path, *, hashes: bool = False) -> dict:
+    """Fail-closed metadata check. Never loads weights.
+
+    A partial download is reported as incomplete (names-only check); a complete
+    one goes through the full header/inventory/extent verification.
+    """
+    from .inventory import CheckpointError, inventory_names_only, verify_checkpoint
     root = Path(path).expanduser()
     if not root.is_dir():
         raise ConfigurationError(f"checkpoint folder does not exist: {root} (no download attempted)")
@@ -47,23 +53,22 @@ def inspect_checkpoint(path: str | Path) -> dict:
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigurationError(f"cannot read checkpoint config: {exc}") from exc
     validate_config(config)
-    index_path = root / "model.safetensors.index.json"
-    missing = []
+    base = {"model": MODEL_ID, "layers": len(config["layers_block_type"]),
+            "architecture": config["model_type"], "quantization": config.get("quantization")}
     try:
-        if index_path.stat().st_size > 32 * 1024 * 1024:
-            raise ConfigurationError("checkpoint index is unexpectedly large")
-        index = json.loads(index_path.read_text())
-        weight_map = index.get("weight_map")
-        if not isinstance(weight_map, dict) or not weight_map:
-            raise ConfigurationError("checkpoint index has no weight map")
-        for name in set(weight_map.values()):
-            if not isinstance(name, str) or not name.endswith(".safetensors") or Path(name).name != name or name.startswith(".") or "\\" in name:
-                raise ConfigurationError("checkpoint index contains an unsafe shard name")
-            if not (root / name).is_file():
-                missing.append(name)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ConfigurationError(f"cannot read checkpoint index: {exc}") from exc
-    return {"model": MODEL_ID, "layers": len(config["layers_block_type"]),
-            "architecture": config["model_type"], "quantization": config.get("quantization"),
-            "checkpoint_complete": not missing, "missing_shards": sorted(missing), "inference_ready": False,
-            "reason": "SSD expert streaming and real-checkpoint loader are not implemented"}
+        names = inventory_names_only(root / "model.safetensors.index.json", config)
+    except CheckpointError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    missing = sorted(n for n in names["shards"] if not (root / n).is_file())
+    partial = sorted(p.name for p in root.rglob("*.incomplete"))
+    if missing or partial:
+        return {**base, "checkpoint_complete": False, "missing_shards": missing, "partial_files": len(partial),
+                "inventory_names_verified": True, "inference_ready": False,
+                "reason": "download incomplete; shard headers, sizes and hashes not verified"}
+    try:
+        summary = verify_checkpoint(root, hashes=hashes)
+    except CheckpointError as exc:
+        raise ConfigurationError(f"checkpoint verification failed: {exc}") from exc
+    return {**base, "checkpoint_complete": True, "missing_shards": [], "verified": summary,
+            "inventory_names_verified": True, "inference_ready": False,
+            "reason": "layout verified; real-checkpoint numerical validation not yet performed"}

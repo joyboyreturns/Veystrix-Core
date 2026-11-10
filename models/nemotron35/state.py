@@ -21,10 +21,14 @@ def fingerprint(identity: dict, tokens: list[int]) -> str:
 def _digest(tensors):
     digest = hashlib.sha256()
     for key in sorted(tensors):
-        a = np.asarray(tensors[key])
+        value = tensors[key]
+        dtype, shape = str(value.dtype), list(value.shape)
+        if value.dtype == mx.bfloat16:      # numpy has no bfloat16: hash the raw 16-bit patterns
+            value = value.view(mx.uint16)
+        a = np.ascontiguousarray(np.asarray(value))
         digest.update(key.encode())
-        digest.update(str(a.dtype).encode())
-        digest.update(json.dumps(a.shape).encode())
+        digest.update(dtype.encode())
+        digest.update(json.dumps(shape).encode())
         digest.update(a.tobytes())
     return digest.hexdigest()
 
