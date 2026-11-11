@@ -16,6 +16,9 @@ from typing import Callable, Protocol
 from veystrix.model_registry import InstalledModel
 
 
+PRELOAD_OWNER = "internal:preloaded"
+
+
 class LifecycleError(RuntimeError):
     code = "model_lifecycle_error"
 
@@ -117,13 +120,15 @@ class ModelCoordinator:
         try:
             if self._state == "fault":
                 raise LifecycleFault(self._error or "model lifecycle is faulted")
+            if self._state == "cooldown":
+                raise ModelBusy("the engine is cooling down after an unexpected exit")
             # Resolve while holding the gate and before unloading the current model.
             model = self.resolve(model_id)
             if model is None or model.id != model_id:
                 raise ModelNotFound(f"model {model_id!r} is not installed")
             current = self._model
             if current and current.id != model.id:
-                if not handoff and (not owner or not self._owner or owner != self._owner):
+                if not handoff and self._owner != PRELOAD_OWNER and (not owner or not self._owner or owner != self._owner):
                     raise HandoffRequired("another session owns the current model; explicit handoff is required")
                 self._set(state="unloading", error=None)
                 try:
@@ -134,7 +139,7 @@ class ModelCoordinator:
                 self._set(state="unloaded", model=None, owner=None)
                 current = None
             if current is not None:
-                if self._owner is None and owner:
+                if self._owner == PRELOAD_OWNER:
                     self._set(owner=owner)
                 try:
                     ready = self.driver.ready(current)

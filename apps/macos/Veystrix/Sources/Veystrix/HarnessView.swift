@@ -158,7 +158,7 @@ struct HarnessView: View {
                                 .disabled(engine.isExternallyManaged || engine.state == .starting || engine.state == .stopping)
                         }
                     }
-                    Text("Selecting a model here prepares its harness configuration. Loading it restarts the app-managed engine and clears its live cache.")
+                    Text("Refresh Harness Models registers the installed models with supported harnesses. A model change rebuilds conversation state and can take time.")
                         .font(.caption).foregroundStyle(.secondary)
                     let s = HarnessProfiles.snippet(for: picked.value, port: model.settings.port, modelID: entry.id)
                     GroupBox("Where it goes") { Text(s.whereToPutIt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
@@ -169,7 +169,7 @@ struct HarnessView: View {
                         }
                     }
                     ForEach(s.notes, id: \.self) { Label($0, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary) }
-                    if !entry.loaded { Text("This model ID is accepted only after this exact installation is loaded. Automatic switching from harness requests is not available yet.").font(.callout).foregroundStyle(.orange) }
+                    if !entry.loaded { Text("A request from the current session can load this model. A different session may be refused to protect the existing session; restart the engine to release it.").font(.callout).foregroundStyle(.secondary) }
                 }
                 if let error = inventory.error { Text(error).font(.callout).foregroundStyle(.secondary) }
                 Text("Refresh Harness Models updates supported local configuration and keeps a backup. Restart the harness to reload its model list.").font(.footnote).foregroundStyle(.secondary)

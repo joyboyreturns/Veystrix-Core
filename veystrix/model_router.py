@@ -11,14 +11,17 @@ import json
 import os
 import signal
 import threading
+import time
 from http.server import ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 from veystrix import model_registry
-from veystrix.model_coordinator import ModelCoordinator, LifecycleError, ModelNotFound, ModelBusy, HandoffRequired
+from veystrix.model_coordinator import ModelCoordinator, LifecycleError, ModelNotFound, ModelBusy, HandoffRequired, PRELOAD_OWNER
 from veystrix.model_process import ProcessDriver
 from veystrix.server import VeystrixHandler, RequestError
 from veystrix.sessions import derive_key, explicit_id
+
+HEARTBEAT_SECONDS = 15.0
 
 
 def session_owner(headers, payload):
@@ -95,18 +98,40 @@ class RouterHandler(VeystrixHandler):
         path = urlsplit(self.path).path
         if path not in ("/v1/chat/completions", "/v1/responses", "/v1/messages"):
             self._error("route not found", 404, "not_found"); return
+        self._sse_open = False
+        heartbeat_stop = None
         try:
             payload = self._payload()
-            requested = payload.get("model") or self.server.coordinator.snapshot().model_id
+            requested = payload["model"] if "model" in payload else self.server.coordinator.snapshot().model_id
             if not isinstance(requested, str) or not requested:
                 raise ModelNotFound("choose an installed model")
             # Legacy family aliases remain accepted only when the family has exactly one installation.
-            if requested in ("veystrix-flashnext", "veystrix-nemotron35-lightning"):
-                matches = [m for m in self.server.inventory() if "veystrix-" + m.family == requested]
+            legacy = {"veystrix-flashnext": "flashnext", "macqwen-flashnext": "flashnext",
+                      "veystrix-nemotron35-lightning": "nemotron35-lightning",
+                      "veystrix-flashnext-nothink": "flashnext"}
+            if requested in legacy:
+                matches = [m for m in self.server.inventory() if m.family == legacy[requested]]
                 if len(matches) != 1:
                     raise ModelNotFound("model family is absent or ambiguous; select an installation ID")
+                if requested == "veystrix-flashnext-nothink":
+                    # Preserve the existing no-thinking shortcut explicitly.
+                    payload["reasoning_effort"] = "none"
                 requested = matches[0].id
                 payload["model"] = requested
+            if self.server.coordinator.resolve(requested) is None:
+                raise ModelNotFound(f"model {requested!r} is not installed")
+            if payload.get("stream") is True:
+                self._sse_start()
+                self.close_connection = True
+                self._response_started = True
+                heartbeat_stop = threading.Event()
+                self._router_heartbeat_stop = heartbeat_stop
+                def heartbeat():
+                    while not heartbeat_stop.wait(HEARTBEAT_SECONDS):
+                        try: self._heartbeat()
+                        except (OSError, ValueError): return
+                self._router_heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+                self._router_heartbeat_thread.start()
             owner = session_owner(self.headers, payload)
             with self.server.coordinator.request(requested, owner=owner, timeout=20, cancelled=self._client_gone):
                 self._forward(path, payload)
@@ -114,14 +139,36 @@ class RouterHandler(VeystrixHandler):
             self._error(exc, exc.status, exc.code)
         except LifecycleError as exc:
             status = 404 if isinstance(exc, ModelNotFound) else 409 if isinstance(exc, HandoffRequired) else 503
-            self._error(exc, status, exc.code, headers={"x-should-retry": "false"})
+            self._router_error(path, exc, status, exc.code)
         except (BrokenPipeError, ConnectionResetError):
             pass
         except (OSError, http.client.HTTPException) as exc:
             if not getattr(self, "_response_started", False):
-                self._error(f"engine connection failed: {exc}", 503, "engine_unavailable", headers={"x-should-retry": "false"})
+                self._router_error(path, f"engine connection failed: {exc}", 503, "engine_unavailable")
+            elif self._sse_open:
+                self._router_error(path, f"engine connection failed: {exc}", 503, "engine_unavailable")
             else:
                 self.close_connection = True
+        finally:
+            if heartbeat_stop is not None:
+                heartbeat_stop.set()
+
+    def _router_error(self, path, message, status, code):
+        if not self._sse_open:
+            self._error(message, status, code, headers={"x-should-retry": "false"})
+            return
+        stop = getattr(self, "_router_heartbeat_stop", None)
+        if stop is not None: stop.set()
+        error = {"message": str(message), "type": "server_error", "code": code}
+        if path == "/v1/messages":
+            self._sse({"type": "error", "error": error}, event="error")
+            self._sse({"type": "message_stop"}, event="message_stop")
+        elif path == "/v1/responses":
+            self._sse({"type": "response.failed", "response": {"status": "failed", "error": error}}, event="response.failed")
+        else:
+            self._sse({"error": error})
+            with self._write_lock():
+                self.wfile.write(b"data: [DONE]\n\n"); self.wfile.flush()
 
     def _forward(self, path, payload):
         driver = self.server.driver
@@ -133,13 +180,22 @@ class RouterHandler(VeystrixHandler):
                 if self.headers.get(name): headers[name] = self.headers[name]
             conn.request("POST", path, body=body, headers=headers)
             response = conn.getresponse()
-            self.send_response(response.status)
-            self._response_started = True
-            for name in ("Content-Type", "Content-Length", "Retry-After", "x-should-retry", "X-Veystrix-Reasoning"):
-                value = response.getheader(name)
-                if value is not None: self.send_header(name, value)
-            self.send_header("Connection", "close")
-            self.end_headers()
+            if self._sse_open:
+                # Stop heartbeats before relaying: a comment must never split an SSE frame.
+                self._router_heartbeat_stop.set()
+                self._router_heartbeat_thread.join(timeout=1)
+                if response.status >= 400:
+                    detail = response.read().decode("utf-8", "replace")
+                    self._router_error(path, detail, response.status, "engine_error")
+                    return
+            else:
+                self.send_response(response.status)
+                self._response_started = True
+                for name in ("Content-Type", "Content-Length", "Retry-After", "x-should-retry", "X-Veystrix-Reasoning"):
+                    value = response.getheader(name)
+                    if value is not None: self.send_header(name, value)
+                self.send_header("Connection", "close")
+                self.end_headers()
             self.close_connection = True
             while True:
                 chunk = response.read1(65536)
@@ -156,6 +212,7 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--pool-gb", default="0")
     parser.add_argument("--prefix-dir")
+    parser.add_argument("--overnight", action="store_true", help="restart after a worker failure within bounded supervisor limits")
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--model", choices=("flashnext", "nemotron35-lightning"), default="flashnext")
     args = parser.parse_args(argv)
@@ -173,12 +230,71 @@ def main(argv=None):
     previous = {sig: signal.signal(sig, shutdown) for sig in (signal.SIGINT, signal.SIGTERM)}
     def startup():
         try:
-            with coordinator.request(initial_id, cancelled=stopping.is_set):
+            with coordinator.request(initial_id, owner=PRELOAD_OWNER, cancelled=stopping.is_set):
                 pass
         except LifecycleError as exc:
             print(f"initial model load failed: {exc}", flush=True)
+            if not stopping.is_set():
+                coordinator._set(state="fault", error=str(exc))
+                threading.Thread(target=server.shutdown, daemon=True).start()
     thread = threading.Thread(target=startup, daemon=True)
     thread.start()
+    def supervise():
+        from models.flashnext.overnight import Policy, swap_used_mb
+        policy = Policy()
+        while not stopping.wait(2):
+            snap = coordinator.snapshot()
+            process = driver.process
+            if snap.state != "ready" or snap.active or process is None:
+                continue
+            code = process.poll()
+            if code is None or not coordinator._gate.acquire(blocking=False):
+                continue
+            try:
+                snap = coordinator.snapshot()
+                if snap.state != "ready" or snap.active or driver.process is not process:
+                    continue
+                action, cooldown, reason = policy.decide(code, time.time(), owner_stop=False)
+                try:
+                    driver.unload()
+                except Exception as exc:
+                    coordinator._set(state="fault", error=f"restart cleanup failed: {exc}")
+                    continue
+                if action != "restart":
+                    coordinator._set(state="fault", model=None, owner=None, error=reason)
+                    continue
+                coordinator._set(state="cooldown", model=None, owner=None, error=reason)
+            finally:
+                coordinator._gate.release()
+            print(f"engine exited ({code}); {reason}", flush=True)
+            if stopping.wait(cooldown): return
+            # Match the original supervisor's swap-settle requirement; never purge or change limits.
+            try:
+                previous_swap = swap_used_mb()
+                deadline = time.monotonic() + 600
+                while time.monotonic() < deadline and not stopping.wait(15):
+                    current_swap = swap_used_mb()
+                    if abs(current_swap - previous_swap) < 64: break
+                    previous_swap = current_swap
+            except Exception as exc:
+                coordinator._set(state="fault", error=f"could not verify swap settlement: {exc}")
+                continue
+            if stopping.is_set(): return
+            if not coordinator._gate.acquire(timeout=1):
+                coordinator._set(state="fault", error="restart could not acquire model gate")
+                continue
+            try:
+                if coordinator.snapshot().state != "cooldown": continue
+                coordinator._set(state="unloaded", error=None)
+            finally:
+                coordinator._gate.release()
+            try:
+                with coordinator.request(snap.model_id, owner=snap.owner, cancelled=stopping.is_set):
+                    pass
+            except LifecycleError as exc:
+                print(f"supervised restart failed: {exc}", flush=True)
+    if args.overnight:
+        threading.Thread(target=supervise, daemon=True).start()
     try:
         server.serve_forever(poll_interval=0.2)
     finally:

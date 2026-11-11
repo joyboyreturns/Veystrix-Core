@@ -114,7 +114,7 @@ class ProcessDriver:
         # already exited, its numeric process-group ID could have been reused.
         if process.poll() is None and self._group_alive(pgid):
             try:
-                os.killpg(pgid, signal.SIGTERM)
+                os.killpg(pgid, signal.SIGINT)
             except ProcessLookupError:
                 pass
         deadline = time.monotonic() + self.stop_timeout

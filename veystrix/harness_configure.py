@@ -4,12 +4,25 @@ import argparse
 import datetime
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import tempfile
 
 from veystrix.harness_models import qwen_config, deepseek_config
 from veystrix.model_registry import discover
+
+
+def load_yaml12(text):
+    # DSH uses YAML 1.2: unquoted "off" is a string, not YAML 1.1 false.
+    import yaml
+    class Loader(yaml.SafeLoader):
+        pass
+    Loader.yaml_implicit_resolvers = {key: [(tag, pattern) for tag, pattern in values
+                                            if tag != "tag:yaml.org,2002:bool"]
+                                      for key, values in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+    Loader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"), list("tTfF"))
+    return yaml.load(text, Loader=Loader)
 
 
 def _write(path: Path, content: str):
@@ -61,14 +74,44 @@ def run(*, home=None, port=8080, apply=False):
             reports[label] = "not installed or no profile"
             continue
         try:
-            data = yaml.safe_load(path.read_text())
+            data = load_yaml12(path.read_text())
             output = yaml.safe_dump(deepseek_config(data, models, port), sort_keys=False, allow_unicode=True)
             reports[label] = _write(path, output) if apply else "ready to update"
         except (OSError, ValueError, yaml.YAMLError) as exc:
             reports[label] = "failed: " + str(exc)
-    # Hermes supports dynamic GET /v1/models for its custom-provider picker. Its
-    # dedicated profile is configured by integrations/hermes/configure_profile.py.
-    reports["Hermes"] = "use Veystrix custom provider and refresh its model picker"
+    # Configure only the dedicated profile, preserving the user's main Hermes config.
+    hermes_dir = home / ".hermes"
+    if not hermes_dir.is_dir():
+        reports["Hermes"] = "not installed"
+    else:
+        path = hermes_dir / "profiles" / "veystrix" / "config.yaml"
+        try:
+            data = load_yaml12(path.read_text()) if path.exists() else {}
+            if data is None: data = {}
+            if not isinstance(data, dict): raise ValueError("Hermes profile is not a mapping")
+            providers = data.setdefault("custom_providers", [])
+            if not isinstance(providers, list) or not all(isinstance(p, dict) for p in providers):
+                raise ValueError("invalid Hermes custom providers")
+            base = f"http://127.0.0.1:{port}/v1"
+            matches = [p for p in providers if p.get("name", "").lower() == "veystrix"]
+            if len(matches) > 1: raise ValueError("multiple Veystrix providers exist")
+            if matches and matches[0].get("base_url") not in (None, base):
+                raise ValueError("existing Veystrix provider uses a different endpoint")
+            provider = matches[0] if matches else {"name": "Veystrix"}
+            if not matches: providers.append(provider)
+            provider.update({"base_url": base, "key_env": "VEYSTRIX_API_KEY",
+                             "models": {m.id: {"context_length": 32768} for m in models}})
+            model = data.setdefault("model", {})
+            if not isinstance(model, dict): raise ValueError("invalid Hermes model settings")
+            model.setdefault("default", models[0].id)
+            model.setdefault("provider", "custom:veystrix")
+            model.setdefault("base_url", base)
+            data.setdefault("fallback_providers", [])
+            output = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+            reports["Hermes"] = _write(path, output) if apply else "ready to update dedicated profile"
+            reports["Hermes"] += "; launch with HERMES_HOME=~/.hermes/profiles/veystrix"
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            reports["Hermes"] = "failed: " + str(exc)
     return reports
 
 

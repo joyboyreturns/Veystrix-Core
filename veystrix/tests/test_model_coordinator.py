@@ -1,7 +1,7 @@
 import threading
 import unittest
 
-from veystrix.model_coordinator import ModelCoordinator, ModelNotFound, ModelBusy, HandoffRequired, LifecycleFault
+from veystrix.model_coordinator import ModelCoordinator, ModelNotFound, ModelBusy, HandoffRequired, LifecycleFault, PRELOAD_OWNER
 from veystrix.model_registry import InstalledModel
 
 
@@ -91,6 +91,14 @@ class CoordinatorTests(unittest.TestCase):
         with self.c.request("a", owner="one"): pass
         with self.c.request("b", owner="two", handoff=True): pass
         self.assertEqual(self.c.snapshot().owner, "two")
+
+    def test_first_request_can_switch_a_preloaded_model(self):
+        with self.c.request("a", owner=PRELOAD_OWNER): pass
+        with self.c.request("b", owner="first-session"): pass
+        self.assertEqual(self.driver.loaded, "b")
+        self.assertEqual(self.c.snapshot().owner, "first-session")
+        with self.assertRaises(HandoffRequired):
+            with self.c.request("a", owner="other-session"): pass
 
     def test_unowned_session_cannot_be_evicted_without_handoff(self):
         with self.c.request("a"): pass

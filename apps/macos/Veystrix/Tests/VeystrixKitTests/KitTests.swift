@@ -126,7 +126,7 @@ private func tempDir() -> URL {
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: "local",
                                        parentEnvironment: ["HOME": "/Users/x", "PATH": "/usr/bin", "OPENAI_API_KEY": "sk-secret", "ANTHROPIC_API_KEY": "sk-ant-secret", "HF_TOKEN": "hf_x"],
                                        fileExists: exists, isExecutable: exists)
-        #expect(plan.arguments.contains("models.flashnext.overnight"))
+        #expect(plan.arguments.contains("veystrix.model_router"))
         let i = try #require(plan.arguments.firstIndex(of: "--host")); #expect(plan.arguments[i + 1] == "127.0.0.1")
         #expect(plan.arguments.contains("--overnight")); #expect(plan.arguments.contains("--checkpoint"))
         #expect(plan.environment["OPENAI_API_KEY"] == nil); #expect(plan.environment["ANTHROPIC_API_KEY"] == nil)
@@ -504,7 +504,7 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         var s = AppSettings(); s.checkpointPath = d.path; s.cacheDirectory = "/cache"
         let plan = try LaunchPlan.make(settings: s, checkpoint: CheckpointValidator.validate(directory: d),
                                        source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
-        #expect(!plan.arguments.contains("--model")); #expect(plan.arguments.contains("--prefix-dir"))
+        #expect(plan.arguments.contains("--model")); #expect(plan.arguments.contains("--prefix-dir"))
         #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == nil)
     }
 }

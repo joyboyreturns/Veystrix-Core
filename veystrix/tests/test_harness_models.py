@@ -46,3 +46,25 @@ class HarnessWriteTests(unittest.TestCase):
                 self.assertEqual(backups[0].read_text(), original)
                 self.assertEqual(json.loads(path.read_text())['other'], {'keep': True})
                 self.assertEqual(run(home=root, apply=True)['Qwen Code'], 'unchanged')
+
+    def test_hermes_refresh_uses_dedicated_profile_and_preserves_main_config(self):
+        import tempfile, yaml
+        from pathlib import Path
+        from unittest.mock import patch
+        from veystrix.harness_configure import run
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); home = root / '.hermes'; home.mkdir()
+            main = home / 'config.yaml'; main.write_text('model: external\n')
+            with patch('veystrix.harness_configure.discover', return_value=[m('a'), m('b')]):
+                result = run(home=root, apply=True)
+                self.assertIn('created', result['Hermes'])
+                profile = yaml.safe_load((home/'profiles/veystrix/config.yaml').read_text())
+                self.assertEqual(set(profile['custom_providers'][0]['models']), {'a','b'})
+                self.assertEqual(main.read_text(), 'model: external\n')
+                self.assertIn('unchanged', run(home=root, apply=True)['Hermes'])
+
+    def test_deepseek_yaml_off_key_stays_a_string(self):
+        from veystrix.harness_configure import load_yaml12
+        parsed = load_yaml12('reasoningEfforts:\n  off: none\n  enabled: false\n')
+        self.assertEqual(parsed['reasoningEfforts']['off'], 'none')
+        self.assertIs(parsed['reasoningEfforts']['enabled'], False)

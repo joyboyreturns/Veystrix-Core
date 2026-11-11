@@ -32,7 +32,7 @@ public struct LaunchPlan: Equatable, Sendable {
 
     /// Variables passed to the engine. Nothing else is inherited, so secrets in the user's shell
     /// (cloud API keys, tokens) never reach the engine or its tools.
-    static let inheritedKeys = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "PATH", "SHELL"]
+    static let inheritedKeys = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "PATH", "SHELL", "VEYSTRIX_MODEL_ROOT"]
 
     public static func make(settings: AppSettings,
                             checkpoint: CheckpointReport?,
@@ -64,24 +64,23 @@ public struct LaunchPlan: Equatable, Sendable {
         guard isExecutable(python.path) else { throw PlanError.runtimeMissing("Python is not executable: \(python.path)") }
         guard fileExists(cwd.path) else { throw PlanError.runtimeMissing("working directory: \(cwd.path)") }
         if case .bundled = source {
-            for file in ["models/flashnext/overnight.pyc", "veystrix/cli.pyc", "veystrix/session.pyc"] {
+            for file in ["models/flashnext/overnight.pyc", "veystrix/cli.pyc", "veystrix/session.pyc", "veystrix/model_router.pyc", "veystrix/engine_guard.pyc"] {
                 let path = cwd.appendingPathComponent(file).path
                 guard fileExists(path) else { throw PlanError.runtimeMissing(path) }
             }
         }
 
         // Nemotron's expert pool is sized from free memory when the setting is left at "none" (0 would disable it).
-        let poolArgument = settings.selectedModel == .nemotron35 && settings.decodePool == .none
-            ? "auto" : String(settings.decodePool.rawValue)
-        var args = ["-m", "models.flashnext.overnight",
+        let poolArgument = String(settings.decodePool.rawValue)
+        var args = ["-m", "veystrix.model_router",
                     "--host", "127.0.0.1",                       // loopback only, always
                     "--port", String(settings.port),
                     "--pool-gb", poolArgument,
                     "--checkpoint", settings.activeCheckpointPath]
-        if settings.selectedModel == .nemotron35 { args += ["--model", ModelFamily.nemotron35.rawValue] }
+        args += ["--model", settings.selectedModel.rawValue]
         if settings.supervisedRestarts { args.append("--overnight") }
-        // The prefix cache is a Flash-Next feature; the Nemotron engine has no use for the folder.
-        if settings.selectedModel == .flashnext, !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
+        // The router passes this directory only to Flash-Next, even when it is loaded later.
+        if !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
 
         var env: [String: String] = [:]
         for key in inheritedKeys { if let v = parentEnvironment[key] { env[key] = v } }

@@ -18,7 +18,7 @@ class Backend(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.calls.append(body["model"])
-        response = json.dumps({"model": body["model"], "choices": []}).encode()
+        response = (b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n' if body.get("stream") else json.dumps({"model": body["model"], "choices": []}).encode())
         self.send_response(200)
         self.send_header("Content-Length", str(len(response)))
         self.send_header("Content-Type", "application/json")
@@ -78,6 +78,28 @@ class RouterTests(unittest.TestCase):
         status, response = self.call("/v1/chat/completions", {"model": "b", "messages": [{"role": "user", "content": "background"}]})
         self.assertEqual((status, response["error"]["code"]), (409, "model_handoff_required"))
         self.assertEqual(self.driver.current, "a")
+    def test_stream_sends_loading_heartbeat_without_splitting_sse(self):
+        import time
+        from unittest.mock import patch
+        old_load = self.driver.load
+        def slow(model, cancelled):
+            time.sleep(0.18)
+            old_load(model, cancelled)
+        self.driver.load = slow
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        data = json.dumps({"model":"a", "messages":[{"role":"user", "content":"hello"}], "stream":True})
+        with patch("veystrix.model_router.HEARTBEAT_SECONDS", 0.03):
+            conn.request("POST", "/v1/chat/completions", data, {"Authorization":"Bearer secret", "Content-Type":"application/json"})
+            response = conn.getresponse(); raw = response.read().decode(); conn.close()
+        self.assertEqual(response.status, 200)
+        self.assertIn(": generating\n\n", raw)
+        self.assertIn('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n', raw)
+
+    def test_legacy_family_alias_rejects_ambiguity(self):
+        status, body = self.call("/v1/chat/completions", {"model": "macqwen-flashnext", "messages": []})
+        self.assertEqual((status, body["error"]["code"]), (404, "model_not_found"))
+        self.assertEqual(self.driver.events, [])
+
     def test_bad_model_and_key_do_not_load(self):
         self.assertEqual(self.call("/v1/models", key="wrong")[0], 401)
         status, body = self.call("/v1/chat/completions", {"model": "bad", "messages": []})

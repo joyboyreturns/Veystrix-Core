@@ -102,7 +102,7 @@ struct ChatView: View {
         HSplitView {
             VStack(alignment: .leading) {
                 HStack {
-                    Button("New") { if let active = engine.health?.model { chat.new(model: active) } }.disabled(chat.streaming || engine.health?.model == nil)
+                    Button("New") { if let active = (engine.health?.installedModelID ?? engine.health?.model) { chat.new(model: active) } }.disabled(chat.streaming || (engine.health?.installedModelID ?? engine.health?.model) == nil)
                     Button("Delete") { chat.delete() }.disabled(chat.streaming || chat.selection == nil)
                 }.padding(.horizontal)
                 List(selection: $chat.selection) {
@@ -111,7 +111,7 @@ struct ChatView: View {
             }.frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(engine.health?.model ?? "No model loaded").font(.headline)
+                    Text((engine.health?.installedModelID ?? engine.health?.model) ?? "No model loaded").font(.headline)
                     Spacer()
                     if engine.state == .starting { ProgressView().controlSize(.small); Text("Loading…") }
                     Picker("Reasoning", selection: $effort.value) { Text("Low").tag("low"); Text("Medium").tag("medium"); Text("High").tag("high") }.frame(width: 180)
@@ -136,7 +136,7 @@ struct ChatView: View {
                 HStack(alignment: .bottom) {
                     TextField("Message", text: $draft.value, axis: .vertical).lineLimit(2...6).textFieldStyle(.roundedBorder)
                     if chat.streaming { Button("Stop") { chat.stop() } }
-                    else { Button("Send") { if let active = engine.health?.model { let text = draft.value; draft.value = ""; chat.send(text, model: active, port: model.settings.port, key: model.effectiveKey, effort: effort.value, system: system.value) } }.disabled(engine.state != .running || engine.health?.model == nil || draft.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                    else { Button("Send") { if let active = (engine.health?.installedModelID ?? engine.health?.model) { let text = draft.value; draft.value = ""; chat.send(text, model: active, port: model.settings.port, key: model.effectiveKey, effort: effort.value, system: system.value) } }.disabled(engine.state != .running || (engine.health?.installedModelID ?? engine.health?.model) == nil || draft.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
                 }
             }.padding().frame(minWidth: 380)
         }.navigationTitle("Chat")

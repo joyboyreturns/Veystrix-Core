@@ -330,7 +330,7 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
 def main() -> int:
     # Keep this check before runtime discovery or setup: it must never download
     # dependencies or load the user's model.
-    probe = argparse.ArgumentParser(add_help=False)
+    probe = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     probe.add_argument("--model")
     probe.add_argument("--model-path", "--checkpoint", dest="checkpoint")
     probe.add_argument("--check", action="store_true")
