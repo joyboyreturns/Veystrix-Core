@@ -110,3 +110,21 @@ public struct ModelsReport: Decodable, Equatable, Sendable {
     }
     public var data: [Entry]
 }
+
+/// Metadata-only installed checkpoint inventory. `loaded` is true only for the exact active installation.
+public struct InstalledModelsReport: Decodable, Sendable {
+    public struct Entry: Decodable, Identifiable, Sendable {
+        public let id: String
+        public let family: String
+        public let displayName: String
+        public let checkpoint: String
+        public let architecture: String
+        public let loaded: Bool
+        public let verification: String
+        enum CodingKeys: String, CodingKey {
+            case id, family, checkpoint, architecture, loaded, verification
+            case displayName = "display_name"
+        }
+    }
+    public let data: [Entry]
+}

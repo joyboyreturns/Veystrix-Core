@@ -28,6 +28,12 @@ class InstalledModel:
         return asdict(self)
 
 
+def installation_id(family: str, path: str | Path) -> str:
+    """Identify one canonical checkpoint installation, without inspecting its weights."""
+    digest = hashlib.sha256(str(Path(path).expanduser().resolve()).encode("utf-8")).hexdigest()
+    return f"veystrix-{family}-{digest}"
+
+
 def discover(root: Path | None = None) -> list[InstalledModel]:
     """Return structurally discovered installations without reading tensor payloads."""
     records = []
@@ -47,9 +53,8 @@ def discover(root: Path | None = None) -> list[InstalledModel]:
         quant = config.get("quantization")
         if not isinstance(quant, dict):
             quant = {}
-        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()
         records.append(InstalledModel(
-            id=f"veystrix-{family}-{digest}", family=family,
+            id=installation_id(family, path), family=family,
             display_name=path.name, checkpoint=str(path),
             architecture=str(text.get("model_type") or config.get("model_type") or "unknown"),
             quantization=quant, native_context=context,
@@ -62,3 +67,14 @@ def discover(root: Path | None = None) -> list[InstalledModel]:
 def resolve(model_id: str, root: Path | None = None) -> InstalledModel | None:
     """Resolve only an exact installed ID; never select by an ambiguous family name."""
     return next((model for model in discover(root) if model.id == model_id), None)
+
+
+def main() -> int:
+    """Print metadata for the native application; never load model weights."""
+    import json
+    print(json.dumps({"object": "list", "data": [dict(m.as_dict(), loaded=False) for m in discover()]}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

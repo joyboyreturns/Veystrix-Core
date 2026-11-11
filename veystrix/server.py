@@ -1004,6 +1004,12 @@ class ModelService:
     def __init__(self, session, context_limit=None, max_cold_prefill=None, max_incremental_prefill=None):
         self.session = session
         self.model = f"veystrix-{session.preferences['model']}"
+        path = getattr(getattr(session, "backend", None), "model_path", None)
+        if path:
+            from veystrix.model_registry import installation_id
+            self.installed_model_id = installation_id(session.preferences["model"], path)
+        else:
+            self.installed_model_id = None
         self.reused = 0
         self.rebuilt = 0
         self.evictions = 0                  # live states replaced by a request that did not extend them
@@ -1964,6 +1970,12 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             self._json(report, 200 if report["ready"] else 503)
         elif path in ("/cache/diagnostics", "/v1/cache/diagnostics"):
             self._json(service.cache_diagnostics())
+        elif path == "/v1/installed-models":
+            # Discovery is separate from /v1/models: this server cannot load another model.
+            from veystrix.model_registry import discover
+            records = [dict(record.as_dict(), loaded=(record.id == service.installed_model_id))
+                       for record in discover()]
+            self._json({"object": "list", "data": records})
         elif path == "/v1/models":
             card = model_card(service)
             self._json({"object": "list", "data": [model_entry(card, service)], "models": [card]})
@@ -2004,14 +2016,16 @@ class VeystrixHandler(BaseHTTPRequestHandler):
         # This server owns exactly one backend. Reject a different explicit model
         # before queueing or touching session state; silently using the loaded
         # model would misattribute output and can evict a coding session.
+        self._response_model = self.server.service.model
         if "model" in payload:
             requested = payload["model"]
             if not isinstance(requested, str) or not requested:
                 self._error("model must be a non-empty string", 400, "invalid_model")
                 return
-            if requested != self.server.service.model:
+            if requested not in (self.server.service.model, self.server.service.installed_model_id):
                 self._error(f"the model {requested!r} is not loaded on this server", 404, "model_not_found")
                 return
+            self._response_model = requested
         try:
             self.server.scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
         except Busy as exc:
@@ -2136,7 +2150,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 def chunk(delta, finish=None):
                     self._sse({
                         "id": ident, "object": "chat.completion.chunk", "created": created,
-                        "model": service.model,
+                        "model": getattr(self, "_response_model", service.model),
                         "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
                     })
 
@@ -2160,7 +2174,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 if (payload.get("stream_options") or {}).get("include_usage"):
                     self._sse({
                         "id": ident, "object": "chat.completion.chunk", "created": created,
-                        "model": service.model, "choices": [],
+                        "model": getattr(self, "_response_model", service.model), "choices": [],
                         "usage": chat_usage(service, result.stats),
                     })
                 self.wfile.write(b"data: [DONE]\n\n")
@@ -2181,7 +2195,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             } for call in result.tool_calls]
         self._json({
             "id": ident, "object": "chat.completion", "created": created,
-            "model": service.model,
+            "model": getattr(self, "_response_model", service.model),
             "choices": [{"index": 0, "message": message,
                          "finish_reason": "tool_calls" if result.tool_calls else result.stats.finish}],
             "usage": chat_usage(service, result.stats),
@@ -2198,7 +2212,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             try:
                 self._sse({"type": "message_start", "message": {
                     "id": ident, "type": "message", "role": "assistant",
-                    "model": service.model, "content": [], "stop_reason": None,
+                    "model": getattr(self, "_response_model", service.model), "content": [], "stop_reason": None,
                     "stop_sequence": None, "usage": {"input_tokens": 0, "output_tokens": 0},
                 }}, "message_start")
                 text_open = [False]
@@ -2256,7 +2270,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                             "name": call["name"], "input": arguments})
         self._json({
             "id": ident, "type": "message", "role": "assistant",
-            "model": service.model, "content": content,
+            "model": getattr(self, "_response_model", service.model), "content": content,
             "stop_reason": _anthropic_stop(result),
             "stop_sequence": None,
             "usage": anthropic_usage(service, result.stats),
@@ -2273,7 +2287,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             try:
                 base = {"id": ident, "object": "response", "created_at": int(time.time()),
                         "status": "in_progress", "error": None,
-                        "incomplete_details": None, "model": service.model, "output": []}
+                        "incomplete_details": None, "model": getattr(self, "_response_model", service.model), "output": []}
                 sequence = [0]
 
                 def event(kind, **values):
@@ -2345,7 +2359,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                            "arguments": call["arguments"], "status": "completed"})
         self._json({
             "id": ident, "object": "response", "created_at": int(time.time()),
-            "status": "completed", "model": service.model, "output": output,
+            "status": "completed", "model": getattr(self, "_response_model", service.model), "output": output,
             "usage": responses_usage(service, result.stats),
         })
 

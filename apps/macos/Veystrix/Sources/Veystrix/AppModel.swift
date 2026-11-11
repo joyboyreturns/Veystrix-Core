@@ -84,6 +84,22 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Select a discovered installation by exact path; explicit confirmation handles any restart.
+    func selectInstalled(_ installed: InstalledModelsReport.Entry) async {
+        guard !engine.isExternallyManaged else { alertMessage = "The engine is managed outside Veystrix. Stop it where it was started."; return }
+        guard engine.state != .running || engine.health?.busy == false else { alertMessage = "Wait until the engine is idle before switching models."; return }
+        guard let family = ModelFamily(rawValue: installed.family) else { alertMessage = "Unsupported model family."; return }
+        let path = installed.checkpoint
+        let report = await Task.detached(priority: .utility) {
+            CheckpointValidator.validate(directory: URL(fileURLWithPath: path), family: family)
+        }.value
+        guard report.isUsable else { alertMessage = "This model no longer passes checkpoint validation."; return }
+        settings.selectedModel = family
+        settings.activeCheckpointPath = path
+        checkpoint = report
+        if engine.state == .running { requestRestart() } else if !engine.state.isActive { requestStart() }
+    }
+
     // MARK: engine
 
     func requestStart() {
