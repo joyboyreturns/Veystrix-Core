@@ -112,7 +112,11 @@ def port_in_use(host: str, port: int) -> bool:
 def health(host: str, port: int, timeout: float = 5.0):
     """Parsed /health, or None when the server cannot be reached."""
     try:
-        with urllib.request.urlopen(f"http://{host}:{port}/health", timeout=timeout) as response:
+        request = urllib.request.Request(f"http://{host}:{port}/health")
+        key = os.environ.get("VEYSTRIX_SERVER_API_KEY")
+        if key:
+            request.add_header("Authorization", f"Bearer {key}")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read())
     except Exception:
         return None

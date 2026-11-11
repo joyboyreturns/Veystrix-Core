@@ -21,6 +21,7 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     public var status: String?
     public var ready: Bool?
     public var model: String?
+    public var installedModelID: String?
     public var busy: Bool?
     public var contextLimit: Int?
     public var maxColdPrefill: Int?
@@ -81,6 +82,7 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     }
     enum CodingKeys: String, CodingKey {
         case status, ready, model, busy, fault, cache, queue, activity, worker
+        case installedModelID = "installed_model_id"
         case contextLimit = "context_limit", maxColdPrefill = "max_cold_prefill", memoryPolicy = "memory_policy"
     }
 

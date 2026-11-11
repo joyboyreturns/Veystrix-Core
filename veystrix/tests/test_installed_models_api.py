@@ -7,6 +7,15 @@ from veystrix.tests.test_server_runtime import Running, request, CHAT
 
 
 class InstalledModelsAPITests(unittest.TestCase):
+    def test_health_reports_exact_active_checkpoint_id(self):
+        run = Running(self)
+        run.service.installed_model_id = installation_id("flashnext", "/models/a")
+        with patch.dict("os.environ", {"VEYSTRIX_ENGINE_INSTANCE_ID": "test-instance"}):
+            status, body, _ = request(run.port, "GET", "/health")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["installed_model_id"], run.service.installed_model_id)
+        self.assertEqual(body["instance_id"], "test-instance")
+
     def test_inventory_marks_only_exact_loaded_checkpoint(self):
         run = Running(self, api_key="secret")
         installed = InstalledModel(installation_id("flashnext", "/models/a"), "flashnext", "A", "/models/a", "qwen4_exp", {}, None, "metadata_only")

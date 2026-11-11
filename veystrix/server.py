@@ -865,6 +865,11 @@ def health(service, scheduler) -> dict:
               "context_limit": getattr(service, "context_limit", None) or 262144,
               "max_cold_prefill": getattr(service, "max_cold_prefill", None) or MAX_COLD_PREFILL_DEFAULT,
               "max_incremental_prefill": getattr(service, "max_incremental_prefill", None) or MAX_INCREMENTAL_PREFILL_DEFAULT}
+    # The router must verify the exact installation, not just its family.
+    report["installed_model_id"] = getattr(service, "installed_model_id", None)
+    instance = os.environ.get("VEYSTRIX_ENGINE_INSTANCE_ID")
+    if instance:
+        report["instance_id"] = instance
     activity = getattr(service, "activity_snapshot", None)
     if callable(activity):
         report["activity"] = activity()
