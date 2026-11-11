@@ -1,0 +1,7 @@
+# Native Chat and manual model switching
+
+The Chat sidebar sends streaming OpenAI chat completions to the running local engine. It uses the model ID reported by health, sends an explicit empty system message by default, and does not send tool schemas. Conversation history is stored in `~/Library/Application Support/Veystrix/chat-history.json` with owner-only permissions; it is local plaintext and should not be used for secrets. The optional system prompt is not persisted. Stop cancels the client stream. Conversations are tied to the active model ID; start a new conversation when changing models.
+
+In Model, select the other configured family, validate its folder, then select Switch to Selected Model. This stops the app-owned engine and starts it with the selected checkpoint; it is not an in-process switch and loses the live model cache. The app refuses to switch an externally managed engine or one reported busy. Health is polled and can be stale: finish harness work before switching. Chat requests also share the engine's single live cache and can evict a harness's warm state; session IDs do not provide isolated model residency.
+
+The selector supports the two configured family paths, not discovery of multiple same-family checkpoints. `/v1/models` still exposes only the active backend; requests do not automatically switch. Real-weight chat, cancellation and switching have not been validated end-to-end. Nemotron remains experimental.

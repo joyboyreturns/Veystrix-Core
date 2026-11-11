@@ -12,12 +12,18 @@ struct ModelView: View {
                 Picker("Model", selection: Binding(get: { model.settings.selectedModel }, set: { model.selectModel($0) })) {
                     ForEach(ModelFamily.allCases) { Text($0.title).tag($0) }
                 }
-                .disabled(engine.state.isActive)
+                .disabled(engine.state == .starting || engine.state == .stopping || engine.isExternallyManaged)
+                if engine.state == .running {
+                    Text("Running: \(engine.health?.model ?? "unknown"). The selection above takes effect only when you switch.")
+                    Button("Switch to Selected Model…") { model.requestRestart() }
+                        .disabled(engine.isExternallyManaged || engine.health?.busy != false || model.checkpoint?.isUsable != true)
+                    Text("Switching stops the app-managed engine and discards its live model cache. Finish active harness work first.").font(.caption).foregroundStyle(.secondary)
+                }
                 Text(model.settings.selectedModel == .nemotron35
                      ? "Experimental. Needs the mlx-community affine 4-bit conversion. Nothing has been measured on real weights yet, so expect it to be slower than Flash-Next. Each model keeps its own folder."
                      : "The default model. Each model keeps its own folder; switching never changes the other one.")
                     .font(.callout).foregroundStyle(.secondary)
-                Text("The model is chosen by you. Nothing switches models automatically, and only one model is loaded at a time.")
+                Text("Only one model is loaded at a time. Model switches are initiated here.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Model folder") {
