@@ -511,10 +511,12 @@ def build_backend(name: str, args, prefs: dict):
         if not args.model_path:
             raise SystemExit("--model-path is required for model 'nemotron35-lightning'")
         from veystrix.backends.nemotron35 import NemotronBackend
+        from models.flashnext.settings.modes import context_limit_from_environment
 
         backend = NemotronBackend(
             model_path=args.model_path,
             session_dir=(args.session_dir or "~/.cache/veystrix/nemotron35/sessions"),
+            context_tokens=context_limit_from_environment(),
         )
         mirror_preferences(backend, prefs, prefs["profile"])
         return backend

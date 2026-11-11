@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from veystrix.harness_models import qwen_config, deepseek_config
+from veystrix.harness_models import qwen_config, deepseek_config, model_context
 from veystrix.model_registry import discover
 
 
@@ -100,7 +100,7 @@ def run(*, home=None, port=8080, apply=False):
             provider = matches[0] if matches else {"name": "Veystrix"}
             if not matches: providers.append(provider)
             provider.update({"base_url": base, "key_env": "VEYSTRIX_API_KEY",
-                             "models": {m.id: {"context_length": 32768} for m in models}})
+                             "models": {m.id: {"context_length": model_context(m)} for m in models}})
             model = data.setdefault("model", {})
             if not isinstance(model, dict): raise ValueError("invalid Hermes model settings")
             model.setdefault("default", models[0].id)

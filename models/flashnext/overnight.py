@@ -57,10 +57,10 @@ def server_command(args) -> list:
     launcher = [sys.executable, "-m", "veystrix.cli"] if bundled() else [str(REPO / "chat.sh")]
     if getattr(args, "model", "flashnext") == "nemotron35-lightning":
         # Manual selection only. The CLI applies the same guard/chunking contract; --mode, the prefix cache, layer-major
-        # and the Flash-Next memory-readiness gates do not exist for this model. 32K is the admitted ceiling, and the
-        # backend tightens it further from measured free memory at startup.
+        # and the Flash-Next memory-readiness gates do not exist for this model. The backend admits the requested
+        # window only if its own memory plan fits the machine.
         command = [*launcher, "--server", "--host", args.host, "--port", str(args.port),
-                   "--pool-gb", str(args.pool_gb), "--context-limit", "32768",
+                   "--pool-gb", str(args.pool_gb), "--context-limit", "262144",
                    "--model", "nemotron35-lightning", "--checkpoint", args.checkpoint]
         if getattr(args, "preferences_file", None):
             command += ["--preferences-file", args.preferences_file]

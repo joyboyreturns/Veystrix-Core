@@ -15,3 +15,13 @@ An initial real startup exposed a CLI probe parsing `--mode` as an ambiguous abb
 A second smoke test exercised the packaged router's streaming path across Qwen → Nemotron → Qwen. All streams identified the requested installation and ended with `[DONE]`; sampled swap stayed at 716.5 MiB. Nemotron did not follow the instruction to reply `OK` in that streaming test, so this is routing evidence, not evidence of numerical equivalence or reliable model quality. The app integration has been compiled, but real client model switching, long-session recovery, cancellation, and supervised crash recovery remain unverified. Cross-session handoffs are deliberately refused with `model_handoff_required` until explicitly authorized, which can prevent model changes across separate harness sessions.
 
 The app now uses this router in the development candidate. The installed DeepSeek desktop picker was observed showing both registered model names, and selection of each was verified without sending a task. A packaged startup test also preloaded Nemotron and successfully served a first Qwen request. The app's refreshed model catalogs update Qwen Code and DeepSeek configuration with backups and create/update a separate Hermes profile; a full real coding task in each harness has not been verified. `swift build` passes; `swift test` cannot run with the installed Command Line Tools because `TestingMacros` is unavailable.
+# Context defaults
+
+The Qwen and Nemotron launchers request a 262,144-token context window. Harness
+catalog entries use the installed checkpoint's reported native context, capped at
+262,144 (or 32,768 when metadata does not report a window). Nemotron admission
+still refuses a launch when the requested window does not fit its memory budget.
+Qwen's maximum cold and incremental prefills remain 32,768 tokens each; the
+larger context requires reusable state and is not a verified 262K cold prefill.
+Neither model has been validated at 262K on the target Mac.
+

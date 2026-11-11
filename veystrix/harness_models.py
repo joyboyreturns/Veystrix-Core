@@ -8,6 +8,12 @@ from __future__ import annotations
 import copy
 
 
+def model_context(model):
+    """Configured window, bounded by checkpoint metadata when available."""
+    native = model.native_context
+    return min(native, 262144) if isinstance(native, int) and native > 0 else 32768
+
+
 def _local_base(port):
     if not isinstance(port, int) or not 1024 <= port <= 65535:
         raise ValueError("invalid local port")
@@ -37,7 +43,7 @@ def qwen_config(settings, models, port=8080):
         preserved.append({"id": m.id, "name": "Veystrix · " + m.display_name, "baseUrl": base,
                           "envKey": "VEYSTRIX_API_KEY",
                           "generationConfig": {"timeout": 7200000, "streamIdleTimeoutMs": 7200000,
-                                               "maxRetries": 0, "contextWindowSize": 32768}})
+                                               "maxRetries": 0, "contextWindowSize": model_context(m)}})
     providers["openai"] = preserved
     return result
 
@@ -69,7 +75,7 @@ def deepseek_config(patch, models, port=8080):
     provider.update({"displayName": "Veystrix", "api": "openai-completions", "baseURL": base,
                      "apiKeyEnv": "VEYSTRIX_API_KEY", "streamIdleTimeoutMs": 7200000,
                      "timeoutMs": 7200000, "retryPolicy": {"mode": "normal", "maxRetries": 0},
-                     "models": preserved_models + [{"id": m.id, "name": m.display_name, "contextWindow": 32768,
+                     "models": preserved_models + [{"id": m.id, "name": m.display_name, "contextWindow": model_context(m),
                                  "maxTokens": 1024, "input": ["text"],
                                  "reasoningEfforts": {"off": "none", "low": "low", "medium": "medium", "high": "high"}}
                                 for m in models]})

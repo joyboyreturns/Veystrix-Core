@@ -7,6 +7,16 @@ def m(x): return InstalledModel(x, "flashnext", x, "/"+x, "qwen4_exp", {}, None,
 
 
 class HarnessConfigTests(unittest.TestCase):
+    def test_catalog_uses_native_window_with_a_safe_fallback(self):
+        from dataclasses import replace
+        full = replace(m('full'), native_context=262144)
+        small = replace(m('small'), native_context=8192)
+        entries = qwen_config({}, [full, small, m('unknown')])['modelProviders']['openai']
+        self.assertEqual([x['generationConfig']['contextWindowSize'] for x in entries], [262144, 8192, 32768])
+        patch = [{'id': 'llm-pi-ai'}]
+        models = deepseek_config(patch, [full, small, m('unknown')])[0]['config']['providers']['veystrix']['models']
+        self.assertEqual([x['contextWindow'] for x in models], [262144, 8192, 32768])
+
     def test_qwen_merge_preserves_unrelated_providers_and_is_idempotent(self):
         original = {"modelProviders": {"openai": [{"id": "other", "baseUrl": "https://example.test"}], "other": [{"id": "x"}]}, "model": {"name": "other"}}
         result = qwen_config(original, [m("a"), m("b")])
