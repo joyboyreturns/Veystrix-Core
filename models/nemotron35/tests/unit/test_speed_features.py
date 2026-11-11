@@ -122,6 +122,9 @@ class AutoPoolTests(unittest.TestCase):
 class PrefixCacheTests(unittest.TestCase):
     PROMPT = list(range(4, 60)) * 2      # 112 tokens, chunk 4 -> several checkpoints at snapshot_tokens=8
 
+    def setUp(self):
+        shutil.rmtree(Path(_dir) / "prefix", ignore_errors=True)
+
     def backend(self, **kw):
         b = make(**kw)
         if b.prefix_cache is not None:
@@ -220,12 +223,11 @@ class PrefixCacheTests(unittest.TestCase):
         foreign = PrefixCache(Path(_dir) / "prefix", {"model": "something-else"}, quota_bytes=2**30, min_tokens=8)
         self.assertEqual(foreign.reusable_tokens(self.PROMPT + [1]), 0)
 
-    def test_quota_evicts_oldest_but_keeps_newest(self):
+    def test_oversize_snapshot_never_exceeds_global_quota(self):
         a = self.backend(prefix_quota_gb=0.00005)   # ~50 KB: smaller than one snapshot
         a.append_tokens(self.PROMPT)
         a.generate(2)
-        self.assertLessEqual(len(a.prefix_cache._disk), 1)
-        self.assertGreater(a.prefix_cache.stats.evicted_ssd, 0)
+        self.assertEqual(len(a.prefix_cache._disk), 0)
         a.close()
 
     def test_server_facing_store_fields(self):
@@ -273,6 +275,34 @@ class LayerMajorTests(unittest.TestCase):
             finally:
                 a_s.close()
                 b_s.close()
+
+    def test_short_anchor_snapshot_matches_separate_prefills(self):
+        from models.nemotron35.backend_core import EngineCore
+
+        directory = Path(_dir) / "int8-anchor"
+        write_checkpoint(directory, config=dict(TINY_CONFIG, head_dim=64))
+        reference_model = load_streamed(directory, pool_bytes=0, config_check=permissive_config_check)
+        candidate_model = load_streamed(directory, pool_bytes=0, config_check=permissive_config_check)
+        reference = EngineCore(reference_model, chunk_tokens=4, int8_kv=True)
+        candidate = EngineCore(candidate_model, chunk_tokens=4, layer_major_tokens=8, int8_kv=True)
+        try:
+            tokens = self.TOKENS[:7]
+            reference.prefill(tokens[:4], emit_logits=False)
+            prefix = [mx.array(a) for a in reference.state_arrays()]
+            mx.eval(*prefix)
+            expected = reference.prefill(tokens[4:])
+            captured = []
+            actual = candidate.prefill(tokens, anchor=4, save_anchor=lambda _, caches: captured.extend(caches))
+            self.assertTrue(mx.array_equal(expected, actual).item())
+            self.assertEqual(candidate.cached_tokens, len(tokens))
+            self.assertTrue(all(mx.array_equal(a, b).item() for a, b in zip(
+                prefix, [a for cache in captured for a in cache.state], strict=True)))
+            self.assertLess(candidate_model.reader.bytes_read, reference_model.reader.bytes_read)
+            candidate.bind_cache(captured)
+            self.assertTrue(mx.array_equal(expected, candidate.prefill(tokens[4:])).item())
+        finally:
+            reference_model.close()
+            candidate_model.close()
 
     def test_each_layers_experts_are_read_once_per_segment(self):
         a_s, a = self.core(0, pool_bytes=0)

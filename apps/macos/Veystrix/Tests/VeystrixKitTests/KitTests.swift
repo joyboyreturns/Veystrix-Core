@@ -84,7 +84,7 @@ private func tempDir() -> URL {
         let paths = Paths(home: tempDir()); try paths.ensureDirectories()
         try Data(#"{"port": 9100, "futureField": true}"#.utf8).write(to: paths.settingsFile)
         let s = SettingsStore(paths: paths).load()
-        #expect(s.port == 9100); #expect(s.decodePool == .none); #expect(s.cacheQuotaGB == 50)
+        #expect(s.port == 9100); #expect(s.decodePool == .none); #expect(s.cacheQuotaGB == 80); #expect(s.nemotronContextTokens == 1_048_576)
         #expect(s.allowBattery); #expect(s.minimumBatteryPercent == 25); #expect(!s.allowLowPowerMode)
     }
     @Test func damagedSettingsAreKeptAndDefaultsUsed() throws {
@@ -203,6 +203,17 @@ private func tempDir() -> URL {
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: source, apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(plan.environment["PYTHONPATH"] == "/Applications/App With Spaces.app/Contents/Resources/engine/lib")
     }
+    @Test func qwenSpeedSelectionReachesTheRouter() throws {
+        var (settings, checkpoint) = try good(tempDir())
+        settings.flashNextSpeed = true
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        let plan = try LaunchPlan.make(settings: decoded, checkpoint: checkpoint,
+            source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil,
+            fileExists: exists, isExecutable: exists)
+        #expect(plan.arguments.contains("--flashnext-speed"))
+        #expect(plan.environment["VEYSTRIX_NEMOTRON_CONTEXT"] == "1048576")
+    }
+
     @Test func customCacheDirectoryIsPassedAsPrefixDir() throws {
         var (s, c) = try good(tempDir()); s.cacheDirectory = "/Volumes/Fast/cache"
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists, isExecutable: exists)

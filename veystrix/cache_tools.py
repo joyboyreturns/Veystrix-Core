@@ -189,13 +189,26 @@ def clean_cache(
 
 def main():
     parser = argparse.ArgumentParser(description="Veystrix Persistent SSD Cache Tools")
-    parser.add_argument("--directory", "-d", default=None, help="Cache directory (default: ~/.flashnext/prefix-cache)")
+    parser.add_argument("--directory", "-d", default=None, help="Custom shared cache location")
     parser.add_argument("--inspect", action="store_true", help="Inspect stored snapshots and exit")
     parser.add_argument("--clean", "--cleanup", action="store_true", dest="clean", help="Perform safe cache cleanup")
     parser.add_argument("--max-age-days", type=float, default=None, help="Maximum snapshot age in days to retain")
     parser.add_argument("--target-gb", "--target-disk-gb", type=float, default=None, dest="target_gb", help="Target disk budget in GB")
     parser.add_argument("--dry-run", action="store_true", help="Simulate cleanup without deleting files")
+    parser.add_argument("--legacy", action="store_true", help="Inspect the pre-migration Flash-Next cache")
     args = parser.parse_args()
+
+    if not args.legacy:
+        from veystrix.universal_cache import CacheManager, GB
+        with CacheManager(args.directory).transaction() as tx:
+            if args.clean:
+                threshold = time.time() - args.max_age_days * 86400 if args.max_age_days is not None else None
+                amount = tx.used if args.target_gb is None else max(0, tx.used - int(args.target_gb * GB))
+                result = tx.reclaim(amount, apply=not args.dry_run, older_than=threshold)
+            else:
+                result = tx.status()
+            print(json.dumps(result, indent=2))
+        return
 
     if args.clean:
         res = clean_cache(args.directory, max_age_days=args.max_age_days, target_gb=args.target_gb, dry_run=args.dry_run)

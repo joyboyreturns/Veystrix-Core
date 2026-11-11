@@ -213,6 +213,7 @@ def main(argv=None):
     parser.add_argument("--pool-gb", default="0")
     parser.add_argument("--prefix-dir")
     parser.add_argument("--flashnext-kv-cache", choices=("bf16", "tiered4"), default="bf16")
+    parser.add_argument("--flashnext-speed", action="store_true", help="enable the experimental short throughput profile")
     parser.add_argument("--flashnext-memory-policy", choices=("absolute-swap-only",))
     parser.add_argument("--overnight", action="store_true", help="restart after a worker failure within bounded supervisor limits")
     parser.add_argument("--checkpoint", required=True)
@@ -224,7 +225,7 @@ def main(argv=None):
         parser.error("selected model was not found in the configured model root or is incomplete")
     driver = ProcessDriver(pool_gb=args.pool_gb, prefix_dir=args.prefix_dir,
                            flashnext_kv_cache=args.flashnext_kv_cache,
-                           flashnext_memory_policy=args.flashnext_memory_policy)
+                           flashnext_memory_policy=args.flashnext_memory_policy, flashnext_speed=args.flashnext_speed)
     coordinator = ModelCoordinator(model_registry.resolve, driver)
     server = RouterServer((args.host, args.port), coordinator, driver, api_key=os.environ.get("VEYSTRIX_SERVER_API_KEY"))
     stopping = threading.Event()

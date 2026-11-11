@@ -47,12 +47,15 @@ def _read_tensor(directory: Path, desc: dict):
 @contextlib.contextmanager
 def _stub_switch_mlp(factory):
     """Make mlx-lm construct streamed experts instead of 128 resident ones."""
-    original = nemotron_h.SwitchMLP
+    from .attention import StreamedAttention
+    original, attention = nemotron_h.SwitchMLP, nemotron_h.NemotronHAttention
     nemotron_h.SwitchMLP = factory
+    nemotron_h.NemotronHAttention = StreamedAttention
     try:
         yield
     finally:
         nemotron_h.SwitchMLP = original
+        nemotron_h.NemotronHAttention = attention
 
 
 class StreamedModel:

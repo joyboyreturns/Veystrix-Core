@@ -276,7 +276,7 @@ class ExpertPool:
                 self.prefetch_wasted += 1
 
     # -- demand ------------------------------------------------------------------------------------------------
-    def fetch(self, layer: int, experts) -> dict:
+    def fetch(self, layer: int, experts, *, after_submit=None) -> dict:
         """Arrays for every requested expert; missing ones are read in parallel. Returns {expert: arrays}."""
         if self.cancel_check():
             raise Cancelled()
@@ -309,6 +309,8 @@ class ExpertPool:
                 waiting[expert] = future
             else:
                 direct[expert] = self.reader.submit_expert(self._demand, layer, expert)
+        if after_submit is not None:
+            after_submit()
         began = time.perf_counter()
         for expert, future in waiting.items():
             self.prefetch_used += 1
@@ -419,14 +421,24 @@ class StreamedSwitchMLP(nn.Module):
             y = _scatter_unsort(y, inv, local.shape)
         return y.squeeze(-2).reshape(*lead, local.shape[-1], flat.shape[-1]).astype(dtype)
 
+    def _expert(self, x, weights):
+        h = mx.quantized_matmul(x, weights['fc1.weight'], weights['fc1.scales'], weights['fc1.biases'],
+                                group_size=self.group_size, bits=4)
+        return mx.quantized_matmul(nn.relu2(h), weights['fc2.weight'], weights['fc2.scales'], weights['fc2.biases'],
+                                   group_size=self.group_size, bits=4)
+
     def __call__(self, x, indices):
         lead = x.shape[:-1]
         hidden = x.shape[-1]
         flat = x.reshape(-1, hidden)
         ids = np.asarray(indices).reshape(flat.shape[0], -1)
         rows_n, k = ids.shape
-        self._prefetch_next(flat, rows_n)
         unique = np.unique(ids)
+        if rows_n == 1 and not GATHER:
+            arrays = self.pool.fetch(self.layer, unique.tolist(), after_submit=lambda: self._prefetch_next(flat, rows_n))
+            outputs = [self._expert(flat, arrays[int(expert)]) for expert in ids[0]]
+            return mx.stack(outputs, axis=-2).reshape(*lead, k, hidden).astype(x.dtype)
+        self._prefetch_next(flat, rows_n)
         arrays = self.pool.fetch(self.layer, unique.tolist())
         if GATHER and len(unique) <= GATHER_MAX_EXPERTS:
             return self._gather(flat, ids, unique, arrays, lead, x.dtype)
@@ -435,10 +447,7 @@ class StreamedSwitchMLP(nn.Module):
             rows, slots = np.nonzero(ids == expert)
             w = arrays[int(expert)]
             sub = flat if len(rows) == rows_n else flat[mx.array(rows)]
-            h = mx.quantized_matmul(sub, w['fc1.weight'], w['fc1.scales'], w['fc1.biases'],
-                                    group_size=self.group_size, bits=4)
-            y = mx.quantized_matmul(nn.relu2(h), w['fc2.weight'], w['fc2.scales'], w['fc2.biases'],
-                                    group_size=self.group_size, bits=4)
+            y = self._expert(sub, w)
             ys.append(y)
             positions.append(rows * k + slots)
             batch.append(y)

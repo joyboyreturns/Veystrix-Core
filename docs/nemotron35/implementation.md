@@ -1,5 +1,9 @@
 # Implementation status and audit
 
+The [shared-cache and INT8 update](../architecture/unified-cache-nemotron-1m-results.md)
+documents the current serving path and its validation limits.
+
+
 Status: **experimental.** The streamed backend exists, is integrated into the shared CLI, session, server, supervisor and guards,
 and passes model-free tests on tiny synthetic checkpoints in the exact real tensor layout. **No inference has been run on the
 real checkpoint**, so correctness, memory and speed on real weights are unknown. Qwen (Flash-Next) remains the default; there is

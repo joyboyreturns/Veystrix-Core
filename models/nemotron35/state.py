@@ -9,6 +9,8 @@ import mlx.core as mx
 import numpy as np
 from mlx_lm.models.cache import ArraysCache, KVCache
 
+from .attention import AttentionCache
+
 class SnapshotError(ValueError):
     pass
 
@@ -29,7 +31,7 @@ def _digest(tensors):
         digest.update(key.encode())
         digest.update(dtype.encode())
         digest.update(json.dumps(shape).encode())
-        digest.update(a.tobytes())
+        digest.update(memoryview(a).cast("B"))
     return digest.hexdigest()
 
 def save(path, cache, identity, tokens):
@@ -42,9 +44,13 @@ def save(path, cache, identity, tokens):
             values, kind = entry.state, 'mamba'
         elif isinstance(entry, KVCache):
             values, kind = entry.state, 'attention'
+        elif isinstance(entry, AttentionCache):
+            if entry.offset != len(tokens):
+                raise SnapshotError('attention offset does not match token tape')
+            values, kind = entry.state, 'attention-int8'
         else:
             raise SnapshotError('unknown state type')
-        if len(values) != 2 or any(v is None for v in values):
+        if not values or any(v is None for v in values):
             raise SnapshotError('state is not initialized')
         types.append(kind)
         for j, value in enumerate(values):
@@ -60,6 +66,8 @@ def save(path, cache, identity, tokens):
     try:
         mx.save_safetensors(tmp, tensors, metadata=meta)
         os.chmod(tmp, 0o600)
+        with open(tmp, 'rb') as handle:
+            os.fsync(handle.fileno())
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
@@ -74,22 +82,32 @@ def restore(path, identity, tokens):
         types = json.loads(meta['types'])
         if not isinstance(types, list) or not types or len(types) > 52:
             raise SnapshotError('invalid cache layout')
-        expected = {f'{i}.{j}' for i in range(len(types)) for j in (0, 1)}
-        if set(tensors) != expected or _digest(tensors) != meta.get('sha256'):
+        if _digest(tensors) != meta.get('sha256'):
             raise SnapshotError('snapshot integrity check failed')
-        result = []
+        result, expected = [], set()
         for i, kind in enumerate(types):
-            values = [tensors[f'{i}.0'], tensors[f'{i}.1']]
+            count = sum(key.startswith(f'{i}.') for key in tensors) if kind == 'attention-int8' else 2
+            keys = [f'{i}.{j}' for j in range(count)]
+            expected.update(keys)
+            values = [tensors[key] for key in keys]
             if kind == 'mamba':
                 entry = ArraysCache(size=2)
             elif kind == 'attention':
                 if values[0].ndim != 4 or values[1].shape != values[0].shape:
                     raise SnapshotError('invalid KV state shape')
+                if values[0].shape[-2] != len(tokens):
+                    raise SnapshotError('invalid KV position')
                 entry = KVCache()
+            elif kind == 'attention-int8':
+                entry = AttentionCache()
             else:
                 raise SnapshotError('unknown cache type')
             entry.state = values
+            if kind == 'attention-int8' and entry.offset != len(tokens):
+                raise SnapshotError('invalid INT8 KV position')
             result.append(entry)
+        if set(tensors) != expected:
+            raise SnapshotError('invalid snapshot tensor names')
         return result
     except SnapshotError:
         raise

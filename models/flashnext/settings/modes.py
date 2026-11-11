@@ -29,6 +29,8 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from veystrix.universal_cache import DEFAULT_QUOTA_GB, DEFAULT_ROOT, _app_cache_settings, quota_gb
+
 CHAT, AGENTIC = "chat", "agentic"
 MODES = (CHAT, AGENTIC)
 PROFILE = {CHAT: "plain", AGENTIC: "agent"}
@@ -36,9 +38,9 @@ PROFILE = {CHAT: "plain", AGENTIC: "agent"}
 POOL_CAP_GB = 2.0
 DEFAULT_POOL_GB = 2.0
 START_GATE_GB = 9.0               # ChatGuard refuses to start below this much available memory
-PREFIX_DIR = "~/.flashnext/prefix-cache"
+PREFIX_DIR = DEFAULT_ROOT
 PREFIX_RAM_GB = 0.75
-PREFIX_DISK_GB = 50.0             # SSD cache quota; oldest unleased entries are evicted first (LRU) once it is full
+PREFIX_DISK_GB = DEFAULT_QUOTA_GB
 QUOTA_ENV = "VEYSTRIX_CACHE_GB"    # owner override of the quota, e.g. VEYSTRIX_CACHE_GB=80 ./chat.sh --mode agentic ...
 DISK_RESERVE_GB = 50.0
 MIN_PREFIX_DISK_GB = 1.0
@@ -127,8 +129,9 @@ EXPERIMENTAL = {
     "layer-major-4k": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096"},
                        "experimental layer-major prefill with a 4,096-token window; real-checkpoint validation pending"),
     "layer-major-hybrid-4k": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096",
-                              "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "1"},
-                             "experimental 4K layer-major windows with chunk-major execution for windows up to 2K; unmeasured"),
+                              "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "1",
+                              "FLASHNEXT_LAYER_MAJOR_MIN_TOKENS": "2049"},
+                             "4K layer-major windows with chunk-major execution for windows up to 2K"),
     "layer-prefetch": ({"FLASHNEXT_PREFILL_LAYER_PREFETCH": "1"},
                        "layer-major only: read layer l+1's experts while layer l computes. With the prefill ring (the agentic "
                        "preset) the scratch ring gets a second half (+1.5 GB while prefilling) and the read goes to it with direct "
@@ -159,6 +162,12 @@ EXPERIMENTAL = {
     "short-pool-reuse": ({"FLASHNEXT_SHORT_PREFILL_POOL_REUSE": "1"},
                          "reuse resident pool experts in short prefills; replay predicts under 5% hits"),
 }
+THROUGHPUT_FEATURES = ("layer-major-hybrid-4k", "layer-prefetch", "uncached-prefill-reads", "pool-buffered-fill")
+EXPERIMENTAL["short-throughput"] = (
+    {key: value for feature in THROUGHPUT_FEATURES for key, value in EXPERIMENTAL[feature][0].items()},
+    "experimental 4K hybrid layer-major prefill and buffered decode expert pool",
+)
+LAYER_MAJOR_MODES = {"layer-major", "layer-major-4k", "layer-major-hybrid-4k", "short-throughput"}
 OWNED = frozenset({*COMMON, *PREFILL_OFF, *AGENTIC_PREFILL, *EXPERIMENTAL_OFF,
                    "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB", "FLASHNEXT_PREFILL_WINDOW_TOKENS", "FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_BITS",
                    "FLASHNEXT_KV_LAYER_MODES",
@@ -235,12 +244,7 @@ def _positive(value, name):
 
 def cache_quota_gb(environ=None) -> float:
     """SSD cache quota in GB: PREFIX_DISK_GB unless VEYSTRIX_CACHE_GB holds a positive number."""
-    raw = (os.environ if environ is None else environ).get(QUOTA_ENV)
-    try:
-        value = float(raw) if raw not in (None, "") else PREFIX_DISK_GB
-    except ValueError:
-        return PREFIX_DISK_GB
-    return value if value > 0 else PREFIX_DISK_GB
+    return quota_gb(environ)
 
 
 def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=None, free_disk_gb=None,
@@ -252,17 +256,17 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
     for name in enable:
         if name not in EXPERIMENTAL:
             raise ModeError(f"unknown experimental feature {name!r}; choose from {', '.join(EXPERIMENTAL)}")
-    if len({"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable)) > 1:
+    if len(LAYER_MAJOR_MODES.intersection(enable)) > 1:
         raise ModeError("choose only one layer-major window size")
-    if {"uncached-reads", "uncached-prefill-reads"} <= set(enable):
+    if "uncached-reads" in enable and {"uncached-prefill-reads", "short-throughput"}.intersection(enable):
         raise ModeError("choose one of uncached-reads (all phases) and uncached-prefill-reads (prefill only)")
-    if "layer-prefetch" in enable and not {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
+    if "layer-prefetch" in enable and not LAYER_MAJOR_MODES.intersection(enable):
         raise ModeError("layer-prefetch needs a layer-major mode (layer-major, layer-major-4k or layer-major-hybrid-4k)")
     if mode == CHAT and "prefix-profiles" in enable:
         raise ModeError("prefix-profiles needs the AGENTIC prefix cache")
     if mode == CHAT and "long-context" in enable:
         raise ModeError("long-context is an AGENTIC feature (CHAT keeps one-call prefill and its reference numerics)")
-    if mode == CHAT and {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
+    if mode == CHAT and LAYER_MAJOR_MODES.intersection(enable):
         raise ModeError("layer-major is an AGENTIC feature (needs watchdog supervision and agentic mode)")
     kv_modes = {"kv-affine4", "kv-affine8", "kv-k16v4", "kv-k8v4", "kv-tiered4"}
     if len(kv_modes & set(enable)) > 1:
@@ -301,21 +305,17 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
             raise ModeError("swap safety margin must be smaller than the ceiling")
         env.update({"FLASHNEXT_SWAP_CEILING_MIB": str(ceiling), "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": str(margin),
                     "FLASHNEXT_WATCHDOG_MEMORY": "1"})
-        directory = os.path.expanduser(prefix_dir or PREFIX_DIR)
+        directory = os.path.expanduser(prefix_dir or os.environ.get("VEYSTRIX_CACHE_ROOT")
+                                       or os.environ.get("FLASHNEXT_PREFIX_CACHE_DIR")
+                                       or os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_DIR")
+                                       or _app_cache_settings().get("cacheDirectory") or PREFIX_DIR)
         free = _free_disk_gb(directory) if free_disk_gb is None else float(free_disk_gb)
-        disk_gb = min(cache_quota_gb(), max(0.0, free - DISK_RESERVE_GB))
-        if disk_gb < MIN_PREFIX_DISK_GB:
-            # A zero SSD budget means "unlimited" to the cache, so the cache is switched off instead.
-            env["FLASHNEXT_PREFIX_CACHE"] = "0"
-            warnings.append(f"prefix cache OFF: only {free:.0f} GB free on the cache volume, "
-                            f"{DISK_RESERVE_GB:g} GB is kept in reserve")
-            directory, disk_gb = None, 0.0
-        else:
-            env.update({"FLASHNEXT_PREFIX_CACHE_DIR": directory,
-                        "FLASHNEXT_PREFIX_CACHE_RAM_GB": f"{PREFIX_RAM_GB:g}",
-                        "FLASHNEXT_PREFIX_CACHE_DISK_GB": f"{disk_gb:g}",
-                        "FLASHNEXT_PREFIX_PROFILES_MAX_GB": f"{disk_gb:g}",
-                        "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB": f"{DISK_RESERVE_GB:g}"})
+        disk_gb = cache_quota_gb()
+        if free < DISK_RESERVE_GB:
+            warnings.append(f"prefix writes require reclaiming space above the {DISK_RESERVE_GB:g} GB SSD reserve")
+        env.update({"FLASHNEXT_PREFIX_CACHE_DIR": directory,
+                    "FLASHNEXT_PREFIX_CACHE_RAM_GB": f"{PREFIX_RAM_GB:g}",
+                    "FLASHNEXT_PREFIX_CACHE_DISK_GB": f"{disk_gb:g}"})
     labels = {}
     for name in enable:
         flags, label = EXPERIMENTAL[name]

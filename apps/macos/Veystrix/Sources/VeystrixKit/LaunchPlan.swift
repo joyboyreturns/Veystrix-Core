@@ -80,8 +80,9 @@ public struct LaunchPlan: Equatable, Sendable {
         args += ["--model", settings.selectedModel.rawValue]
         args += ["--flashnext-kv-cache", settings.flashNextKVCache.rawValue,
                  "--flashnext-memory-policy", "absolute-swap-only"]
+        if settings.flashNextSpeed { args.append("--flashnext-speed") }
         if settings.supervisedRestarts { args.append("--overnight") }
-        // The router passes this directory only to Flash-Next, even when it is loaded later.
+        // The router forwards the shared cache location when either model starts.
         if !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
 
         var env: [String: String] = [:]
@@ -95,6 +96,7 @@ public struct LaunchPlan: Equatable, Sendable {
         // Lifetime statistics: the engine appends one counts-only line per finished request here.
         env["VEYSTRIX_USAGE_LOG"] = UsageStore(paths: paths).requestsFile.path
         env["VEYSTRIX_CACHE_GB"] = String(settings.cacheQuotaGB)
+        env["VEYSTRIX_NEMOTRON_CONTEXT"] = String(settings.nemotronContextTokens)
         // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;
         // needs the narrow `sudo -n /usr/sbin/purge` permission, otherwise it records that and backs off).
         env["FLASHNEXT_AUTO_PURGE"] = "1"

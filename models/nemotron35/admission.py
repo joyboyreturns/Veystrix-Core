@@ -18,10 +18,13 @@ GIB = 2 ** 30
 ACTIVATION_BYTES_PER_CHUNK_TOKEN = 256 * 1024     # estimate: projections, router, expert rows, SSM scan temporaries
 MIN_OS_RESERVE = 3 * GIB                           # never plan into this, regardless of machine size
 SWAP_REFUSE_BYTES = int(2.5 * GIB)                 # refuse new work at the project's swap-growth stop line
-MAX_CONTEXT = 262144
-DEFAULT_CONTEXT = 262144
+MAX_CONTEXT = 1_048_576
+DEFAULT_CONTEXT = MAX_CONTEXT
+BF16_CONTEXT = 262_144
+PREFILL_LIMIT = 65_536
 DEFAULT_POOL_BYTES = 2 * GIB
 AUTO_POOL_MAX = 4 * GIB          # auto-sized pool never exceeds this
+INT8_ATTENTION_SCRATCH_BYTES = 384 * 2**20
 AUTO_POOL_HEADROOM = int(1.25 * GIB)   # and always leaves this much of the budget unplanned
 
 
@@ -98,9 +101,9 @@ def budget(machine: Machine) -> int:
     return max(0, min(machine.gpu_limit, by_total, machine.available))
 
 
-def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_tokens: int = DEFAULT_CONTEXT,
+def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_tokens: int | None = None,
               chunk_tokens: int = 2048, pool_bytes: int | None = None, allocator_slack: int = GIB // 2,
-              shrink: bool = True) -> Plan:
+              shrink: bool = True, int8_kv: bool = False, lightning: bool = False) -> Plan:
     """Fit context, chunk and pool into the budget, shrinking pool, then chunk; refuse if the core cannot fit.
 
     ``pool_bytes=None`` sizes the expert pool automatically: as large as fits (up to AUTO_POOL_MAX) while leaving
@@ -110,12 +113,16 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
     if machine.swap_used >= SWAP_REFUSE_BYTES:
         raise AdmissionRefused(f'swap in use ({machine.swap_used / GIB:.2f} GiB) is at the safety line; retry later')
     limit = budget(machine)
-    context_tokens = min(context_tokens, MAX_CONTEXT, config.get('max_position_embeddings', MAX_CONTEXT))
+    maximum = DEFAULT_CONTEXT if lightning and int8_kv else min(BF16_CONTEXT, config.get('max_position_embeddings', BF16_CONTEXT))
+    context_tokens = maximum if context_tokens is None else context_tokens
+    if not 1 <= context_tokens <= maximum:
+        raise AdmissionRefused(f'requested context {context_tokens} is outside the supported range 1–{maximum}')
 
     def build(pool, chunk):
         return estimate(config=config, context_tokens=context_tokens, non_expert_bytes=dense_bytes,
-                        expert_pool_bytes=pool, activation_bytes=chunk * ACTIVATION_BYTES_PER_CHUNK_TOKEN,
-                        reserve_bytes=allocator_slack)
+                        expert_pool_bytes=pool, activation_bytes=(chunk * ACTIVATION_BYTES_PER_CHUNK_TOKEN
+                            + (INT8_ATTENTION_SCRATCH_BYTES if int8_kv else 0)),
+                        reserve_bytes=allocator_slack, int8_kv=int8_kv)
 
     if pool_bytes is None:
         base = build(0, chunk_tokens).total_bytes

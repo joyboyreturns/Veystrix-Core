@@ -1,0 +1,562 @@
+{
+  "value": {
+    "arm": "warm",
+    "ttft_s": 3.7266457499936223,
+    "request_s": 9.251437167054974,
+    "text": "```python\ndef sorted_words(text: str) -> list[str]:\n    \"\"\"Return the words of *text* sorted lexicographically.\n\n    The function splits",
+    "usage": {
+      "prompt_tokens": 1010,
+      "completion_tokens": 32,
+      "total_tokens": 1042,
+      "prompt_tokens_details": {
+        "cached_tokens": 969
+      },
+      "prompt_cache_hit_tokens": 969,
+      "prompt_cache_miss_tokens": 41
+    },
+    "health": {
+      "status": "ok",
+      "ready": true,
+      "worker": {
+        "stage": "idle",
+        "detail": "",
+        "request_seq": 2,
+        "in_request": false,
+        "progress_ticks": 67,
+        "seconds_since_progress": 0.0,
+        "seconds_in_stage": 0.0,
+        "busy": false,
+        "stall_seconds": 180.0,
+        "stalled": false
+      },
+      "model": "veystrix-nemotron35-lightning",
+      "busy": false,
+      "queue": {
+        "active": null,
+        "waiting": 0,
+        "max_waiting": 4,
+        "max_wait_seconds": 20.0,
+        "completed": 2,
+        "rejected": 0,
+        "dropped": 0
+      },
+      "context_limit": 262144,
+      "max_cold_prefill": 262144,
+      "max_incremental_prefill": 262144,
+      "installed_model_id": "veystrix-nemotron35-lightning-361a7b280b076fd1c32324e4f2b80e24a1ea639a209f523e89ab6a65ddfb5c26",
+      "activity": {
+        "active": false,
+        "stage": "decode",
+        "prompt_tokens": 1010,
+        "prefill_done": 1010,
+        "prefill_total": 1010,
+        "decode_tokens": 32,
+        "decode_tokens_per_second": 5.356866064814728
+      },
+      "cache": {
+        "cache_enabled": true,
+        "ram_cache_bytes": 0,
+        "ram_cache_entries": 0,
+        "ram_cache_budget_bytes": 0,
+        "ssd_cache_bytes": 52256016,
+        "ssd_cache_entries": 1,
+        "ssd_cache_budget_bytes": 80000000000,
+        "ssd_cache_directory": "/private/tmp/veystrix-nem-int8-final/veystrix-cache-v1/nemotron35/56da7a18fe3aa1a64f6dc902a8dfa853c571ea43138a7ee983b99d026df2a7fc",
+        "active_model_state_bytes": 52483456,
+        "matched_prefix_tokens": 969,
+        "reused_tokens": 969,
+        "ram_hits": 0,
+        "ssd_hits": 1,
+        "static_prefix_hits": null,
+        "session_continuation_hits": 0,
+        "reasoning_state_restoration_hits": 0,
+        "prefix_mismatches": 0,
+        "state_invalids": 0,
+        "evicted_hits": 0,
+        "restore_failures": 0,
+        "cold_lookups": 1,
+        "evictions_ram": 0,
+        "evictions_ssd": 0,
+        "ssd_writes": 1,
+        "ssd_bytes_written": 52256016,
+        "ssd_bytes_read": 52256016,
+        "writes_skipped": 0,
+        "pressure_invalidated_snapshots": 0,
+        "pressure_invalidated_bytes": 0,
+        "restore_seconds": 0.0,
+        "snapshot_seconds": 2.00001522898674e-06,
+        "newly_computed_prefill_tokens": 41,
+        "actual_prefill_seconds": 3.200491665978916,
+        "decode_tokens_per_second": 5.351632868428695,
+        "current_swap_growth_mb": 0.0,
+        "swap_baseline_mb": 1019.62,
+        "peak_swap_growth_mb": 0.0,
+        "corruption_recovery_errors": 0,
+        "reused": 0,
+        "rebuilt": 2,
+        "evictions": 1,
+        "refused_cold_prefill": 0,
+        "warm_tokens": 1042,
+        "max_cold_prefill": 262144,
+        "max_incremental_prefill": 262144,
+        "sessions": {
+          "live": "auto:89b627dd0736c3c9",
+          "switches": 1,
+          "known": [
+            {
+              "id": "auto:89b627dd0736c3c9",
+              "requests": 1,
+              "rebuilds": 1,
+              "cold": false,
+              "last_prompt_tokens": 1010
+            },
+            {
+              "id": "auto:9660cda021e6ec7c",
+              "requests": 1,
+              "rebuilds": 1,
+              "cold": true,
+              "last_prompt_tokens": 1009
+            }
+          ]
+        },
+        "last_budget": {
+          "server_window": 262144,
+          "input_tokens": 1010,
+          "requested_output": 32,
+          "reserved_output": 32,
+          "remaining": 261102,
+          "continuation_ok": true
+        },
+        "last_divergence": {
+          "tape_tokens": 1041,
+          "prompt_tokens": 1010,
+          "first_difference": 978,
+          "tape_window": [
+            17616,
+            2254,
+            8876,
+            16448,
+            62899,
+            1455,
+            9368
+          ],
+          "prompt_window": [
+            17616,
+            2254,
+            8876,
+            25585,
+            62899,
+            1455,
+            9368
+          ],
+          "tape_is_prefix_of_prompt": false
+        },
+        "last_prefix": {
+          "prompt_tokens": 1010,
+          "hit_tokens": 969,
+          "reused_tokens": 969,
+          "prefilled_tokens": 41,
+          "prefill_seconds": 3.2,
+          "snapshot_seconds": 0.0,
+          "restore_seconds": 0.046,
+          "outcome": "ssd_hit",
+          "layer_major": false
+        },
+        "memory_controller": {
+          "policy_identifier": "swap-growth-only",
+          "swap_baseline_mb": 1019.62,
+          "current_swap_growth_mb": 0.0,
+          "peak_swap_growth_mb": 0.0,
+          "threshold_gib": 1.0,
+          "threshold_mb": 1024.0,
+          "stop_reason": null,
+          "stopped_at": null,
+          "can_admit": true,
+          "probe_availability": {
+            "pressure": true,
+            "swap_used_mb": true,
+            "swapout": true,
+            "swapin": true,
+            "available_mb": true,
+            "compressor_mb": true
+          },
+          "telemetry_only_checks": [
+            "startup_9gib_gate",
+            "measured_available_memory_admission",
+            "available_memory_floor_2gib",
+            "compressor_growth_stop",
+            "pressure_level_4_stop",
+            "persistent_pressure_level_2_stop",
+            "active_swap_rate_stop"
+          ],
+          "disclaimer": "The swap-growth-only policy does not guarantee protection against sudden OOM, GPU allocation failure, compressor growth, or degraded responsiveness.",
+          "state": "normal",
+          "reasons": [],
+          "recovery_events": 1,
+          "episodes": [
+            {
+              "start_s": 9.5,
+              "seconds": 12.8,
+              "peak_pressure": 1
+            }
+          ],
+          "elevated_seconds": 12.8,
+          "throttled_seconds": 0.0,
+          "swap_at_launch_mb": 1019.62,
+          "peak": {
+            "swap_increase_mib": 0.0,
+            "swapout_window_mib": 0.0,
+            "swapin_window_mib": 0.0625,
+            "compressor_growth_mib": 2894.8,
+            "pressure_level": 1,
+            "pressure_seconds": 0.0
+          },
+          "last": {
+            "mono_t": 596191.09,
+            "pressure": 1,
+            "available_mb": 5069.8,
+            "swap_increase_mib": 0.0,
+            "swapout_window_mib": 0.0,
+            "swapin_window_mib": 0.0,
+            "compressor_window_growth_mib": 0.0,
+            "compressor_growth_mib": 256.1,
+            "pressure_seconds": 0.0,
+            "window_s": 9.2
+          },
+          "swap_growth_stop_gib": 1.0,
+          "swap_ceiling_mib": 0.0,
+          "swap_ceiling_margin_mib": 256.0
+        }
+      },
+      "engine": {
+        "model": "nemotron35-lightning",
+        "runtime": "veystrix-nemotron35-stream-1",
+        "configured_context": 262144,
+        "admitted_context": 262144,
+        "kv_format": "affine-int8-g64",
+        "million_token_validation": false,
+        "planned_memory": {
+          "context_tokens": 262144,
+          "chunk_tokens": 2048,
+          "pool_bytes": 1073741824,
+          "dense_bytes": 1252003968,
+          "mamba_state_bytes": 49082368,
+          "kv_bytes": 855638016,
+          "activation_bytes": 939524096,
+          "reserve_bytes": 536870912,
+          "total_bytes": 4706861184,
+          "budget_bytes": 8610185216,
+          "estimated": true
+        },
+        "metal_active_bytes": 2794953172,
+        "metal_peak_bytes": 4317521008,
+        "process_peak_rss_bytes": 3039920128,
+        "pool": {
+          "budget_gib": 1.0,
+          "resident_gib": 1.0,
+          "hit_rate": 0.374,
+          "staged_mib": 369.3
+        },
+        "prefetch": {
+          "issued": 3649,
+          "used": 3334,
+          "wasted": 246,
+          "precision": 0.914
+        },
+        "expert_gb_read": 73.97,
+        "prefill": {
+          "layer_major_tokens": 8192,
+          "chunk_tokens": 2048
+        },
+        "last_prefix": {
+          "prompt_tokens": 1010,
+          "hit_tokens": 969,
+          "reused_tokens": 969,
+          "prefilled_tokens": 41,
+          "prefill_seconds": 3.2,
+          "snapshot_seconds": 0.0,
+          "restore_seconds": 0.046,
+          "outcome": "ssd_hit",
+          "layer_major": false
+        },
+        "readiness": {
+          "admitted": true,
+          "required_gib": 1.88,
+          "available_gib": 5.32,
+          "pressure": 1,
+          "steps": []
+        },
+        "prefix_cache": {
+          "snapshots": 1,
+          "gb": 0.05,
+          "ssd_hits": 1,
+          "cold_lookups": 1,
+          "reused_tokens": 969,
+          "restore_failures": 0,
+          "evicted": 0
+        }
+      },
+      "nemotron_context": {
+        "admitted_context": 262144,
+        "kv_format": "affine-int8-g64",
+        "million_token_validation": false
+      },
+      "memory_policy": {
+        "policy_identifier": "swap-growth-only",
+        "swap_baseline_mb": 1019.62,
+        "current_swap_growth_mb": 0.0,
+        "peak_swap_growth_mb": 0.0,
+        "threshold_gib": 1.0,
+        "threshold_mb": 1024.0,
+        "swap_ceiling_mib": 0.0,
+        "swap_ceiling_margin_mib": 256.0,
+        "stop_reason": null,
+        "can_admit": true,
+        "probe_availability": {
+          "pressure": true,
+          "swap_used_mb": true,
+          "swapout": true,
+          "swapin": true,
+          "available_mb": true,
+          "compressor_mb": true
+        },
+        "telemetry_only_checks": [
+          "startup_9gib_gate",
+          "measured_available_memory_admission",
+          "available_memory_floor_2gib",
+          "compressor_growth_stop",
+          "pressure_level_4_stop",
+          "persistent_pressure_level_2_stop",
+          "active_swap_rate_stop"
+        ]
+      }
+    }
+  },
+  "readings": [
+    {
+      "t": 1794407255.143544,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5341.3,
+      "compressor_mb": 2391.9,
+      "file_backed_mb": 6080.1,
+      "vm": {
+        "reactivated": 288117321,
+        "decompress": 817892546,
+        "compress": 955439148,
+        "pagein": 1348324108,
+        "pageout": 153435,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407256.2174022,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5293.3,
+      "compressor_mb": 2382.5,
+      "file_backed_mb": 6049.3,
+      "vm": {
+        "reactivated": 288118234,
+        "decompress": 817893319,
+        "compress": 955439148,
+        "pagein": 1348464407,
+        "pageout": 153453,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407257.2939079,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5169.0,
+      "compressor_mb": 2382.1,
+      "file_backed_mb": 5969.5,
+      "vm": {
+        "reactivated": 288119548,
+        "decompress": 817893429,
+        "compress": 955439148,
+        "pagein": 1348611482,
+        "pageout": 153454,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407258.372999,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5115.8,
+      "compressor_mb": 2339.2,
+      "file_backed_mb": 5905.3,
+      "vm": {
+        "reactivated": 288119676,
+        "decompress": 817896175,
+        "compress": 955439148,
+        "pagein": 1348725248,
+        "pageout": 153457,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407259.4540591,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5101.5,
+      "compressor_mb": 2339.2,
+      "file_backed_mb": 5887.6,
+      "vm": {
+        "reactivated": 288119776,
+        "decompress": 817896232,
+        "compress": 955439148,
+        "pagein": 1348826363,
+        "pageout": 153458,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407260.5270872,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5100.7,
+      "compressor_mb": 2339.2,
+      "file_backed_mb": 5892.2,
+      "vm": {
+        "reactivated": 288120180,
+        "decompress": 817896281,
+        "compress": 955439148,
+        "pagein": 1348921785,
+        "pageout": 153459,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407261.6015549,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5129.4,
+      "compressor_mb": 2337.1,
+      "file_backed_mb": 5932.2,
+      "vm": {
+        "reactivated": 288120663,
+        "decompress": 817896617,
+        "compress": 955439148,
+        "pagein": 1349017302,
+        "pageout": 153459,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407262.6719182,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5056.9,
+      "compressor_mb": 2337.1,
+      "file_backed_mb": 5856.0,
+      "vm": {
+        "reactivated": 288121502,
+        "decompress": 817896658,
+        "compress": 955439148,
+        "pagein": 1349109935,
+        "pageout": 153461,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    {
+      "t": 1794407263.389958,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.62,
+      "pressure_level": 1,
+      "available_mb": 5273.0,
+      "compressor_mb": 2337.1,
+      "file_backed_mb": 5873.7,
+      "vm": {
+        "reactivated": 288122270,
+        "decompress": 817896700,
+        "compress": 955439148,
+        "pagein": 1349174544,
+        "pageout": 153461,
+        "swapin": 7302409,
+        "swapout": 11847181
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    }
+  ]
+}

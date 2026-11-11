@@ -20,13 +20,14 @@ from models.flashnext.overnight import server_command
 class ProcessDriver:
     """Start one guarded CLI engine and prove its process group has exited on unload."""
     def __init__(self, *, pool_gb="0", prefix_dir=None, startup_timeout=1800, stop_timeout=60,
-                 command_factory=None, flashnext_kv_cache="bf16", flashnext_memory_policy=None):
+                 command_factory=None, flashnext_kv_cache="bf16", flashnext_memory_policy=None, flashnext_speed=False):
         self.pool_gb = pool_gb
         self.prefix_dir = prefix_dir
         self.startup_timeout = startup_timeout
         self.stop_timeout = stop_timeout
         self.flashnext_kv_cache = flashnext_kv_cache
         self.flashnext_memory_policy = flashnext_memory_policy
+        self.flashnext_speed = flashnext_speed
         self.command_factory = command_factory or self._command
         self.process = None
         self.port = None
@@ -38,9 +39,12 @@ class ProcessDriver:
     def _command(self, model, port):
         is_flashnext = model.family == "flashnext"
         tiered = is_flashnext and self.flashnext_kv_cache == "tiered4"
+        features = ["kv-tiered4"] if tiered else []
+        if is_flashnext and self.flashnext_speed:
+            features.append("short-throughput")
         args = Namespace(model=model.family, checkpoint=model.checkpoint, host="127.0.0.1", port=port,
                          pool_gb=("auto" if model.family == "nemotron35-lightning" and self.pool_gb == "0" else self.pool_gb),
-                         enable=["kv-tiered4"] if tiered else [], prefix_dir=self.prefix_dir,
+                         enable=features, prefix_dir=self.prefix_dir,
                          preferences_file=None, no_auto_purge=is_flashnext and self.flashnext_memory_policy == "absolute-swap-only",
                          threshold=1.0 if tiered else None)
         command = server_command(args)

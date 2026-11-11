@@ -121,7 +121,7 @@ class ProfiledPrefixCache(P.PrefixCache):
     def __init__(self, fp: str, ram_budget: int, directory, disk_budget: int = int(10e9), *,
                  free_reserve: int = int(50e9), free_bytes=None, pin_after: int = 3,
                  half_life_s: float = 72 * 3600.0, clock=time.time, config: dict | None = None,
-                 index_flush_s: float = 5.0, orphan_grace_s: float = 60.0, verify_hash: bool = True):
+                 index_flush_s: float = 5.0, orphan_grace_s: float = 60.0, verify_hash: bool = True, manager=None):
         if directory is None:
             raise ValueError("profiles need a cache directory")
         self.free_reserve = int(free_reserve)
@@ -143,7 +143,7 @@ class ProfiledPrefixCache(P.PrefixCache):
         self._flushed_at = 0.0
         self.index_state = "absent"
         self.extra = {"config_drift": 0, "auto_pins": 0, "foreign_evicted": 0, "scrubbed": 0}
-        super().__init__(fp, ram_budget, directory, disk_budget, verify_hash=verify_hash, write_through=True)
+        super().__init__(fp, ram_budget, directory, disk_budget, verify_hash=verify_hash, write_through=True, manager=manager)
 
     # ---- safety of deletion ----
     def _check_directory(self) -> None:
@@ -216,8 +216,21 @@ class ProfiledPrefixCache(P.PrefixCache):
             return False
 
     def _drop_files(self, key) -> None:
+        if self.manager is not None:
+            return super()._drop_files(key)
         for suffix in (".json", ".safetensors"):            # manifest first: a crash leaves an orphan data file
             self._unlink(f"{key}{suffix}")
+
+    def _sync_managed_disk(self):
+        super()._sync_managed_disk()
+        saved = self._load_index()
+        self._rate.update(saved.get("rate", {}))
+        self._seen.update(saved.get("seen", {}))
+        self._meta = {key: {
+            "kind": None, "hits": 0, "last_used": meta["atime"], "created": meta["atime"],
+            "pinned": None, "saved_s": 0.0, "config": {}, "n": meta["n"],
+            **saved.get("entries", {}).get(key, {}), **self._meta.get(key, {})
+        } for key, meta in self._disk.items()}
 
     # ---- startup: scan, recover, enforce ----
     def _scan(self) -> None:
@@ -331,6 +344,7 @@ class ProfiledPrefixCache(P.PrefixCache):
         self._dirty, self._flushed_at = False, now
         return True
 
+    @P._managed_disk
     def flush(self) -> bool:
         with self._lock:
             return self._flush_index(force=True)
@@ -471,7 +485,7 @@ class ProfiledPrefixCache(P.PrefixCache):
     def _persist(self, entry: P.Entry) -> None:
         if entry.key in self._disk:
             return
-        if not self._make_room(entry.nbytes() + DISK_SLACK, protect=self._chain_keys(entry.parent) if entry.parent else ()):
+        if self.manager is None and not self._make_room(entry.nbytes() + DISK_SLACK, protect=self._chain_keys(entry.parent) if entry.parent else ()):
             self.stats.writes_skipped += 1
             return
         super()._persist(entry)
@@ -502,6 +516,7 @@ class ProfiledPrefixCache(P.PrefixCache):
         with self._lock:
             return list(self.eviction_events)
 
+    @P._managed_disk
     def put(self, tokens, cache_list, parent=None, language=None, plan=None, kind=None, high_value=None, *, auto_parent=True):
         with self._lock:
             entry = super().put(tokens, cache_list, parent, language, plan, kind, auto_parent=auto_parent)
@@ -522,10 +537,10 @@ class ProfiledPrefixCache(P.PrefixCache):
             self._flush_index(force=entry.key in self._disk and self._dirty)   # a new snapshot's record is saved at once
             return entry
 
-    def invalidate_unbacked_under_pressure(self, target_bytes=0):
+    def invalidate_unbacked_under_pressure(self, target_bytes=0, *, exclude=()):
         with self._lock:
             before = set(self._ram)
-            result = super().invalidate_unbacked_under_pressure(target_bytes)
+            result = super().invalidate_unbacked_under_pressure(target_bytes, exclude=exclude)
             for key in before - set(self._ram):
                 self._meta.pop(key, None)
             if result["invalidated_entries"]:
@@ -583,6 +598,8 @@ class ProfiledPrefixCache(P.PrefixCache):
                     break
             else:
                 return                                                # pins may not take more than half the budget
+        if self._transaction is not None and not self._transaction.set_pin(self.directory, key, True):
+            return
         meta["pinned"] = "auto"
         self.extra["auto_pins"] += 1
         self._dirty = True
@@ -642,22 +659,28 @@ class ProfiledPrefixCache(P.PrefixCache):
         key = P.chain_key(self.fp, tuple(int(t) for t in ref))
         return key if key in self._disk else None
 
+    @P._managed_disk
     def pin(self, ref, label: str = "manual") -> bool:
         """Protect a stored snapshot (by key or by its exact token ids) and its whole chain from eviction."""
         with self._lock:
             key = self._key_of(ref)
             if key is None:
                 return False
+            if self._transaction is not None and not self._transaction.set_pin(self.directory, key, True):
+                return False
             self._meta[key]["pinned"] = "manual" if label != "auto" else "auto"
             self._dirty = True
             self._flush_index(force=True)
             return True
 
+    @P._managed_disk
     def unpin(self, ref) -> bool:
         with self._lock:
             key = self._key_of(ref)
             if key is None or not self._meta[key]["pinned"]:
                 return False
+            if self._transaction is not None:
+                self._transaction.set_pin(self.directory, key, False)
             self._meta[key]["pinned"] = None
             self._dirty = True
             self._flush_index(force=True)
@@ -700,6 +723,7 @@ class ProfiledPrefixCache(P.PrefixCache):
                     "ssd_bytes_written": s.ssd_bytes_written, "ssd_bytes_read": s.ssd_bytes_read,
                     **self.extra, **self.usage()}
 
+    @P._managed_disk
     def scrub(self, delete: bool = True) -> list:
         """Verify every stored entry against its manifest and checksum. Returns the keys that failed (removed with
         ``delete``, descendants included)."""
@@ -717,6 +741,7 @@ class ProfiledPrefixCache(P.PrefixCache):
                         self.extra["scrubbed"] += 1
             return bad
 
+    @P._managed_disk
     def warm_ram(self, limit_bytes: int | None = None) -> int:
         """After a restart: load the most valuable snapshots (pinned first) into RAM, up to the RAM budget. Returns the
         number loaded. Entries load exactly as a lookup would load them."""
@@ -740,6 +765,7 @@ class ProfiledPrefixCache(P.PrefixCache):
                     self._invalidate(key)
             return loaded
 
+    @P._managed_disk
     def clear(self) -> None:
         with self._lock:
             super().clear()

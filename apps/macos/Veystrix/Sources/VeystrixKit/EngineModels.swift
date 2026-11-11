@@ -32,6 +32,19 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     public var queue: Queue?
     public var activity: Activity?
     public var worker: Worker?
+    public var nemotron: Nemotron?
+
+    public struct Nemotron: Decodable, Equatable, Sendable {
+        public let admittedContext: Int
+        public let kvFormat: String
+        public let millionTokenValidation: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case admittedContext = "admitted_context"
+            case kvFormat = "kv_format"
+            case millionTokenValidation = "million_token_validation"
+        }
+    }
 
     public struct Activity: Decodable, Equatable, Sendable {
         public var active: Bool?
@@ -83,6 +96,7 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     }
     enum CodingKeys: String, CodingKey {
         case status, ready, model, busy, fault, cache, queue, activity, worker
+        case nemotron = "nemotron_context"
         case installedModelID = "installed_model_id"
         case flashNextKVCache = "flashnext_kv_cache"
         case contextLimit = "context_limit", maxColdPrefill = "max_cold_prefill", memoryPolicy = "memory_policy"

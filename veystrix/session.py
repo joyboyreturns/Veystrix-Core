@@ -537,8 +537,9 @@ def _apply_backend_limits(backend) -> None:
     current = os.environ.get("VEYSTRIX_CONTEXT_LIMIT")
     os.environ["VEYSTRIX_CONTEXT_LIMIT"] = str(min(context, int(current)) if current and current.isdigit() else context)
     for name in ("VEYSTRIX_MAX_COLD_PREFILL", "VEYSTRIX_MAX_INCREMENTAL_PREFILL"):
+        limit = min(context, getattr(backend, name.removeprefix("VEYSTRIX_").lower(), context))
         value = os.environ.get(name)
-        os.environ[name] = str(min(context, int(value)) if value and value.isdigit() else context)
+        os.environ[name] = str(min(limit, int(value)) if value and value.isdigit() and int(value) > 0 else limit)
 
 
 def _apply_seed(seed: int | None) -> None:

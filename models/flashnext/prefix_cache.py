@@ -538,7 +538,7 @@ def read_manifest(directory: Path, key: str) -> dict:
 
 
 @_with_directory_owner
-def read_entry(directory: Path, key: str, fp: str, verify_hash: bool = True) -> Entry:
+def read_entry(directory: Path, key: str, fp: str, verify_hash: bool = True, *, managed: bool = False) -> Entry:
     manifest = read_manifest(directory, key)
     if manifest.get("format") != FORMAT_VERSION or manifest.get("key") != key:
         raise CorruptEntry("format or key mismatch")
@@ -546,26 +546,32 @@ def read_entry(directory: Path, key: str, fp: str, verify_hash: bool = True) -> 
         raise CorruptEntry("fingerprint mismatch")
     data = directory / f"{key}.safetensors"
     try:
-        # Load exactly the bytes verified, not a pathname another process can
-        # replace between hashing and loading. The anonymous temporary file is
-        # disk-backed and disappears on close; it does not retain a second
-        # snapshot in RAM. Materialize MLX arrays before closing its handle.
-        with data.open("rb") as source, tempfile.TemporaryFile(mode="w+b") as verified:
+        # Managed snapshots are immutable under the global transaction. Hash and load
+        # the same open file. Standalone readers still load a private verified copy.
+        from contextlib import nullcontext
+        fd = os.open(data, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as source, (nullcontext(None) if managed else tempfile.TemporaryFile(mode="w+b")) as copy:
+            before = os.fstat(source.fileno())
             digest = hashlib.sha256()
             size = 0
             for block in iter(lambda: source.read(8 * 1024 * 1024), b""):
                 size += len(block)
                 digest.update(block)
-                verified.write(block)
+                if copy is not None:
+                    copy.write(block)
             if size != manifest["file_bytes"]:
                 raise CorruptEntry(f"size {size} differs from manifest {manifest['file_bytes']}")
-            # A disk snapshot is never restored without checking its contents.
             if digest.hexdigest() != manifest["file_sha256"]:
                 raise CorruptEntry("checksum mismatch")
-            verified.flush()
+            verified = source if copy is None else copy
+            if copy is not None:
+                copy.flush()
             verified.seek(0)
             tensors, metadata = mx.load(verified, format="safetensors", return_metadata=True)
             mx.eval(*tensors.values())
+            after = os.fstat(source.fileno())
+            if managed and (before.st_ctime_ns, before.st_size) != (after.st_ctime_ns, after.st_size):
+                raise CorruptEntry("snapshot changed during restore")
     except CorruptEntry:
         raise
     except Exception as error:
@@ -714,6 +720,25 @@ class _Lease:
         return False
 
 
+def _managed_disk(method):
+    """Refresh the SSD view and serialize disk operations across local engines."""
+    @wraps(method)
+    def operation(self, *args, **kwargs):
+        if self.manager is None:
+            return method(self, *args, **kwargs)
+        with self._lock:
+            if self._transaction is not None:
+                return method(self, *args, **kwargs)
+            with self.manager.transaction() as tx:
+                self._transaction = tx
+                try:
+                    self._sync_managed_disk()
+                    return method(self, *args, **kwargs)
+                finally:
+                    self._transaction = None
+    return operation
+
+
 class PrefixCache:
     """Longest-exact-prefix lookup over chained snapshots.
 
@@ -723,8 +748,13 @@ class PrefixCache:
 
     def __init__(self, fp: str, ram_budget: int, directory=None, disk_budget: int = 0,
                  verify_hash: bool = True, write_through: bool = True,
-                 min_disk_free_bytes: int | None = None):
+                 min_disk_free_bytes: int | None = None, manager=None):
         self.fp = fp
+        self.manager = manager
+        self._transaction = None
+        self._lease_fds = {}
+        if manager is not None:
+            directory = manager.namespace("flashnext", fp)
         self.ram_budget = int(ram_budget)
         self.disk_budget = int(disk_budget)
         self.directory = Path(directory) if directory else None
@@ -745,7 +775,9 @@ class PrefixCache:
         self._lengths: set[int] = set()
         self._leases: dict[str, int] = {}             # key -> holders; a leased entry is never evicted or dropped
         self._evicted_keys: OrderedDict[str, float] = OrderedDict()
-        if self.directory is not None:
+        if manager is not None:
+            self._initialize_managed_disk()
+        elif self.directory is not None:
             owner = _claim_directory(self.directory)
             self._owner_finalizer = weakref.finalize(self, _release_directory, *owner)
             try:
@@ -753,6 +785,34 @@ class PrefixCache:
             except BaseException:
                 self._owner_finalizer()
                 raise
+
+    @_managed_disk
+    def _initialize_managed_disk(self):
+        pass
+
+    def _sync_managed_disk(self):
+        tx = self._transaction
+        self.disk_budget = tx.quota
+        local = {entry.key: entry for entry in tx.entries.values()
+                 if entry.directory == self.directory and entry.tokens > 0}
+        removed = self._disk.keys() - local.keys()
+        self.stats.evicted_ssd += len(removed)
+        self.stats.evicted_ssd_bytes += sum(self._disk[key]["bytes"] for key in removed)
+        # A dropped disk entry can also invalidate a RAM-only descendant.
+        for key, entry in sorted(self._ram.items(), key=lambda item: item[1].n_tokens):
+            if entry.parent in removed:
+                removed.add(key)
+        for key in removed:
+            entry = self._ram.pop(key, None)
+            if entry is not None:
+                self._ram_bytes -= entry.nbytes()
+            self._tokens.pop(key, None)
+            self._plans.pop(key, None)
+        self._disk = {key: {"n": entry.tokens, "parent": entry.parent,
+                            "bytes": entry.size, "atime": entry.mtime}
+                      for key, entry in local.items()}
+        self._plans.update({key: entry.plan for key, entry in local.items()})
+        self._lengths = {e.n_tokens for e in self._ram.values()} | {e.tokens for e in local.values()}
 
     # ---- index ----
     def _scan(self) -> None:
@@ -809,8 +869,11 @@ class PrefixCache:
             return
         for suffix in (".json", ".safetensors"):
             (self.directory / f"{key}{suffix}").unlink(missing_ok=True)
+        if self._transaction is not None:
+            self._transaction.entries.pop(f"flashnext/{self.fp}/{key}", None)
 
     # ---- store ----
+    @_managed_disk
     def put(self, tokens, cache_list, parent: Hit | Entry | None = None, language=None, plan=None,
             kind: str | None = None, *, auto_parent: bool = True) -> Entry:
         """Capture the live cache at ``tokens`` and store it. ``parent`` is the Hit or Entry it extends.
@@ -887,16 +950,20 @@ class PrefixCache:
                                                                   (k in self._disk and self._ancestors_present(k)))]
                 victim = None
                 for key in candidates:
-                    candidate = self._ram[key]
+                    candidate = self._ram.get(key)
+                    if candidate is None:
+                        continue
                     if self.directory is not None and key not in self._disk:
                         self._persist(candidate)
                     if key in self._disk:
                         victim, entry = key, candidate
                         break
                 if victim is None:
+                    if self.manager is not None:
+                        self.invalidate_unbacked_under_pressure(self.ram_budget, exclude=(newest,))
                     break
-            self._ram.pop(victim)
-            self._ram_bytes -= entry.nbytes()
+            if self._ram.pop(victim, None) is not None:
+                self._ram_bytes -= entry.nbytes()
             self.stats.evicted_ram += 1
 
     # ---- leases ----
@@ -904,9 +971,12 @@ class PrefixCache:
         """Protect entries from loss while in use; durable RAM copies may be released and restored from SSD."""
         return _Lease(self, tuple(keys))
 
+    @_managed_disk
     def _acquire(self, keys) -> None:
         with self._lock:
             for key in keys:
+                if self._transaction is not None and key not in self._leases:
+                    self._lease_fds[key] = self._transaction.lease(self.directory, key)
                 self._leases[key] = self._leases.get(key, 0) + 1
 
     def _release(self, keys) -> None:
@@ -917,7 +987,11 @@ class PrefixCache:
                     self._leases[key] = left
                 else:
                     self._leases.pop(key, None)
+                    fd = self._lease_fds.pop(key, None)
+                    if fd is not None:
+                        os.close(fd)
 
+    @_managed_disk
     def shrink_ram(self, target_bytes: int) -> int:
         """Drop least-recently-used RAM entries until at most ``target_bytes`` stay. Returns the bytes freed.
 
@@ -946,7 +1020,8 @@ class PrefixCache:
                 self.stats.evicted_ram += 1
             return before - self._ram_bytes
 
-    def invalidate_unbacked_under_pressure(self, target_bytes: int = 0) -> dict:
+    @_managed_disk
+    def invalidate_unbacked_under_pressure(self, target_bytes: int = 0, *, exclude=()) -> dict:
         """Explicitly discard unleased, undurable leaf snapshots under pressure.
 
         Persisted copies and their ancestry are never removed here. A discarded
@@ -959,7 +1034,7 @@ class PrefixCache:
                 parents = {entry.parent for entry in self._ram.values()}
                 parents.update(meta["parent"] for meta in self._disk.values())
                 key = next((k for k in self._ram_order()
-                            if k not in self._disk and k not in self._leases and k not in parents), None)
+                            if k not in self._disk and k not in self._leases and k not in parents and k not in exclude), None)
                 if key is None:
                     break
                 entry = self._ram.pop(key)
@@ -998,7 +1073,15 @@ class PrefixCache:
             if entry.parent not in self._disk:
                 self.stats.writes_skipped += 1
                 return
-        if self.directory is not None:
+        tx = self._transaction
+        if tx is not None:
+            ancestors = self._chain_keys(entry.parent) if entry.parent else ()
+            protect = [f"flashnext/{self.fp}/{key}" for key in ancestors]
+            if not tx.make_room(entry.nbytes() + 1024 * 1024, protect=protect):
+                self.stats.writes_skipped += 1
+                return
+            self._sync_managed_disk()
+        elif self.directory is not None:
             try:
                 usage = shutil.disk_usage(self.directory)
                 if usage.free < self.min_disk_free_bytes:
@@ -1008,6 +1091,13 @@ class PrefixCache:
                 pass
         try:
             written = write_entry(self.directory, entry, self.fp)
+            if tx is not None:
+                tx.entries = tx._scan()
+                if tx.used > tx.quota or shutil.disk_usage(self.directory).free < tx.manager.reserve:
+                    self._drop_files(entry.key)
+                    tx.entries = tx._scan()
+                    self.stats.writes_skipped += 1
+                    return
             self._disk[entry.key] = {"n": entry.n_tokens, "parent": entry.parent, "bytes": written,
                                      "atime": time.time()}
             self.stats.ssd_writes += 1
@@ -1016,7 +1106,8 @@ class PrefixCache:
             if entry.parent is not None:
                 self._acquire((entry.parent,))
             try:
-                self._evict_disk()
+                if tx is None:
+                    self._evict_disk()
             finally:
                 if entry.parent is not None:
                     self._release((entry.parent,))
@@ -1109,6 +1200,7 @@ class PrefixCache:
         found, _ = self._longest_prefix_with_reason(tokens, strictly_shorter=strictly_shorter, accept=accept)
         return found
 
+    @_managed_disk
     def peek(self, ids, accept=None) -> int:
         """How many leading tokens of ``ids`` a lookup would reuse, without loading, restoring or counting anything.
 
@@ -1122,6 +1214,7 @@ class PrefixCache:
             self.stats.rejected_plan = vetoed
             return 0 if found is None else found[1]
 
+    @_managed_disk
     def lookup(self, ids, make_cache, language=None, accept=None) -> tuple:
         """Return ``LookupResult(hit, caches, outcome)``. ``hit`` is None on a miss (then ``caches`` is None).
 
@@ -1155,6 +1248,8 @@ class PrefixCache:
                     else:
                         outcome = OUTCOME_COLD
                         self.stats.cold_lookups += 1
+                    if self._transaction is not None:
+                        self._transaction.record("flashnext", self.directory)
                     return LookupResult(None, None, outcome)
                 key, n = found
                 holding = self._chain_keys(key)
@@ -1193,6 +1288,8 @@ class PrefixCache:
                 self.stats.ssd_hits += tier == "ssd"
                 self.stats.ssd_bytes_read += loaded
                 self._on_hit(key, n, tier, seconds)
+                if self._transaction is not None:
+                    self._transaction.record("flashnext", self.directory, key, n)
                 hit = Hit(n, tier, seconds, loaded, tuple(e.key for e in chain), outcome=outcome)
                 return LookupResult(hit, caches, outcome)
 
@@ -1245,7 +1342,7 @@ class PrefixCache:
             raise CorruptEntry("entry is not in RAM or on disk")
         # Disk files can be replaced or modified by another process at any time.
         # A previous verification of this key does not verify the current bytes.
-        entry = read_entry(self.directory, key, self.fp, self.verify_hash)
+        entry = read_entry(self.directory, key, self.fp, self.verify_hash, managed=self._transaction is not None)
         if entry.parent is not None:
             parent_tokens = self._tokens.get(entry.parent)
             if parent_tokens is None:
@@ -1266,7 +1363,7 @@ class PrefixCache:
             if current in self._tokens:
                 deltas.append(self._tokens[current])
                 break
-            entry = self._ram.get(current) or read_entry(self.directory, current, self.fp, self.verify_hash)
+            entry = self._ram.get(current) or read_entry(self.directory, current, self.fp, self.verify_hash, managed=self._transaction is not None)
             deltas.append(entry.token_delta)
             current = entry.parent
         return tuple(t for delta in reversed(deltas) for t in delta)
@@ -1294,6 +1391,7 @@ class PrefixCache:
         self._lengths = {m["n"] for m in self._disk.values()} | {e.n_tokens for e in self._ram.values()}
 
     # ---- reporting ----
+    @_managed_disk
     def usage(self) -> dict:
         with self._lock:
             return {
@@ -1302,6 +1400,7 @@ class PrefixCache:
                 "disk_budget": self.disk_budget,
             }
 
+    @_managed_disk
     def clear(self) -> None:
         with self._lock:
             for key in list(self._disk):

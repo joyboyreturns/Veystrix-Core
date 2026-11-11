@@ -28,6 +28,13 @@ class ModelProcessTests(unittest.TestCase):
   self.assertEqual(command[command.index("--max-incremental-prefill") + 1], "32768")
   self.assertNotIn("kv-tiered4", driver._command(nemotron, 8080))
 
+ def test_speed_profile_only_applies_to_qwen(self):
+  driver = ProcessDriver(flashnext_speed=True)
+  flashnext = InstalledModel("flash", "flashnext", "test", "/tmp/flash", "qwen4_exp", {}, None, "test")
+  nemotron = InstalledModel("nemo", "nemotron35-lightning", "test", "/tmp/nemo", "nemotron_h", {}, None, "test")
+  self.assertIn("short-throughput", driver._command(flashnext, 8080))
+  self.assertNotIn("short-throughput", driver._command(nemotron, 8080))
+
  def test_real_child_is_verified_and_unloaded(self):
   m=InstalledModel('test-model','flashnext','test','/tmp/test','qwen4_exp',{},None,'test')
   driver=ProcessDriver(startup_timeout=5,stop_timeout=5,command_factory=lambda model,port:[sys.executable,'-c',CHILD,str(port)])

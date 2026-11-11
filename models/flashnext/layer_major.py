@@ -84,7 +84,9 @@ def identity() -> str:
     if not enabled():
         return ""
     hybrid = "/hybrid-small-v1" if hybrid_enabled() else ""
-    return f"{PLAN_VERSION}/w{window_tokens()}{hybrid}"
+    minimum = min_tokens()
+    threshold = f"/min{minimum}" if minimum != DEFAULT_MIN_TOKENS else ""
+    return f"{PLAN_VERSION}/w{window_tokens()}{hybrid}{threshold}"
 
 
 def prefetch_enabled() -> bool:

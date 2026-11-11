@@ -830,6 +830,19 @@ def _context_report(service, limit, enforced) -> dict:
     native = context_budget.native_context_window(getattr(backend, "model_path", None)) if backend is not None else None
     if native is None:
         native = 262144
+    if type(backend).__name__ == "NemotronBackend":
+        from models.nemotron35.admission import MAX_CONTEXT
+        return {
+            "native_positional_capability": native,
+            "architectural_context_maximum": MAX_CONTEXT,
+            "configured_server_limit": backend.configured_context,
+            "memory_admitted_context": backend.context_limit,
+            "kv_format": backend.kv_format,
+            "million_token_validation": False,
+            "max_cold_prefill": service.max_cold_prefill,
+            "max_incremental_prefill": service.max_incremental_prefill,
+            "preferred_internal_chunk_size": backend.plan.chunk_tokens,
+        }
     cold = getattr(service, "max_cold_prefill", None) or MAX_COLD_PREFILL_DEFAULT
     incremental = getattr(service, "max_incremental_prefill", None) or MAX_INCREMENTAL_PREFILL_DEFAULT
     return {
@@ -841,14 +854,9 @@ def _context_report(service, limit, enforced) -> dict:
         "memory_admitted_max_cold_prefill": getattr(service, "max_cold_prefill", None),
         "incremental_accumulation_required": True,
         "preferred_internal_chunk_size": 2048,
-        "validated_on_this_machine": (
-            {"largest_real_cold_prefill_tokens": 0, "evidence": "none: no real Nemotron inference has been run",
-             "real_8k": "unverified", "above_validated": "unverified"}
-            if type(backend).__name__ == "NemotronBackend" else dict(context_budget.VALIDATION)),
+        "validated_on_this_machine": dict(context_budget.VALIDATION),
         "overflow": f"a prompt over the configured limit is refused with HTTP 400 context_length_exceeded; cold prefill > {cold} (or uncached increment > {incremental}) refused with oversized_prefill_rejected / recovery_required",
-        "validated_prefill_tokens_on_real_checkpoint": (
-            0 if type(backend).__name__ == "NemotronBackend"
-            else context_budget.VALIDATION["largest_real_cold_prefill_tokens"]),
+        "validated_prefill_tokens_on_real_checkpoint": context_budget.VALIDATION["largest_real_cold_prefill_tokens"],
     }
 
 
@@ -900,6 +908,10 @@ def health(service, scheduler) -> dict:
     if callable(engine):
         try:
             report["engine"] = engine()
+            if report["engine"].get("kv_format"):
+                report["nemotron_context"] = {
+                    key: report["engine"][key] for key in ("admitted_context", "kv_format", "million_token_validation")
+                }
         except Exception:
             pass                                     # telemetry never fails a health probe
     mem = _memory_ledger()

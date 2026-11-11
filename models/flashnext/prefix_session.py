@@ -150,17 +150,18 @@ class PrefixSession:
                 ring=os.environ.get("FLASHNEXT_PREFILL_RING_EXPERTS", "0"),
                 qsa_chunk=os.environ.get("FLASHNEXT_QSA_QUERY_CHUNK", "2048"),
             )
-            directory = os.path.expanduser(os.environ.get(FLAG_DIR) or DEFAULT_DIR)
+            from veystrix.universal_cache import CacheManager
+            manager = CacheManager()
+            directory = manager.root
             if prefix_profiles.enabled():
-                # Opt-in profile manager: same exact snapshots, plus frequency-aware eviction, pins, a size budget and
-                # a free-space reserve (its own settings, FLASHNEXT_PREFIX_PROFILES_*).
+                # Profile annotations and pins use the shared budget and free-space policy.
                 self._store = prefix_profiles.ProfiledPrefixCache(
                     fp, int(_number(FLAG_RAM_GB, "0.75") * 1e9), Path(directory),
-                    config=self.execution_profile(), **prefix_profiles.settings_from_env())
+                    config=self.execution_profile(), manager=manager, **prefix_profiles.settings_from_env())
             else:
                 self._store = P.PrefixCache(
                     fp, int(_number(FLAG_RAM_GB, "0.75") * 1e9), Path(directory),
-                    int(_number(FLAG_DISK_GB, "24") * 1e9))
+                    manager=manager)
         return self._store
 
     @staticmethod

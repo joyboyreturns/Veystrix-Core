@@ -128,7 +128,7 @@ struct DashboardView: View {
                 let budget = cache["ssd_cache_budget_bytes"]
                 if let used, let budget, budget > 0 {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Persistent cache: \(ByteCountFormatter.string(fromByteCount: Int64(used), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(budget), countStyle: .file))")
+                        Text("Current model cache / shared quota: \(ByteCountFormatter.string(fromByteCount: Int64(used), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(budget), countStyle: .file))")
                             .font(.callout)
                         ProgressView(value: min(used / budget, 1.0))
                         if let entries = cache["ssd_cache_entries"] {

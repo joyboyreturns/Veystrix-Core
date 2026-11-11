@@ -56,7 +56,7 @@ public enum FlashNextKVCache: String, Codable, CaseIterable, Sendable, Identifia
 /// User-visible settings. Stored as JSON in Application Support. Unknown or missing keys fall back to defaults,
 /// so an older settings file keeps working after an update (see `schemaVersion`).
 public struct AppSettings: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int = AppSettings.currentSchemaVersion
     /// Local API port. The engine binds to 127.0.0.1 only.
@@ -69,15 +69,17 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var nemotronCheckpointPath: String = ""
     public var decodePool: DecodePool = .none
     public var flashNextKVCache: FlashNextKVCache = .bf16
+    public var flashNextSpeed: Bool = false
     /// Let the engine's supervisor restart the server after a crash or memory guard stop (bounded and logged).
     public var supervisedRestarts: Bool = true
     public var keepMacAwake: Bool = true
     public var allowBattery: Bool = true
     public var minimumBatteryPercent: Int = 25
     public var allowLowPowerMode: Bool = false
-    /// Persistent cache quota in GB (VEYSTRIX_CACHE_GB). The engine default is 50.
-    public var cacheQuotaGB: Int = 50
-    /// Empty means the engine's default cache folder (existing caches are reused).
+    /// Initial shared quota in decimal GB. Applied changes are stored by the cache manager.
+    public var cacheQuotaGB: Int = 80
+    public var nemotronContextTokens: Int = 1_048_576
+    /// Empty selects the default shared cache folder.
     public var cacheDirectory: String = ""
     /// Ask for confirmation before the model is loaded. The model is never loaded when the app opens.
     public var confirmBeforeLoading: Bool = true
@@ -99,7 +101,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case schemaVersion, port, checkpointPath, selectedModel, nemotronCheckpointPath, decodePool, supervisedRestarts, keepMacAwake, cacheQuotaGB,
              cacheDirectory, confirmBeforeLoading, requireAPIKey, checkForUpdatesAutomatically,
              includeLogsInDiagnostics, developerRepoPath, allowBattery, minimumBatteryPercent, allowLowPowerMode,
-             flashNextKVCache
+             flashNextKVCache, flashNextSpeed, nemotronContextTokens
     }
 
     public init(from decoder: Decoder) throws {
@@ -112,12 +114,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.nemotronCheckpointPath = try c.decodeIfPresent(String.self, forKey: .nemotronCheckpointPath) ?? s.nemotronCheckpointPath
         s.decodePool = try c.decodeIfPresent(DecodePool.self, forKey: .decodePool) ?? s.decodePool
         s.flashNextKVCache = (try? c.decodeIfPresent(FlashNextKVCache.self, forKey: .flashNextKVCache)) ?? s.flashNextKVCache
+        s.flashNextSpeed = try c.decodeIfPresent(Bool.self, forKey: .flashNextSpeed) ?? s.flashNextSpeed
         s.supervisedRestarts = try c.decodeIfPresent(Bool.self, forKey: .supervisedRestarts) ?? s.supervisedRestarts
         s.keepMacAwake = try c.decodeIfPresent(Bool.self, forKey: .keepMacAwake) ?? s.keepMacAwake
         s.allowBattery = try c.decodeIfPresent(Bool.self, forKey: .allowBattery) ?? s.allowBattery
         s.minimumBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .minimumBatteryPercent) ?? s.minimumBatteryPercent
         s.allowLowPowerMode = try c.decodeIfPresent(Bool.self, forKey: .allowLowPowerMode) ?? s.allowLowPowerMode
-        s.cacheQuotaGB = try c.decodeIfPresent(Int.self, forKey: .cacheQuotaGB) ?? s.cacheQuotaGB
+        let oldQuota = try c.decodeIfPresent(Int.self, forKey: .cacheQuotaGB)
+        if let oldQuota, s.schemaVersion >= 2 || oldQuota != 50 { s.cacheQuotaGB = oldQuota }
+        s.nemotronContextTokens = try c.decodeIfPresent(Int.self, forKey: .nemotronContextTokens) ?? s.nemotronContextTokens
         s.cacheDirectory = try c.decodeIfPresent(String.self, forKey: .cacheDirectory) ?? s.cacheDirectory
         s.confirmBeforeLoading = try c.decodeIfPresent(Bool.self, forKey: .confirmBeforeLoading) ?? s.confirmBeforeLoading
         s.requireAPIKey = try c.decodeIfPresent(Bool.self, forKey: .requireAPIKey) ?? s.requireAPIKey
@@ -135,6 +140,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         if !(1024...65535).contains(port) { problems.append("The port must be between 1024 and 65535.") }
         if !(0...100).contains(minimumBatteryPercent) { problems.append("The minimum battery charge must be between 0% and 100%.") }
         if !(1...2000).contains(cacheQuotaGB) { problems.append("The cache quota must be between 1 and 2000 GB.") }
+        if !(1...1_048_576).contains(nemotronContextTokens) { problems.append("Nemotron context must be between 1 and 1,048,576 tokens.") }
         return problems
     }
 }

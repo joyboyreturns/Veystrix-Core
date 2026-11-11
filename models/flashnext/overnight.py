@@ -60,8 +60,10 @@ def server_command(args) -> list:
         # and the Flash-Next memory-readiness gates do not exist for this model. The backend admits the requested
         # window only if its own memory plan fits the machine.
         command = [*launcher, "--server", "--host", args.host, "--port", str(args.port),
-                   "--pool-gb", str(args.pool_gb), "--context-limit", "262144",
+                   "--pool-gb", str(args.pool_gb),
                    "--model", "nemotron35-lightning", "--checkpoint", args.checkpoint]
+        if getattr(args, "prefix_dir", None):
+            command += ["--prefix-dir", args.prefix_dir]
         if getattr(args, "preferences_file", None):
             command += ["--preferences-file", args.preferences_file]
         return command

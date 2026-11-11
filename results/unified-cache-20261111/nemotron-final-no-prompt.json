@@ -1,0 +1,18 @@
+{
+  "context_window": 1048576,
+  "max_cold_prefill": 65536,
+  "max_incremental_prefill": 65536,
+  "runtime": {
+    "native_positional_capability": 262144,
+    "architectural_context_maximum": 1048576,
+    "configured_server_limit": 1048576,
+    "memory_admitted_context": 1048576,
+    "kv_format": "affine-int8-g64",
+    "million_token_validation": false,
+    "max_cold_prefill": 65536,
+    "max_incremental_prefill": 65536,
+    "preferred_internal_chunk_size": 2048
+  },
+  "watchdog_running": true,
+  "prompts_submitted": 0
+}

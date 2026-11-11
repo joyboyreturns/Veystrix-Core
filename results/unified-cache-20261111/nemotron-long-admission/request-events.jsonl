@@ -1,0 +1,11 @@
+{"t":1794407276.845,"event":"server_start","pid":43100,"host":"127.0.0.1","port":49649,"context_limit":1048576,"max_cold_prefill":1048576,"max_incremental_prefill":1048576}
+{"t":1794407277.338,"event":"request_begin","pid":43100,"path":"/v1/chat/completions","seq":1,"user_agent":"Python-urllib/3.12","session_header":false,"stream":true,"messages":2,"tools":0,"reasoning_fields":{},"max_tokens":32,"waiting":0}
+{"t":1794407277.39,"event":"adopt","pid":43100,"prompt_tokens":14641,"matched_tokens":0,"needed_prefill":14641,"extends":false,"outcome":"MISS","warm_tokens":0,"session_hint":false}
+{"t":1794407277.391,"event":"generate_begin","pid":43100,"prompt_tokens":14641,"max_tokens":32,"thinking":false,"effort":null}
+{"t":1794407277.414,"event":"prefill_progress","pid":43100,"done":0,"total":14641,"elapsed":0.0}
+{"t":1794407308.463,"event":"prefill_progress","pid":43100,"done":8192,"total":14641,"elapsed":31.1}
+{"t":1794407339.042,"event":"prefill_progress","pid":43100,"done":14606,"total":14641,"elapsed":61.7}
+{"t":1794407339.886,"event":"guard_stop","pid":43100,"reason":"swap grew 1.42 GiB over the session baseline (hard limit 1 GiB)","mode":"graceful"}
+{"t":1794407340.197,"event":"request_cancelled","pid":43100,"memory_stop":true}
+{"t":1794407340.198,"event":"request_end","pid":43100,"path":"/v1/chat/completions"}
+{"t":1794407341.813,"event":"guard_exit","pid":43100,"reason":"swap grew 1.42 GiB over the session baseline (hard limit 1 GiB)","why":"worker cancelled"}

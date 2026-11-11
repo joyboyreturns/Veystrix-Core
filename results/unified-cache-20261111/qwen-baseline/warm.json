@@ -1,0 +1,1806 @@
+{
+  "label": "before",
+  "arm": "warm",
+  "metrics": {
+    "logits": {
+      "event": "logits",
+      "value": {
+        "dtype": "mlx.core.bfloat16",
+        "sha256": "b7a8a88bb8fa873616966e3e3f52e9ce16b141e0f1da457d8adeb4568a98fe16",
+        "shape": [
+          1,
+          1,
+          248320
+        ]
+      }
+    },
+    "prefilled": {
+      "event": "prefilled",
+      "first_token": 40,
+      "peak_bytes": 5139168858,
+      "physical_bytes": 55421751296,
+      "prefill_seconds": 35.168315000017174,
+      "prefix": {
+        "bytes_loaded": 289724218,
+        "bytes_restored": 289724218,
+        "chunk_trace": [
+          {
+            "available_gb": null,
+            "end": 2562,
+            "increment_peak_mb": 1811.3,
+            "memory_state": "elevated",
+            "pressure": null,
+            "process_peak_mb": 5139.2,
+            "resident_before_mb": 3327.9,
+            "seconds": 31.668,
+            "start": 2107,
+            "tokens": 455
+          },
+          {
+            "available_gb": null,
+            "end": 2569,
+            "increment_peak_mb": null,
+            "memory_state": "elevated",
+            "pressure": null,
+            "process_peak_mb": 5139.2,
+            "resident_before_mb": 3464.8,
+            "seconds": 3.179,
+            "start": 2562,
+            "tokens": 7
+          }
+        ],
+        "executed_edges": [
+          2562
+        ],
+        "execution_order": "",
+        "execution_segments": [],
+        "execution_windows": [],
+        "hit_tokens": 2107,
+        "lookup_seconds": 0.318784708972089,
+        "outcome": "SSD_HIT",
+        "plan_deviated": false,
+        "plan_edges": [
+          1054,
+          2107,
+          2562
+        ],
+        "plan_rejections": 0,
+        "prefill_seconds": 34.84756658296101,
+        "prefilled_tokens": 462,
+        "prompt_tokens": 2569,
+        "restore_seconds": 0.31875274993944913,
+        "snapshot_seconds": 0.0,
+        "snapshots": [],
+        "snapshots_skipped": [
+          {
+            "position": 2562,
+            "reason": "memory_pressure"
+          }
+        ],
+        "stepdowns": [],
+        "tier": "ssd"
+      },
+      "prompt_sha256": "ed9ea34490c5f1012176ec1006a369ce7ea32d1eb9992950821df36886f788a2",
+      "state": {
+        "language": {
+          "position_ids": {
+            "dtype": "mlx.core.int32",
+            "sha256": "faac0d7dd66a7dde9641dea7c0a7c4e5c31494b93eb224824d69b66dad3a0eb3",
+            "shape": [
+              1,
+              1054
+            ]
+          },
+          "rope_deltas": {
+            "dtype": "mlx.core.int32",
+            "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+            "shape": [
+              1,
+              1
+            ]
+          }
+        },
+        "layers": [
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "c94827734ebbd0cc05e87e9bd79f9a9447967aab903697f0c5048ee52f90d960",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "bbc1ee23adaba89f298dca6a220ede56130efa50b342d5a077d6f8f7e1205356",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "8baf8cb33620b6f81e6be944b999bc94b2ff45efd71c9c7574187ae7baed5a13",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "a6df52be79dcf5ccdfe12d95bee5dc59813d18a478c5e308eebe622aa6c00060",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              },
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "4e98251d500d6a03b69afc1358c97e1765a69717681b02a0099181352d05a3b0",
+                "shape": [
+                  1,
+                  9,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.int64",
+                "sha256": "9d3ec74aaf981ad945dcc08c5b09e496a84353a618b669e7bc38bc40e893df71",
+                "shape": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "cc06f86a96254eee67d7392daa94107915e39af42400b3b5d75736d7f8336adf",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "2fcf5bcd52e597f004ca55bc78b367fd3bdf401a93b1a37b6fbfe086835ff866",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "c9610cf3b9237956e327472c5794cb1def758ea6ac981011114e646f5bf8a1b1",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "13155ceacb1992f85ad99f715f79d2ece84295ea086f103569994b34432471c7",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "503b1bfc0e7a5372563c3e56b312df439c307d46c297d383f7a50cb260e0b789",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "702c2f62faa47bb91a246cfddefa7f87d21d3071b471272ed5dbf3dcd64ed48c",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "157e3337068aa308c4744c3681ebc94564442f300f0b1f2f74a915020c8dee27",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "5f6188478d9a8473933492c8c6cbdeb0b696b5bd3dcd225fc1f323a2642388b5",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "4de5c19c43082f901587168a6839c826199d535d396172d4298e4a318c84aec6",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "eeca98685cbad825f412f84765168c86d3e89655f379db7b901e250c4ea5d4a8",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "76fc486dbdcc00dcf0a32adcad666b2c392a387aba9478d07b4afc2253fcdd6d",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "94831640c0c92f4c4e37d897e577bea7996394452a5166e930f7565520f43e62",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "ff180d1fbd210371feaa95c38f7919b552eb6c3aaea59a33194f2498de39dee4",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "589fd542042b124d8a7c250ffed7652f271060f23b323ef6ea103ef4032d9ef6",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "4e0f7da4b0cac756d2c03b349712a0a9f489e1136e5de9ebe8dd5ee2a0a67850",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "687a54bdf158ebfbedb152959d7211fce594df9dfd13be2f9e2c46fc4156e4c0",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "42e728021743bbec707c0aba582119f07a1c47772fe570fe8b4bb2c2e102ecb5",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "5b1224d85824952c4f7bcab579eeb1cedfd23003ecb778b2a12591e733019ba9",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "1c72cf4f747013e7ecb9b081fbc8bc239d269d7c9587958542eaebca79fab1f7",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "044c21bfb47185b2019481f548890dff5b4f991c3495ba66f64510cb14f3a7d2",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "246f046a3d8e167f9ee3c6650a33f8c6b4181c010c35a469744c998d1fe2dcf5",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "39cd4d21a5729fb1386f1744b2fc4fd31dc8053abcf442ed1a1c37313bfb9f9a",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "3878f2ada481e1b77243e0312f7d21200b55cf9895b1a6c65608f50746030b7f",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "43fc840048d8cf69e1d8b0f640f6ff59433fe5bb7f52de6c5aa9fe6b6efb92b5",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "707ae4a6de5ec8dcc8c89a950b61396daa5968529c7685a763d25fafbf32af8e",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "3b345b36858a19f2e4b6f4daf042078b81f5bbd15616c65f8f095dd487ed4f5b",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "9f3259a7dcf5107198db44f3a15d7fee6e72568f2873951fae458353a0bae08e",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "04c861acf49ba931004151e929f5a65e90475ff43d8d775d354c4a2cdc245950",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "bd0ad667da3402d7ab12e40d177289a88530a151b2dae7ab4f7509297f493dd5",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "a7e822da2b6a74c4721130657deab26446b1e2c56e8d2cbf08ccf8c8051c3018",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "d6873ac4e6f6a3c0f14b84a2e12d2c72275cb29eff291e31fd92b4c8935531af",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "d01354c375838ccc0a156aa43140c950463aeb91b4810f295d494307bc931017",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "4857057dfd4ef8f490947f1a056678c0ecfc811e38eb713b1d487a12e328ac1d",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "ca95e1f96df66f614bfc02be7a594ef64d72db90b16a29f5fe19d458febda9ac",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "3b1e9693271dd7b69611becea22abe3534c34541601985dc70e8ced1f02f5502",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "d76f7193968c70b8311d1f80d78bea550ca191ce51908f7c96df1533f8d39886",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "f59251b062509e0723de06099de5cd642d171ed8d46a7a5c644eb85a60e9419f",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "062b6ce66487568dc2c64294d1a5afba3458f4471e3d10d390cbc6cf0e91b2cd",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "e3757926fcc03366c13042a9290e1989755c612c22bc9be70f5aac2d07c3901d",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "fc28422d35db6d65123260c2167f8d3033fccc0f3d86448a8ee4eaf602ae8b50",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "41e331990fe3e5b8dbf2f6c8c18bdf7f861feafca1db7227f5086c785071a8ff",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "2cdf2f43b0a839205d473671ee9a2dc1334b3bcb831cb185fec6ccbf2dbc13ea",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "31ceacf5487847d599a1c35d54306a6a2991e428dfc6c0d0b1491c7668821a6b",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "7f5f139f6f7549d747ffb9f2c74bc57cca59fc39064ee6d4ca059dadc4f64889",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "2bcb7012ef439292128c10e97f9b8eca7d1a8accb4f0b78d275a571465a04fae",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "aaaaa44fcb4cfe55f9e56f5e8a82a7b6f81a9ff54dd619b53ca03b9bbb2ab568",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "78cca66299a29f4b8cd04b2d18d08855205e1c7e24d9d9abe5af23131c04a274",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "1e4ecfa6d190ad9c0e69f415ca5c6fa4e100de6e7db915983921bb15afa6cda0",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "a01c7954165814a456edef69a9c95614c3b63e1ce52a8625311fffe337d817ab",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "7397800e674bfb1fdff5590dc0a0c34cbe764a3404b6bb1e241bec3e4afa8618",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "885a9e3fc5fb2cbe35c6fd55d16008801e65229c4c7f5865d3b4b0a673f25d9f",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "daecf7c3fd1cb8778e8548c0702adc7a6dc2b3dfb7478e2801d5981062467402",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "f6677fe64da429b7ff5eff17285ec0d9038b052ea44e748de4fb14bf9bc88326",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "5fb9bc1fa646716043698100f939ca6fcecdc17ea792b765bfa342f3543ac255",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "27adec4af03dc4034f56def0f70c4e8284c951bb3f76ad9604d6c9f614320395",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "3302edbddb4d83139c72f86c6271a073fa5a38e3ae8090bb0542ebc4844ac75f",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "e8d3e8b63568a7890035096373abcc068b50b2b2c6b51be500bbb0b8316e78de",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "2d7f3a7fd1208ca58a0b33273ec23945bce2738d50096bf32cba5a7b25fb1ecb",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "9c152f42db48501c961b43211308e14c7eb8518f8f46cfeaad2f4a6669d8ed59",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "f21f22debb2e7cf22e55022cf2ba7f577724788cf3b5d319909f67a806be9e04",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "43665c328cd91751076cf41d84e8419ef4cd18d8be6b9ac41c70d2c7d8d3752b",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "175753327846b9c8a05fa2adfc0305034e158adda652600664a9de80e59bf35f",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "ee8e484f2a1275fa6fcc4e023ade2de84ade50263059c1cbf979aea4f52d03c6",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "15011f598c6a6446edc6dc9734355425fd49d5ce183a641d5d6098fb9e81174f",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "d8c5fc8aefb3301bb71aed1b4e20c87e222d2c5e68938c3b69896203a203119a",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "7cb932c8fdeaeaff2a59ed18725994048e587d587c85b244f005aee38ee88489",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "10487628ae2f69f2181155bf1cd19a428c10c67f9616f3a01b03bfc381ddeb75",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "4cfddaaf2bb635a5978243c89d54f9c5991aba95c724968c0b4b5395f220c840",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "a270b87da2e80d0e7e8001da650a5e8baa3c091ac461a6c08258f6d7de967a7f",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "36c57df3b1f158647161c2d4b1b756b33b957382ec57cdc57795224ae2aa6f85",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "7e59a8dacb92631b87871f71f681fd47bf03bdb5e0f2d4554b0b373c689155bc",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "9d8db686ce93bd7d40553e30dd284049e4dcb9967a217f21ab0769fdf1b44e08",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "bf65e85ef27e87427de743e92c101cf6d874503a168f782d030a0b39d2af30a3",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "b4529d2091667d2c8d9a964fa12c8409b7c0c4d0e641caac416c4fe0e3a4a1cf",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "09e5e0da535ebdf0395703b3ddac213c8f28ae96f1f182d1b2c8ce6c1553b377",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "14caf9f4b67e6abad7049e6c51477bab783c47e5bdc4cd97acceb01d05ba7107",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "0119740df8be62338200790478f67c89b6b33ce60ac5cfe2582d489e6a06c03e",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "5bf41bdfb4a9c3dc676219655aff6628b08c0f2e10974e1835d3b71e3671f674",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "e58b74b1374d246c7b8217dd49529cfb763ca7b508d2fd0f39def0492b96df14",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "1e55749603bb69da612626303fe185468637f9e163498c6338959490f3b4449b",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "d94261eee6fcd5642fede573d42258c317b08cb338817265b683cb76e26bc1ee",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "59d9e201a99ee7fb92920b66b47b21612796ef956372fafffb29c7ba9e3ee9f9",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "5c5ea720b3214b7cb89e9a905dd5418237662b1bb8aa26def149e45f64d12da2",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "dd1d6a5bf6c90e60cb5613a3ffd9fa977bf44556f28ee8666112d77fd9f32a47",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "1e50b4bd36c404d6e34cf55043dfa9ad038366479fac42407483dfe8cf1fa6cb",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "99b8ea929d7fc8de61597481bc1dfa39336ef58577babd4cd55851ac8d733f6b",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "24e678ad046540541a97c705e695a99f836a30607e1c0c8c966afee74729ef5d",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "4a021339dccaaeceb1bb7dc76784da6bea2db6068bc4f53e1a2f81d2c3a1ff25",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "0026f349bb5e0dcf2387bd51dc68b2a0a604fea22880d8cdb862f25af7329117",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "f188510d9a7a74aa07a5424776dc31f97a45d9fa1b0699082cfb33904cc7d8cd",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "d7bcc76adde44cc2aaf0bc9ef013d8e6fc1e5f8c313316deaf4593261b83c4eb",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "bbbc8a7679ee0792c6c46948ff0152733f055d04ec48056abe91a1a21a905fc3",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "e33d0acd4197202dd9a22ea59765084d47794a505c430bdb2c223e5708a50608",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "09688bea8780e6d851369221b7a9175b2065f961638f9eb5b08e1cb70eb675cd",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "317f62809e40f9e1c4ea1d4109f4c7ff4c9bf352424338e2a831818a3b4e0c25",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "26b688110fb09cc3e7c0525ce9ea45f45e8631e3ca628d67da28403da9f17642",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "0e1664f92a616f0c8fd54548af5622ad44d0994a6585f5d35f9807741a6dac8c",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "e282357a50e3d46588e583be5fd247f93d47362ecfb2cf242537a892d2033996",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "bf16c435a35a7f3b8f8300985840d999c436188f5cf803cd4b4c2f78cb2ad47f",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "arrays",
+            "states": [
+              {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "3c4d5e214b8367644823b59804c545dd88ad1ffafdea021f68fe06af55f79a64",
+                "shape": [
+                  1,
+                  3,
+                  10240
+                ]
+              },
+              {
+                "dtype": "mlx.core.float32",
+                "sha256": "4aeaa2db3d88dd1d363fa42c10e5b4b6597a5dd6758c0487583eb6966abc51f0",
+                "shape": [
+                  1,
+                  48,
+                  128,
+                  128
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "qsa_kv",
+            "kv": {
+              "index_keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "9d26bbff25f5f2f88d0d2d262f7f5b380d377c194146fef022c64b329f603a50",
+                "shape": [
+                  1,
+                  2569,
+                  128
+                ]
+              },
+              "index_position_ids": {
+                "dtype": "mlx.core.int32",
+                "sha256": "90c4d4b1c0584922664e2c507edc02dc1ad9ccbd94045cc98753b69eae94cd61",
+                "shape": [
+                  1,
+                  2569
+                ]
+              },
+              "keys": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "ce9d44e4cab25b3714afce384f35c1ee7a16def07c8c621242f5b782019b57a7",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              },
+              "values": {
+                "dtype": "mlx.core.bfloat16",
+                "sha256": "86f666b8348f882845d80f85b0b49479d86130b3b64380996977ae3a87a63a5f",
+                "shape": [
+                  1,
+                  2,
+                  2569,
+                  256
+                ]
+              }
+            }
+          }
+        ],
+        "token_count": 2569
+      }
+    },
+    "finished": {
+      "event": "finished",
+      "finish": "length",
+      "generation_seconds": 30.727319544181228,
+      "physical_bytes_total": 98593722368,
+      "tail_seconds": 19.92406217008829,
+      "tail_tokens": 23,
+      "token_ids": [
+        40,
+        3172,
+        1151,
+        539,
+        23218,
+        279,
+        12182,
+        310,
+        3418,
+        279,
+        1970,
+        3051,
+        321,
+        1423,
+        279,
+        9468,
+        1970,
+        2094,
+        411,
+        47801,
+        13,
+        271,
+        248058,
+        198,
+        27,
+        1628,
+        39619,
+        14416,
+        29,
+        198,
+        27,
+        15704
+      ],
+      "wall_seconds": 65.97070562501904
+    }
+  },
+  "machine": {
+    "before": {
+      "t": 1794406828.534133,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 958.75,
+      "pressure_level": 1,
+      "available_mb": 10059.9,
+      "compressor_mb": 2147.9,
+      "file_backed_mb": 614.1,
+      "vm": {
+        "reactivated": 287865467,
+        "decompress": 816724290,
+        "compress": 953551753,
+        "pagein": 1342773313,
+        "pageout": 152469,
+        "swapin": 7301899,
+        "swapout": 11842773
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    "after": {
+      "t": 1794406900.9784708,
+      "battery_percent": 80,
+      "power_source": "ac",
+      "battery_state": "ac attached",
+      "low_power": false,
+      "thermal_speed_limit": null,
+      "thermal_warning": false,
+      "swap_used_mb": 1019.12,
+      "pressure_level": 2,
+      "available_mb": 2890.0,
+      "compressor_mb": 4449.9,
+      "file_backed_mb": 2082.0,
+      "vm": {
+        "reactivated": 287984999,
+        "decompress": 817159098,
+        "compress": 954274772,
+        "pagein": 1343112255,
+        "pageout": 152541,
+        "swapin": 7302183,
+        "swapout": 11847149
+      },
+      "thermal_readable": true,
+      "thermal_pressure": 0
+    },
+    "health": {
+      "status": "ok",
+      "ready": true,
+      "worker": {
+        "stage": "idle",
+        "detail": "",
+        "request_seq": 0,
+        "in_request": false,
+        "progress_ticks": 0,
+        "seconds_since_progress": 0.5,
+        "seconds_in_stage": 0.5,
+        "busy": false,
+        "stall_seconds": 180.0,
+        "stalled": false
+      },
+      "model": "veystrix-flashnext",
+      "busy": false,
+      "queue": {
+        "active": null,
+        "waiting": 0,
+        "max_waiting": 4,
+        "max_wait_seconds": 20.0,
+        "completed": 0,
+        "rejected": 0,
+        "dropped": 0
+      },
+      "context_limit": 262144,
+      "max_cold_prefill": 32768,
+      "max_incremental_prefill": 32768,
+      "installed_model_id": "veystrix-flashnext-6059bb8c4b5895ad794ccaca13fbcea84f4830aa9096ee59b54ea0561ddb8633",
+      "activity": {
+        "active": false
+      },
+      "cache": {
+        "cache_enabled": true,
+        "ram_cache_bytes": 0,
+        "ram_cache_entries": 0,
+        "ram_cache_budget_bytes": 750000000,
+        "ssd_cache_bytes": 418007796,
+        "ssd_cache_entries": 3,
+        "ssd_cache_budget_bytes": 50000000000,
+        "ssd_cache_directory": "/tmp/veystrix-qwen-baseline-final-cache",
+        "active_model_state_bytes": 0,
+        "flashnext_kv": {
+          "attention_k_bytes": 0,
+          "attention_v_bytes": 0,
+          "quantization_metadata_bytes": 0,
+          "qsa_indexer_bytes": 0,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 0,
+          "min_attention_offset": 0,
+          "max_attention_offset": 0,
+          "last_qsa_workspace_shape": null,
+          "kv_dtype": "bf16",
+          "qsa_kernel": "reference",
+          "logical_resident_weight_bytes": 2785023000,
+          "expert_pool_mapped_bytes": 0,
+          "mlx_active_bytes": 2979066976,
+          "mlx_cached_bytes": 23820,
+          "mlx_working_set_bytes": 2979090796,
+          "mlx_peak_active_bytes": 2979066976,
+          "metal_recommended_working_set_bytes": 12713115648
+        },
+        "matched_prefix_tokens": 0,
+        "reused_tokens": 0,
+        "ram_hits": 0,
+        "ssd_hits": 0,
+        "static_prefix_hits": null,
+        "session_continuation_hits": 0,
+        "reasoning_state_restoration_hits": 0,
+        "prefix_mismatches": 0,
+        "state_invalids": 0,
+        "evicted_hits": 0,
+        "restore_failures": 0,
+        "cold_lookups": 0,
+        "evictions_ram": 0,
+        "evictions_ssd": 0,
+        "ssd_writes": 0,
+        "ssd_bytes_written": 0,
+        "ssd_bytes_read": 0,
+        "writes_skipped": 0,
+        "pressure_invalidated_snapshots": 0,
+        "pressure_invalidated_bytes": 0,
+        "restore_seconds": 0.0,
+        "snapshot_seconds": 0.0,
+        "newly_computed_prefill_tokens": 0,
+        "actual_prefill_seconds": 0.0,
+        "decode_tokens_per_second": null,
+        "current_swap_growth_mb": 0.0,
+        "swap_baseline_mb": 958.75,
+        "peak_swap_growth_mb": 0.0,
+        "corruption_recovery_errors": 0,
+        "reused": 0,
+        "rebuilt": 0,
+        "evictions": 0,
+        "refused_cold_prefill": 0,
+        "warm_tokens": 0,
+        "max_cold_prefill": 32768,
+        "max_incremental_prefill": 32768,
+        "sessions": {
+          "live": null,
+          "switches": 0,
+          "known": []
+        },
+        "last_budget": null,
+        "last_divergence": null,
+        "last_prefix": null,
+        "memory_controller": {
+          "policy_identifier": "swap-growth-only",
+          "swap_baseline_mb": 958.75,
+          "current_swap_growth_mb": 0.0,
+          "peak_swap_growth_mb": 0.0,
+          "threshold_gib": 2.01,
+          "threshold_mb": 2058.24,
+          "stop_reason": null,
+          "stopped_at": null,
+          "can_admit": true,
+          "probe_availability": {
+            "pressure": true,
+            "swap_used_mb": true,
+            "swapout": true,
+            "swapin": true,
+            "available_mb": true,
+            "compressor_mb": true
+          },
+          "telemetry_only_checks": [
+            "startup_9gib_gate",
+            "measured_available_memory_admission",
+            "available_memory_floor_2gib",
+            "compressor_growth_stop",
+            "pressure_level_4_stop",
+            "persistent_pressure_level_2_stop",
+            "active_swap_rate_stop"
+          ],
+          "disclaimer": "The swap-growth-only policy does not guarantee protection against sudden OOM, GPU allocation failure, compressor growth, or degraded responsiveness.",
+          "state": "normal",
+          "reasons": [],
+          "recovery_events": 0,
+          "episodes": [],
+          "elevated_seconds": 0.0,
+          "throttled_seconds": 0.0,
+          "swap_at_launch_mb": 958.75,
+          "peak": {
+            "swap_increase_mib": 0.0,
+            "swapout_window_mib": 0.0,
+            "swapin_window_mib": 0.0,
+            "compressor_growth_mib": 0.0,
+            "pressure_level": 1,
+            "pressure_seconds": 0.0
+          },
+          "last": {
+            "mono_t": 595762.68,
+            "pressure": 1,
+            "available_mb": 6728.5,
+            "swap_increase_mib": 0.0,
+            "swapout_window_mib": 0.0,
+            "swapin_window_mib": 0.0,
+            "compressor_window_growth_mib": 0.0,
+            "compressor_growth_mib": 0.0,
+            "pressure_seconds": 0.0,
+            "window_s": 2.4
+          },
+          "swap_growth_stop_gib": 2.01,
+          "swap_ceiling_mib": 3072.0,
+          "swap_ceiling_margin_mib": 256.0
+        }
+      },
+      "flashnext_kv_cache": "bf16",
+      "memory_policy": {
+        "policy_identifier": "swap-growth-only",
+        "swap_baseline_mb": 958.75,
+        "current_swap_growth_mb": 0.0,
+        "peak_swap_growth_mb": 0.0,
+        "threshold_gib": 2.01,
+        "threshold_mb": 2058.24,
+        "swap_ceiling_mib": 3072.0,
+        "swap_ceiling_margin_mib": 256.0,
+        "stop_reason": null,
+        "can_admit": true,
+        "probe_availability": {
+          "pressure": true,
+          "swap_used_mb": true,
+          "swapout": true,
+          "swapin": true,
+          "available_mb": true,
+          "compressor_mb": true
+        },
+        "telemetry_only_checks": [
+          "startup_9gib_gate",
+          "measured_available_memory_admission",
+          "available_memory_floor_2gib",
+          "compressor_growth_stop",
+          "pressure_level_4_stop",
+          "persistent_pressure_level_2_stop",
+          "active_swap_rate_stop"
+        ]
+      }
+    },
+    "preflight_purge": {
+      "purged": true,
+      "available_before_mb": 7948.4,
+      "headroom_short": true,
+      "returncode": 0,
+      "available_after_mb": 10059.9
+    },
+    "watchdog_pid": 33879,
+    "response_usage": {
+      "prompt_tokens": 2569,
+      "completion_tokens": 32,
+      "total_tokens": 2601,
+      "prompt_tokens_details": {
+        "cached_tokens": 2107
+      },
+      "prompt_cache_hit_tokens": 2107,
+      "prompt_cache_miss_tokens": 462
+    }
+  }
+}

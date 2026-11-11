@@ -1,5 +1,9 @@
 # Veystrix Persistent Cache Architecture (RAM + SSD)
 
+Production launches now use the [shared cache manager](../architecture/unified-cache-nemotron-1m-results.md).
+The namespace, quota and tools in the original design below describe the legacy deployment.
+
+
 ## Overview
 
 Veystrix integrates an oMLX-inspired persistent three-tier caching engine tailored for hybrid state models like Qwen3.8-Flash-Next (featuring GatedDeltaNet recurrent layers and Quasi-Static Attention / QSA KV layers).

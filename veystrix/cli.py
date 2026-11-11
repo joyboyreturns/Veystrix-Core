@@ -294,6 +294,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         chat_args.append("--server")
 
     environment = dict(os.environ)
+    if known.prefix_dir:
+        environment["VEYSTRIX_CACHE_ROOT"] = known.prefix_dir
     if plan:
         modes.apply_mode(environment, plan)
         if not known.profile:
@@ -316,11 +318,13 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         # Real inference is allowed by default; VEYSTRIX_NEMOTRON_AUTHORIZED=0 is a kill switch.
         if "--server" in chat_args:
             environment.setdefault("VEYSTRIX_MODE", "agentic")
+            environment.setdefault("FLASHNEXT_WATCHDOG", "1")
+            environment.setdefault("FLASHNEXT_WATCHDOG_MEMORY", "1")
         environment.setdefault("FLASHNEXT_CHAT_GUARD", "1")
         environment.setdefault("FLASHNEXT_PREFILL_CHUNK_TOKENS", "2048")
         if known.pool_gb:
             environment["VEYSTRIX_NEMOTRON_POOL_GB"] = known.pool_gb
-        if known.context_limit:
+        if known.context_limit is not None:
             environment["VEYSTRIX_CONTEXT_LIMIT"] = str(known.context_limit)
     if not session_script.is_file():
         environment["PYTHONPATH"] = os.pathsep.join(p for p in (str(ROOT), environment.get("PYTHONPATH", "")) if p)

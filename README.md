@@ -144,6 +144,45 @@ information. Flash-Next extras: `/config model gpu-keepwarm off`
 disables keep-warm and saves the choice. Use
 `/config display animate off` to disable output animation.
 
+## Shared inference cache
+
+Qwen3.8 Flash-Next and Nemotron 3.5 Lightning share one **80 GB** persistent
+prefix quota at `~/.cache/veystrix/prefix-cache-v1`. The cache retains a
+separate **50 GB** free-space reserve. The manager keeps Qwen delta chains
+and Nemotron hybrid states in separate compatibility namespaces.
+
+In the macOS app, open **Settings → Universal Cache** to inspect live usage,
+change the quota, preview a reclaim operation, or clear eligible states.
+The same operations are available without starting a model:
+
+```sh
+.venv/bin/python -m veystrix.universal_cache status
+.venv/bin/python -m veystrix.universal_cache preview 10
+.venv/bin/python -m veystrix.universal_cache reclaim 10
+.venv/bin/python -m veystrix.universal_cache quota 80
+```
+
+`--prefix-dir` and `VEYSTRIX_CACHE_ROOT` select a parent for the dedicated
+cache directory. `VEYSTRIX_CACHE_GB` initializes the quota for a new root.
+Settings and the `quota` command update the stored quota live. Cache
+administration leaves model files and named sessions outside its scope.
+
+Nemotron defaults to a **1,048,576-token logical context window** with
+block-backed affine INT8 attention KV and FP32 Mamba SSM state. Each
+request can prefill up to **65,536 uncached tokens**. Longer conversations
+accumulate context across requests. The engine admits the configured
+window only when memory and swap checks pass. Set a smaller window in
+macOS Settings, with `--context-limit` on a direct Nemotron CLI launch,
+or with `VEYSTRIX_NEMOTRON_CONTEXT` on a supervised launch. See the
+[validation results](docs/architecture/unified-cache-nemotron-1m-results.md).
+
+Qwen's experimental throughput profile combines 4K hybrid layer-major
+prefill and buffered decode-pool reads. Enable it in the app's Engine
+settings or launch with `./serve.sh --enable short-throughput --pool-gb 2`.
+The profile uses more memory than the standard path. See the
+[short Qwen benchmark](results/qwen-short-20261111/) and
+[short Nemotron benchmarks](results/nemotron-short-20261111/).
+
 ## CHAT and AGENTIC modes, memory and cache safety
 
 ```bash
