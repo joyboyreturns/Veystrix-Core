@@ -17,7 +17,7 @@ import urllib.request
 
 from .bench_hifi_kv import STAGES
 
-OUTPUT_RESERVE = 64
+OUTPUT_RESERVE = 128
 ADDITION_TARGET = 1792
 ADDITION_LIMIT = 2048
 

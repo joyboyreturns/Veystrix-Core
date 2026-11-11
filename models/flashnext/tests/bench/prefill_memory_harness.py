@@ -722,6 +722,8 @@ def window_rate(stamps: list[float], start: int, stop: int) -> float | None:
 
 def measured_turn(arm: dict) -> dict:
     """The turn a result measures: the last one (turn 1 for first-turn arms)."""
+    if not arm.get("turns"):
+        return {}
     return arm["turns"][-1]
 
 
@@ -762,7 +764,7 @@ def exactness(arms: list[dict]) -> dict:
 
 def ring_health(arm: dict, cond: Condition) -> dict:
     """G2: in a ring condition the ring ran every layer with no fallback or error."""
-    if not cond.ring_on:
+    if not cond.ring_on or not arm.get("turns"):
         return {"status": "n/a", "reasons": []}
     turn = measured_turn(arm)
     ring = turn.get("ring") or {}
@@ -796,7 +798,7 @@ def memory_gate(arm: dict, limit: int = METAL_LIMIT_BYTES) -> dict:
 def scratch_cleanup(arm: dict, cond: Condition, baseline: dict | None) -> dict:
     """G4: after a scratch prefill no pool exists, nothing is retained, and
     active memory is near the baseline's."""
-    if not cond.scratch:
+    if not cond.scratch or not arm.get("turns"):
         return {"status": "n/a", "reasons": []}
     turn = measured_turn(arm)
     after = (turn.get("prefill_calls") or [{}])[-1].get("after", {})

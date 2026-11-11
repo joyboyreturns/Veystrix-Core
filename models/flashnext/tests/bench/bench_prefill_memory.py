@@ -1423,6 +1423,13 @@ def _gate_statuses(report: dict):
 
 
 def _arm_metrics(data: dict) -> dict:
+    if not data.get("turns"):
+        quality = data.get("quality") or {}
+        return {
+            "quality_suite": quality.get("suite"),
+            "passed": sum(1 for c in quality.get("cases", []) if c.get("passed")),
+            "total": len(quality.get("cases", [])),
+        }
     turn = H.measured_turn(data)
     return {
         "prefilled_tokens": turn["prefilled_tokens"], "prefill_tok_s": turn["prefill_tok_s"],

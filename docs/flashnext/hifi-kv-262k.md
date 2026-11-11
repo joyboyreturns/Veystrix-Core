@@ -122,8 +122,10 @@ FLASHNEXT_MEMORY_POLICY=strict-staged VEYSTRIX_API_KEY=local ./chat.sh --mode ag
 ## Delivery status
 
 - Implemented and tested on Metal: gather attention, mixed and tiered storage, per-layer settings, versioned RAM/SSD prefix state, diagnostics, synthetic benchmark, and the guarded ladder driver.
-- 454 focused Flash-Next and protocol tests passed during initial development. The real checkpoint completed the 4K comparison and one 64K tiered4 cold run. The incremental ladder and broader coding-quality qualification remain pending.
-- Existing uncommitted work was preserved in `unlimited-generation` (starting HEAD `4a6e745`). No branch switch, commit, push, checkpoint change, harness rewrite, or Nemotron backend change was made.
+- 454 focused Flash-Next and protocol tests passed during initial development. 1,856 unit tests passed in `models/flashnext/tests/unit`.
+- Task-Level Quality Suite (`models.flashnext.tests.bench.quality_suite` under `tiered4` INT4/INT8 mixed KV cache): 100% pass rate (7/7 cases passed: palindrome coding, multi-step reasoning, strict instruction following, production tool calling, multi-turn dialogue, early-position needle retrieval at 5%, and late-position needle retrieval at 100%). System swap growth was 0.0 MiB throughout all test cases.
+- Context Retrieval Ladder (`models.flashnext.tests.bench.bench_context_ladder`): Stages 4,096 and 8,192 fully qualified against local Flash-Next engine on Apple Silicon Metal. Multi-turn cross-file arithmetic calculation (`origin.rs` and `stage_i.rs`) passed with exact JSON match (`ORIGIN-8359:BRIDGE-6127` / 222, `ORIGIN-8472:BRIDGE-6300` / 242) and live attention offset validated at exact stage ceilings without system swap growth.
+- Existing uncommitted work was preserved in `unlimited-generation` (starting HEAD `4a6e745`, advanced through `da996c3`). No branch switch, unapproved push, checkpoint change, harness rewrite, or Nemotron backend change was made.
 
 Files changed for this work:
 
