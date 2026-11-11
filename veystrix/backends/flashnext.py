@@ -813,6 +813,23 @@ class FlashNextBackend(Conversation):
                 "predicted_decode_headroom": plan.predicted_decode_headroom, "reasons": list(plan.reasons),
                 "available_before": report["snapshot"].available, "pool_before": report["snapshot"].pool_bytes}
 
+    def _context_ceiling(self) -> int | None:
+        """Configured or checkpoint-declared context ceiling, or None when unavailable."""
+        configured = getattr(self, "context_limit", None)
+        if isinstance(configured, int) and not isinstance(configured, bool) and configured > 0:
+            return configured
+        for holder in (getattr(self, "language", None), getattr(self, "tokenizer", None)):
+            if holder is None:
+                continue
+            for source in (holder, getattr(holder, "config", None), getattr(holder, "init_kwargs", None)):
+                if source is None:
+                    continue
+                for attr in ("context_window", "max_position_embeddings", "model_max_length", "n_positions"):
+                    raw = source.get(attr) if isinstance(source, dict) else getattr(source, attr, None)
+                    if isinstance(raw, int) and not isinstance(raw, bool) and 0 < raw < 10_000_000:
+                        return raw
+        return None
+
     def _generate(self, max_tokens: int, out=None, on_prefilled=None,
                   on_prefill_progress=None, on_decode_token=None,
                   should_cancel=None) -> tuple[str, Stats]:
@@ -924,6 +941,9 @@ class FlashNextBackend(Conversation):
         self.tape.extend(self.pending)
         self.pending = []
         self._replay_needed = False
+        context_ceiling = self._context_ceiling()
+        if context_ceiling is not None:
+            generation_horizon = min(generation_horizon, max(0, context_ceiling - len(self.tape)))
         cancelled = False
 
         def check_cancel():

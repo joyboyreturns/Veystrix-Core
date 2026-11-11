@@ -246,7 +246,7 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     parser.add_argument("--enable", action="append", default=[], choices=tuple(modes.EXPERIMENTAL))
     parser.add_argument("--context-limit", type=int)
     parser.add_argument("--max-cold-prefill", type=int,
-                        help="largest cold prefill in tokens (AGENTIC default 32768; prefill still runs in 2048-token chunks)")
+                        help="largest cold prefill in tokens (32768 default, 65536 with kv-tiered4, 2048-token internal chunks)")
     parser.add_argument("--max-incremental-prefill", type=int,
                         help="largest uncached increment per request in tokens (AGENTIC default 32768)")
     parser.add_argument("--prefix-dir")

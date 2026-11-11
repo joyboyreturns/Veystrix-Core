@@ -1,6 +1,6 @@
 # Flash-Next 262K KV qualification, 2026-11-11
 
-**Experimental. BF16 remains the default.** Group 64 reached 262,144 synthetic cache rows on Metal and completed one real 4,097-token cold-prefill comparison on the installed checkpoint. The BF16 and tiered4 arms emitted identical 32-token outputs for that prompt. Long-context retrieval and broader coding quality remain unqualified.
+**Experimental. BF16 remains the default.** Group 64 reached 262,144 synthetic cache rows on Metal and completed a real 65,537-token cold prefill. The 4,097-token BF16 and tiered4 arms emitted identical 32-token outputs. Long-context retrieval and broader coding quality remain unqualified.
 
 ## Baseline and changes
 
@@ -34,11 +34,15 @@ One sequential BF16-then-tiered4 pair used the same 4,097-token prompt and 32-to
 | BF16 | 45.23 | 2.17 | 5,710.7 | 902 |
 | Tiered INT4 / INT8 | 39.07 | 2.04 | 5,563.5 | 902 |
 
-The 32 generated token IDs matched. At this length, the recent INT8 tier covers all attended rows, so the pair does not measure retrieval from aged INT4 rows. This is a single timing pair.
+The 32 generated token IDs matched. At this length, the recent INT8 tier covers all attended rows. This is a single timing pair.
+
+The subsequent tiered4 cold run processed **65,537 prompt tokens** in **1,775.88 seconds** at **36.90 tokens/s**, then generated **32 tokens** at **1.71 tokens/s**. Peak MLX active memory was **6.30 GiB** and peak system swap was **1,691 MiB**. The scratch ring and cleanup checks passed. This run used Group 64, an 8,192-token recent window, the gather kernel, 2,048-token internal chunks, and a 3,072 MiB swap stop.
 
 ## macOS app and harnesses
 
 In the app, choose **Model → Flash-Next KV cache → Tiered INT4 / INT8 (experimental)**. Press **Start** or **Switch to Selected Model**. The Model and Agents views show the precision reported by the running worker. The existing model folder and installation ID serve both precisions, so Hermes, Qwen Code, DeepSeek Harness, and other API clients keep the same model ID and base URL. The app starts Flash-Next with the 3 GiB absolute swap policy.
+
+Tiered4 admits up to **65,536 cold prompt tokens** across the app, router, and CLI. The uncached continuation limit is 32,768 tokens per request. Harnesses use the same native context window and read the worker's cold limit through `/health`. BF16 retains its 32,768-token cold limit.
 
 The bundled router loaded the real checkpoint in tiered4 and confirmed the 3,072 MiB stop with zero margin in `/health`. It passed requests shaped like Hermes, Qwen Code and DeepSeek Harness, plus generic Chat Completions, OpenAI Responses streaming and Anthropic Messages streaming. These were API-level checks. The app and its routing tests passed 65 Swift tests and 75 focused Python tests.
 
@@ -118,7 +122,7 @@ FLASHNEXT_MEMORY_POLICY=strict-staged VEYSTRIX_API_KEY=local ./chat.sh --mode ag
 ## Delivery status
 
 - Implemented and tested on Metal: gather attention, mixed and tiered storage, per-layer settings, versioned RAM/SSD prefix state, diagnostics, synthetic benchmark, and the guarded ladder driver.
-- 454 focused Flash-Next and protocol tests passed during initial development. The real checkpoint completed one 4K comparison. The incremental ladder and broader coding-quality qualification remain pending.
+- 454 focused Flash-Next and protocol tests passed during initial development. The real checkpoint completed the 4K comparison and one 64K tiered4 cold run. The incremental ladder and broader coding-quality qualification remain pending.
 - Existing uncommitted work was preserved in `unlimited-generation` (starting HEAD `4a6e745`). No branch switch, commit, push, checkpoint change, harness rewrite, or Nemotron backend change was made.
 
 Files changed for this work:

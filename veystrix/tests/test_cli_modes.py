@@ -52,6 +52,13 @@ class ModeLaunchTests(unittest.TestCase):
         _, chat = self.launch("--mode", "chat")
         self.assertNotIn("VEYSTRIX_MAX_COLD_PREFILL", chat)
 
+    def test_tiered4_uses_64k_cold_limit_and_preserves_overrides(self):
+        _, env = self.launch("--mode", "agentic", "--enable", "kv-tiered4")
+        self.assertEqual(env["VEYSTRIX_MAX_COLD_PREFILL"], "65536")
+        self.assertEqual(env["VEYSTRIX_MAX_INCREMENTAL_PREFILL"], "32768")
+        _, capped = self.launch("--mode", "agentic", "--enable", "kv-tiered4", "--max-cold-prefill", "4096")
+        self.assertEqual(capped["VEYSTRIX_MAX_COLD_PREFILL"], "4096")
+
     def test_agentic_does_not_double_a_server_flag(self):
         command, _ = self.launch("--mode", "agentic", "/server")
         self.assertEqual(command.count("--server"), 1)

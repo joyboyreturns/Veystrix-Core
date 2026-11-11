@@ -65,13 +65,18 @@ def server_command(args) -> list:
         if getattr(args, "preferences_file", None):
             command += ["--preferences-file", args.preferences_file]
         return command
+    from .settings.modes import DEFAULT_MAX_INCREMENTAL_PREFILL, default_cold_prefill
+
+    enables = getattr(args, "enable", None) or ()
+    kv_cache = "tiered4" if "kv-tiered4" in enables else "bf16"
     command = [*launcher, "--mode", "agentic",
                "--pool-gb", str(args.pool_gb),
                "--host", args.host, "--port", str(args.port),
                "--context-limit", "262144",
-               "--max-cold-prefill", "32768", "--max-incremental-prefill", "32768",
+               "--max-cold-prefill", str(default_cold_prefill(kv_cache)),
+               "--max-incremental-prefill", str(DEFAULT_MAX_INCREMENTAL_PREFILL),
                "--model", "flashnext", "--checkpoint", args.checkpoint]
-    for name in getattr(args, "enable", None) or ():
+    for name in enables:
         command += ["--enable", name]          # an explicit experimental option, e.g. layer-major
     if getattr(args, "prefix_dir", None):
         command += ["--prefix-dir", args.prefix_dir]

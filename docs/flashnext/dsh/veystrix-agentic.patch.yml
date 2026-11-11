@@ -25,12 +25,12 @@
             # where CONTEXT_SAFETY_TOKENS is hardcoded to 4096 and MIN_MAX_TOKENS is 1.
             # When contextWindow was 4096 or 8192, a ~4K input prompt yielded:
             #   8192 - ~4032 - 4096 <= 64 (or <= 0 when including tool schemas/framing), floored to 1.
-            # With contextWindow 12288 (8192 effective + 4096 safety offset) and maxTokens 1024:
-            #   12288 - ~4032 - 4096 = 4160 >= 1024, so dsh requests exactly max_completion_tokens: 1024.
+            # With contextWindow 12288 (8192 effective + 4096 safety offset) and maxTokens 8192:
+            #   min(8192, 12288 - ~4032 - 4096) = 4160, so remaining context (never an artificial 1024 cap) governs output.
             # The Veystrix server enforces its own real context limit (8192 tokens) and checks
             # that prompt_tokens + MIN_OUTPUT_RESERVE (256) <= 8192.
             contextWindow: 12288
-            maxTokens: 1024
+            maxTokens: 8192
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:

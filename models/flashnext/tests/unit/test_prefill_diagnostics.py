@@ -1400,14 +1400,14 @@ class OptionTests(unittest.TestCase):
 
     def test_the_planned_matrix_is_unchanged_by_the_short_sizes(self):
         self.assertEqual(set(H.SIZES), {"1k", "2k", "4k"})
-        self.assertEqual(set(H.DIAGNOSTIC_SIZES), {"128", "256"})
-        self.assertEqual(set(H.ALL_SIZES), {"128", "256", "1k", "2k", "4k"})
+        self.assertEqual(set(H.DIAGNOSTIC_SIZES), {"128", "256", "64k"})
+        self.assertEqual(set(H.ALL_SIZES), {"128", "256", "1k", "2k", "4k", "64k"})
 
     def test_every_size_has_a_time_limit_and_a_position(self):
         for size in H.ALL_SIZES:
             self.assertIn(size, H.TIME_LIMIT_SECONDS, size)
             self.assertIn(size, B.SIZE_ORDER, size)
-        self.assertEqual(sorted(B.SIZE_ORDER, key=B.SIZE_ORDER.get), ["128", "256", "1k", "2k", "4k"])
+        self.assertEqual(sorted(B.SIZE_ORDER, key=B.SIZE_ORDER.get), ["128", "256", "1k", "2k", "4k", "64k"])
 
     def test_short_sizes_come_first_in_the_schedule(self):
         arms = H.build_schedule(["1k", "256", "128"], ["F0", "F2"], 1)

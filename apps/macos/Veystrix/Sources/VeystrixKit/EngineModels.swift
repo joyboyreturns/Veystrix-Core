@@ -110,7 +110,16 @@ public struct ModelsReport: Decodable, Equatable, Sendable {
     public struct Entry: Decodable, Equatable, Sendable {
         public var id: String
         public var contextWindow: Int?
-        enum CodingKeys: String, CodingKey { case id, contextWindow = "context_window" }
+        public var suggestedClientContextWindow: Int?
+        public var contextLimitEnforced: Bool?
+        public var maxOutputTokens: Int?
+        enum CodingKeys: String, CodingKey {
+            case id
+            case contextWindow = "context_window"
+            case suggestedClientContextWindow = "suggested_client_context_window"
+            case contextLimitEnforced = "context_limit_enforced"
+            case maxOutputTokens = "max_output_tokens"
+        }
     }
     public var data: [Entry]
 }

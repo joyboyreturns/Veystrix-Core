@@ -152,13 +152,13 @@ class Agentic4kOfflineTests(unittest.TestCase):
         max_tokens = int(re.search(r"^\s*maxTokens:\s*(\d+)", text, re.M)[1])
 
         self.assertEqual(window, 12288)
-        self.assertEqual(max_tokens, 1024)
+        self.assertEqual(max_tokens, 8192)
         # Harness formula check (pi-messages.js: CONTEXT_SAFETY_TOKENS = 4096)
         context_safety_tokens = 4096
         prompt_estimate = 4032
         available = window - prompt_estimate - context_safety_tokens
         wire_tokens = min(max_tokens, max(1, available))
-        self.assertEqual(wire_tokens, 1024, "Harness must request 1024 tokens, not 1")
+        self.assertEqual(wire_tokens, 4160, "Harness must use remaining context (4160 tokens), not 1")
 
         # Server-side guard: when a tool call is cut off by the output limit,
         # it is raised as ModelToolCallError (422), never handed to client as plain text

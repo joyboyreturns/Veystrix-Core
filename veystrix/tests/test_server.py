@@ -68,8 +68,9 @@ class FakeBackend:
         self.pending = []
         # a real client echoes the reply back in the next request
         self.tape.extend(self.encode(text))
+        token_count = 3 if int(max_tokens) < 0 else min(int(max_tokens), 3)
         return text, SimpleNamespace(
-            finish="stop", tokens=min(max_tokens, 3), prompt_tokens=4
+            finish="stop", tokens=token_count, prompt_tokens=4
         )
 
 

@@ -4,6 +4,7 @@ import VeystrixKit
 
 @MainActor private final class HarnessModels: ObservableObject {
     @Published var entries: [InstalledModelsReport.Entry] = []
+    @Published var modelCapabilities: [String: ModelsReport.Entry] = [:]
     @Published var selected = ""
     @Published var loading = false
     @Published var error: String?
@@ -15,9 +16,14 @@ import VeystrixKit
         let current = revision
         loading = true
         defer { if current == revision { loading = false } }
-        var result = await HealthClient(port: port, apiKey: key).installedModels()
+        let client = HealthClient(port: port, apiKey: key)
+        var result = await client.installedModels()
+        let models = await client.models()
         if result == nil { result = await Self.offlineInventory(source: source) }
         guard current == revision else { return }
+        var capMap: [String: ModelsReport.Entry] = [:]
+        for item in models?.data ?? [] { capMap[item.id] = item }
+        modelCapabilities = capMap
         guard let result else {
             error = "Installed models could not be read. Check the bundled engine and refresh."
             return
@@ -164,7 +170,14 @@ struct HarnessView: View {
                     }
                     Text("Refresh Harness Models registers the installed models with supported harnesses. A model change rebuilds conversation state and can take time.")
                         .font(.caption).foregroundStyle(.secondary)
-                    let s = HarnessProfiles.snippet(for: picked.value, port: model.settings.port, modelID: entry.id)
+                    let caps = inventory.modelCapabilities[entry.id]
+                    let s = HarnessProfiles.snippet(
+                        for: picked.value,
+                        port: model.settings.port,
+                        modelID: entry.id,
+                        suggestedClientContext: caps?.suggestedClientContextWindow,
+                        modelContext: caps?.contextWindow
+                    )
                     GroupBox("Where it goes") { Text(s.whereToPutIt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
                     GroupBox("Configuration") {
                         VStack(alignment: .leading, spacing: 8) {
@@ -181,10 +194,10 @@ struct HarnessView: View {
         }
         .navigationTitle("Agents")
         .task { await inventory.refresh(port: model.settings.port, key: model.effectiveKey, source: EngineLocator.resolve(settings: model.settings)) }
-        .onChange(of: engine.state) { _ in
+        .onChange(of: engine.state) { _, _ in
             Task { await inventory.refresh(port: model.settings.port, key: model.effectiveKey, source: EngineLocator.resolve(settings: model.settings)) }
         }
-        .onChange(of: engine.health?.installedModelID) { _ in
+        .onChange(of: engine.health?.installedModelID) { _, _ in
             Task { await inventory.refresh(port: model.settings.port, key: model.effectiveKey, source: EngineLocator.resolve(settings: model.settings)) }
         }
     }

@@ -1,7 +1,7 @@
 # DeepSeek Harness patch for the direct 8K AGENTIC gate: identical to veystrix-agentic.patch.yml except contextWindow.
-# Server --context-limit 12288 (first request about 8.2K + 1,024 answer + tool results and a follow-up); the client window is
-# the server window plus the harness's hard-coded 4,096 safety margin: 12288 + 4096 = 16384, so with an 8,203-token first
-# request the harness asks for min(1024, 16384 - 8203 - 4096 = 4085) = 1024 output tokens.
+# Server --context-limit 12288 (first request about 8.2K + tool results and follow-ups up to the server window); the
+# client window is the server window plus the harness's hard-coded 4,096 safety margin: 12288 + 4096 = 16384, so
+# with maxTokens: 12288 the harness computes min(12288, 16384 - prompt - 4096) = remaining server context.
 # (Original header follows.)
 # DeepSeek Harness patch for Veystrix AGENTIC mode (guarded baseline).
 # Use:  DSH_HOME=<profile home> VEYSTRIX_API_KEY=<same value as the server's --server-api-key> \
@@ -35,7 +35,7 @@
             # The Veystrix server enforces its own real context limit (8192 tokens) and checks
             # that prompt_tokens + MIN_OUTPUT_RESERVE (256) <= 8192.
             contextWindow: 16384
-            maxTokens: 1024
+            maxTokens: 12288
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:

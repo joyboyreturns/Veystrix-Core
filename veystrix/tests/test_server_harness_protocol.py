@@ -188,14 +188,16 @@ class HarnessPatchTests(unittest.TestCase):
 
     def test_the_shipped_patch_leaves_the_harness_room_to_ask_for_a_real_answer(self):
         window, max_tokens = self.values()
-        self.assertIsNotNone(max_tokens, "the patch must cap the requested output with maxTokens")
-        self.assertGreaterEqual(max_tokens, 512)
-        self.assertGreaterEqual(window - self.HARNESS_RESERVE, max_tokens, "the window must leave room for maxTokens")
-        self.assertLessEqual(max_tokens, 2048 - 256)          # never more than the smallest enforced context can hold
+        self.assertEqual(window, 12288)
+        self.assertIsNotNone(max_tokens, "the patch must set maxTokens to the full server context rather than leaving it small")
+        self.assertEqual(max_tokens, 8192)
+        self.assertGreaterEqual(window - self.HARNESS_RESERVE, 512, "the 4096 safety reserve must not collapse available output")
 
     def test_the_real_harness_wire_value_is_what_the_patch_implies(self):
         window, max_tokens = self.values()
-        self.assertEqual(min(max_tokens, max(1, window - self.HARNESS_RESERVE)), max_tokens)
+        wire_tokens = min(max_tokens, max(1, window - self.HARNESS_RESERVE))
+        self.assertEqual(wire_tokens, window - self.HARNESS_RESERVE)
+        self.assertGreaterEqual(wire_tokens, 4096)
         self.assertEqual(max(1, 4096 - self.HARNESS_RESERVE), 1)      # the configuration that failed
 
 

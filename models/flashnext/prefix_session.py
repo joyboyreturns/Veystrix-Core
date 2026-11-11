@@ -24,6 +24,7 @@ import mlx.core as mx
 from . import prefill as prefill_module
 from . import prefix_cache as P
 from . import prefix_profiles
+from .settings.modes import DEFAULT_MAX_INCREMENTAL_PREFILL, default_cold_prefill
 
 FLAG = "FLASHNEXT_PREFIX_CACHE"
 FLAG_DIR = "FLASHNEXT_PREFIX_CACHE_DIR"
@@ -290,8 +291,8 @@ class PrefixSession:
             report.bytes_restored = hit.bytes_loaded
 
         needed = len(prompt) - offset
-        max_cold = int(os.environ.get("VEYSTRIX_MAX_COLD_PREFILL") or 32768)
-        max_inc = int(os.environ.get("VEYSTRIX_MAX_INCREMENTAL_PREFILL") or max_cold)
+        max_cold = int(os.environ.get("VEYSTRIX_MAX_COLD_PREFILL") or default_cold_prefill())
+        max_inc = int(os.environ.get("VEYSTRIX_MAX_INCREMENTAL_PREFILL") or min(max_cold, DEFAULT_MAX_INCREMENTAL_PREFILL))
         # Use the incremental allowance only after an actual successful restore;
         # a failed or incompatible lookup remains subject to the cold limit.
         effective_limit = max_inc if offset > 0 else max_cold

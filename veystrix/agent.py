@@ -33,8 +33,8 @@ class Limits:
     """
 
     max_turns: int = 24
-    max_tokens: int = 2048
-    think_tokens: int = 512
+    max_tokens: int = -1
+    think_tokens: int = -1
     max_forced_closes: int = 2
     min_free_gb: float = 0.0
     max_swap_growth_gb: float = 8.0
@@ -76,12 +76,13 @@ def run_agent(engine: Backend, repo, out, limits: Limits = Limits(),
         else:
             out(f"\n{'#' * 30} TURN {turn} {'#' * 30}")
             out(f"[appending {len(engine.pending)} new tokens]")
-        generation_limit = limits.max_tokens
+        generation_limit = -1 if limits.max_tokens is None else int(limits.max_tokens)
         if getattr(engine, "thinking_enabled", False):
+            think_tokens = -1 if limits.think_tokens is None else int(limits.think_tokens)
             generation_limit = (
                 -1
-                if generation_limit < 0 or limits.think_tokens < 0
-                else generation_limit + limits.think_tokens
+                if generation_limit < 0 or think_tokens < 0
+                else generation_limit + think_tokens
             )
         if on_prefill_progress is not None and ui is not None:
             def progress(done, total):

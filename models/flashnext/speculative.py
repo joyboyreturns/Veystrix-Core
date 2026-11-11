@@ -19,6 +19,15 @@ from .prefill import prefill_target
 from .routing import DEFAULT_READ_MODE
 
 
+UNLIMITED_GENERATION_HORIZON = (1 << 31) - 1
+
+
+def _normalize_max_tokens(max_tokens: int | None) -> int:
+    if max_tokens is None or int(max_tokens) < 0:
+        return UNLIMITED_GENERATION_HORIZON
+    return int(max_tokens)
+
+
 def _copy_state(value):
     if isinstance(value, list):
         return list(value)
@@ -570,6 +579,7 @@ class FastDraftGreedy:
 
     def generate(self, max_tokens: int, stops: Iterable[int]):
         """Yield the same greedy tokens as exact routing."""
+        max_tokens = _normalize_max_tokens(max_tokens)
         stops = set(stops)
         if self.external_draft:
             try:
@@ -835,6 +845,7 @@ class MTPGreedy:
 
     def generate(self, max_tokens: int, stops: Iterable[int]):
         """Yield exact greedy tokens. The target cache always trails no output."""
+        max_tokens = _normalize_max_tokens(max_tokens)
         stops = set(stops)
         produced = 0
         while produced < max_tokens and self.next_main is not None:

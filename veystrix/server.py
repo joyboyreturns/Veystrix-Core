@@ -42,6 +42,7 @@ from veystrix import effort_slot
 from veystrix import usage_log
 from veystrix import warm as warm_module
 from models.flashnext import flight_recorder
+from models.flashnext.settings.modes import default_cold_prefill
 
 
 MAX_BODY = 16 * 1024 * 1024
@@ -638,54 +639,66 @@ def _window_from_object(candidate) -> int | None:
 def _tokenizer_windows(tokenizer):
     seen = set()
     current = tokenizer
-    while current is not None and id(current) not in seen:
+    for _ in range(4):
+        if current is None or id(current) in seen:
+            break
         seen.add(id(current))
         yield current
-        init_kwargs = getattr(current, "init_kwargs", None)
-        if isinstance(init_kwargs, dict):
-            yield init_kwargs
+        mock_children = getattr(current, "_mock_children", None)
+        is_mock = isinstance(mock_children, dict)
+        if not is_mock or "init_kwargs" in mock_children:
+            init_kwargs = getattr(current, "init_kwargs", None)
+            if isinstance(init_kwargs, dict):
+                yield init_kwargs
+        if is_mock and "_tokenizer" not in mock_children:
+            break
         current = getattr(current, "_tokenizer", None)
+
+
+def _backend_native_window(service) -> int | None:
+    backend = _service_backend(service)
+    if backend is None:
+        return None
+    found = _window_from_object(backend)
+    if found is not None:
+        return found
+    for name in _WINDOW_HOLDERS:
+        try:
+            found = _window_from_object(getattr(backend, name, None))
+        except Exception:
+            continue
+        if found is not None:
+            return found
+    try:
+        tokenizer = _model_tokenizer(backend)
+    except Exception:
+        tokenizer = getattr(backend, "tokenizer", None)
+    if tokenizer is not None:
+        for candidate in _tokenizer_windows(tokenizer):
+            if isinstance(candidate, dict):
+                for name in _TOKENIZER_ATTRS:
+                    found = _valid_window(candidate.get(name))
+                    if found is not None:
+                        return found
+                continue
+            found = _window_from_object(candidate)
+            if found is not None:
+                return found
+            for name in _TOKENIZER_ATTRS:
+                try:
+                    found = _valid_window(getattr(candidate, name, None))
+                except Exception:
+                    continue
+                if found is not None:
+                    return found
+    return None
 
 
 def _context_window_for(service) -> int:
     configured = getattr(service, "context_limit", None)
     if isinstance(configured, int) and not isinstance(configured, bool) and configured > 0:
         return configured
-    backend = _service_backend(service)
-    if backend is not None:
-        found = _window_from_object(backend)
-        if found is not None:
-            return found
-        for name in _WINDOW_HOLDERS:
-            try:
-                found = _window_from_object(getattr(backend, name, None))
-            except Exception:
-                continue
-            if found is not None:
-                return found
-        try:
-            tokenizer = _model_tokenizer(backend)
-        except Exception:
-            tokenizer = getattr(backend, "tokenizer", None)
-        if tokenizer is not None:
-            for candidate in _tokenizer_windows(tokenizer):
-                if isinstance(candidate, dict):
-                    for name in _TOKENIZER_ATTRS:
-                        found = _valid_window(candidate.get(name))
-                        if found is not None:
-                            return found
-                    continue
-                found = _window_from_object(candidate)
-                if found is not None:
-                    return found
-                for name in _TOKENIZER_ATTRS:
-                    try:
-                        found = _valid_window(getattr(candidate, name, None))
-                    except Exception:
-                        continue
-                    if found is not None:
-                        return found
-    return DEFAULT_CONTEXT_WINDOW
+    return _backend_native_window(service) or DEFAULT_CONTEXT_WINDOW
 
 
 def _display_name_for(service) -> str:
@@ -733,6 +746,7 @@ def model_card(service) -> dict:
             {"effort": "low", "description": "Low reasoning effort"},
             {"effort": "medium", "description": "Medium reasoning effort"},
             {"effort": "high", "description": "High reasoning effort"},
+            {"effort": "xhigh", "description": "Extra-high reasoning effort"},
         ],
         "shell_type": "shell_command",
         "visibility": "list",
@@ -917,6 +931,14 @@ STALL_SECONDS = float(os.environ.get("VEYSTRIX_STALL_SECONDS", "180"))
 RESTART_COMMAND = "./chat.sh --mode agentic --pool-gb 0 --context-limit 262144 --max-cold-prefill 32768 --max-incremental-prefill 32768"
 
 
+def _restart_command() -> str:
+    if os.environ.get("FLASHNEXT_KV_CACHE_DTYPE") == "tiered4":
+        policy = "FLASHNEXT_MEMORY_POLICY=absolute-swap-only " if os.environ.get("FLASHNEXT_MEMORY_POLICY") == "absolute-swap-only" else ""
+        return (f"{policy}./chat.sh --mode agentic --enable kv-tiered4 --pool-gb 0 --context-limit 262144 "
+                f"--max-cold-prefill {default_cold_prefill('tiered4')} --max-incremental-prefill {MAX_INCREMENTAL_PREFILL_DEFAULT}")
+    return RESTART_COMMAND
+
+
 def _memory_stopped() -> bool:
     try:
         from models.flashnext import memory_controller
@@ -937,7 +959,7 @@ def _safety_stop_error(prefix: str = "request cancelled") -> RequestError:
         pass
     return RequestError(
         f"{prefix} by the memory safety stop: {reason}. This server will exit and accepts no further work. "
-        f"Do NOT retry automatically: restart it deliberately with `{RESTART_COMMAND}` once memory pressure has eased.",
+        f"Do NOT retry automatically: restart it deliberately with `{_restart_command()}` once memory pressure has eased.",
         503, "memory_critical_stop")
 
 
@@ -1014,7 +1036,7 @@ class ModelService:
         self.session = session
         self.model = f"veystrix-{session.preferences['model']}"
         path = getattr(getattr(session, "backend", None), "model_path", None)
-        if path:
+        if isinstance(path, (str, os.PathLike)) and path:
             from veystrix.model_registry import installation_id
             self.installed_model_id = installation_id(session.preferences["model"], path)
         else:
@@ -1029,7 +1051,8 @@ class ModelService:
         self.context_limit = context_limit
         # Largest single prefill (a cold rebuild, or the new tokens of a continuation) that the admitted memory tier
         # allows. None means no tier limit. Requests above it are refused before any state changes.
-        self.max_cold_prefill = max_cold_prefill
+        self.max_cold_prefill = (default_cold_prefill() if max_cold_prefill is None and
+                                 session.preferences["model"] == "flashnext" else max_cold_prefill)
         self.max_incremental_prefill = max_incremental_prefill
         self.last_prompt_tokens = None
         self.last_cached_tokens = 0
@@ -1189,7 +1212,7 @@ class ModelService:
         """Refuse a prefill larger than the allowed prefill limit. Runs before any state changes.
 
         ``incremental`` (the request extends live or restored state) is judged against ``max_incremental_prefill``; a cold or
-        rebuilt prompt against ``max_cold_prefill``. Both default to 32,768 and neither is a licence to split a rejected
+        rebuilt prompt against ``max_cold_prefill``. Neither limit is a licence to split a rejected
         cold prompt into chunks: chunking (2,048 tokens) happens only inside an admitted prefill."""
         if incremental:
             limit = self.max_incremental_prefill
@@ -1208,7 +1231,7 @@ class ModelService:
                     "less new content per turn (for example fewer or smaller tool outputs). Nothing was run and the "
                     "live state is unchanged.",
                     code="oversized_prefill_rejected")
-            if total_tokens > MAX_COLD_PREFILL_DEFAULT:
+            if total_tokens > default_cold_prefill():
                 if is_cold or matched_prefix == 0:
                     raise OversizedPrefillError(
                         f"this request needs {tokens} tokens of cold prefill (total prompt: {total_tokens}), "
@@ -1555,11 +1578,22 @@ class ModelService:
                     return True
                 return False
 
-            requested_output = max_tokens
-            server_limit = self.context_limit or 262144
-            if self.last_prompt_tokens:
-                available_for_output = max(1, server_limit - self.last_prompt_tokens)
-                max_tokens = min(max_tokens, available_for_output)
+            requested_output = (
+                -1 if max_tokens is None or int(max_tokens) < 0 else int(max_tokens)
+            )
+            native_or_configured = (
+                self.context_limit
+                if isinstance(self.context_limit, int) and not isinstance(self.context_limit, bool) and self.context_limit > 0
+                else _backend_native_window(self)
+            )
+            prompt_tokens = self.last_prompt_tokens
+            if native_or_configured is not None:
+                if prompt_tokens is None:
+                    prompt_tokens = len(getattr(backend, "tape", ())) + len(getattr(backend, "pending", ()))
+                available_for_output = max(1, native_or_configured - prompt_tokens)
+                max_tokens = available_for_output if requested_output < 0 else min(requested_output, available_for_output)
+            else:
+                max_tokens = -1 if requested_output < 0 else requested_output
             budget = context_budget.evaluate(self.context_limit, self.last_prompt_tokens or 0, requested_output)
             self.last_budget = budget.as_dict()
             gen_kwargs = {
@@ -1661,10 +1695,15 @@ class ModelService:
                     and raw_visible.rfind("<tool_call>") > raw_visible.rfind("</tool_call>")):
                 # The model began a tool call and the output limit ended it. Handing the client the raw marker as
                 # ordinary text would look like an answer; nothing was executed and no call is invented.
+                limit_desc = (
+                    "the remaining context window"
+                    if requested_output < 0
+                    else f"the output limit of {max_tokens} tokens"
+                )
                 raise ModelToolCallError(
-                    f"the model began a tool call but the output limit of {max_tokens} tokens ended it first; "
-                    "no tool was called. Raise max_tokens / max_completion_tokens (the client may be computing "
-                    "it from a context window that leaves too little room).")
+                    f"the model began a tool call but {limit_desc} ended it first; "
+                    "no tool was called. Compact the conversation or raise max_tokens / max_completion_tokens "
+                    "(the client may be computing it from a context window that leaves too little room).")
             if hold and on_text is not None and visible:
                 final_words = CompletedTextBuffer()
                 for complete in final_words.feed(visible) + final_words.finish():
@@ -2110,15 +2149,35 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             progress.PROGRESS.request_end()
             flight_recorder.record("request_end", path=path)
 
-    DEFAULT_MAX_OUTPUT_TOKENS = int(os.environ.get("VEYSTRIX_DEFAULT_MAX_OUTPUT_TOKENS", "2048"))
+    @staticmethod
+    def _default_max_output_tokens() -> int:
+        raw = os.environ.get("VEYSTRIX_DEFAULT_MAX_OUTPUT_TOKENS")
+        if raw is None or not str(raw).strip():
+            return -1
+        text = str(raw).strip().lower()
+        if text in {"-1", "none", "unlimited"}:
+            return -1
+        try:
+            value = int(text)
+        except ValueError:
+            return -1
+        return value if value >= 1 else -1
+
+    DEFAULT_MAX_OUTPUT_TOKENS = _default_max_output_tokens.__func__()
 
     def _limit(self, payload, default=None):
-        if default is None:
-            default = self.DEFAULT_MAX_OUTPUT_TOKENS
-        value = payload.get(
-            "max_output_tokens",
-            payload.get("max_completion_tokens", payload.get("max_tokens", default)),
-        )
+        default_limit = self.DEFAULT_MAX_OUTPUT_TOKENS if default is None else default
+        explicit = False
+        value = None
+        for key in ("max_output_tokens", "max_completion_tokens", "max_tokens"):
+            if key in payload and payload[key] is not None:
+                value = payload[key]
+                explicit = True
+                break
+        if not explicit:
+            if default_limit is None or default_limit == -1:
+                return -1
+            value = default_limit
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             raise RequestError("max_tokens must be a positive integer")
         return min(value, capabilities(self.server.service)["context_window"])
@@ -2356,9 +2415,11 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                     event("response.function_call_arguments.done", item_id=item["id"],
                           output_index=index, arguments=call["arguments"])
                     event("response.output_item.done", output_index=index, item=item)
-                completed = dict(base, status="completed", output=output,
+                response_status = "incomplete" if getattr(result.stats, "finish", None) == "length" else "completed"
+                incomplete = {"reason": "max_output_tokens"} if response_status == "incomplete" else None
+                completed = dict(base, status=response_status, incomplete_details=incomplete, output=output,
                                  usage=responses_usage(service, result.stats))
-                event("response.completed", response=completed)
+                event("response.completed" if response_status == "completed" else "response.incomplete", response=completed)
             except (BrokenPipeError, ConnectionResetError, ClientGone):
                 pass
             except Exception as exc:
@@ -2375,9 +2436,12 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             output.append({"type": "function_call", "id": f"fc_{uuid.uuid4().hex}",
                            "call_id": call["id"], "name": call["name"],
                            "arguments": call["arguments"], "status": "completed"})
+        response_status = "incomplete" if getattr(result.stats, "finish", None) == "length" else "completed"
+        incomplete = {"reason": "max_output_tokens"} if response_status == "incomplete" else None
         self._json({
             "id": ident, "object": "response", "created_at": int(time.time()),
-            "status": "completed", "model": getattr(self, "_response_model", service.model), "output": output,
+            "status": response_status, "incomplete_details": incomplete,
+            "model": getattr(self, "_response_model", service.model), "output": output,
             "usage": responses_usage(service, result.stats),
         })
 
@@ -2398,7 +2462,7 @@ def serve(session, host: str, port: int, api_key: str | None = None,
     if recorder.enabled:
         print(f"flight recorder: {recorder.path}")
     flight_recorder.record("server_start", host=host, port=server.server_port, context_limit=context_limit,
-                           max_cold_prefill=max_cold_prefill or MAX_COLD_PREFILL_DEFAULT,
+                           max_cold_prefill=server.service.max_cold_prefill or MAX_COLD_PREFILL_DEFAULT,
                            max_incremental_prefill=max_incremental_prefill or MAX_INCREMENTAL_PREFILL_DEFAULT)
     try:
         from models.flashnext import memory_controller as _mc

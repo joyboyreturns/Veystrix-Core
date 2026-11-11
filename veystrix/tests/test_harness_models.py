@@ -15,7 +15,10 @@ class HarnessConfigTests(unittest.TestCase):
         self.assertEqual([x['generationConfig']['contextWindowSize'] for x in entries], [262144, 8192, 32768])
         patch = [{'id': 'llm-pi-ai'}]
         models = deepseek_config(patch, [full, small, m('unknown')])[0]['config']['providers']['veystrix']['models']
-        self.assertEqual([x['contextWindow'] for x in models], [262144, 8192, 32768])
+        self.assertEqual([x['contextWindow'] for x in models], [266240, 12288, 36864])
+        self.assertEqual([x['maxTokens'] for x in models], [262144, 8192, 32768])
+        self.assertEqual(models[0]['reasoningEfforts']['xhigh'], 'xhigh')
+        self.assertEqual(models[0]['reasoningEfforts']['max'], 'max')
 
     def test_qwen_merge_preserves_unrelated_providers_and_is_idempotent(self):
         original = {"modelProviders": {"openai": [{"id": "other", "baseUrl": "https://example.test"}], "other": [{"id": "x"}]}, "model": {"name": "other"}}

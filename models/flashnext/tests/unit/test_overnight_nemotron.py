@@ -18,7 +18,7 @@ class NemotronSupervisorTests(unittest.TestCase):
         command = overnight.server_command(args())
         self.assertIn("nemotron35-lightning", command)
         self.assertEqual(command[command.index("--model") + 1], "nemotron35-lightning")
-        self.assertEqual(command[command.index("--context-limit") + 1], "32768")
+        self.assertEqual(command[command.index("--context-limit") + 1], "262144")
         self.assertIn("--server", command)
         for flashnext_only in ("--mode", "--enable", "--prefix-dir", "--threshold", "--max-cold-prefill"):
             self.assertNotIn(flashnext_only, command)

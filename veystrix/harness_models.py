@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import copy
 
+from veystrix.context_budget import suggested_client_window
+
 
 def model_context(model):
     """Configured window, bounded by checkpoint metadata when available."""
@@ -75,9 +77,11 @@ def deepseek_config(patch, models, port=8080):
     provider.update({"displayName": "Veystrix", "api": "openai-completions", "baseURL": base,
                      "apiKeyEnv": "VEYSTRIX_API_KEY", "streamIdleTimeoutMs": 7200000,
                      "timeoutMs": 7200000, "retryPolicy": {"mode": "normal", "maxRetries": 0},
-                     "models": preserved_models + [{"id": m.id, "name": m.display_name, "contextWindow": model_context(m),
-                                 "maxTokens": 1024, "input": ["text"],
-                                 "reasoningEfforts": {"off": "none", "low": "low", "medium": "medium", "high": "high"}}
+                     "models": preserved_models + [{"id": m.id, "name": m.display_name,
+                                 "contextWindow": suggested_client_window(model_context(m)),
+                                 "maxTokens": model_context(m), "input": ["text"],
+                                 "reasoningEfforts": {"off": "none", "low": "low", "medium": "medium",
+                                                      "high": "high", "xhigh": "xhigh", "max": "max"}}
                                 for m in models]})
     providers["veystrix"] = provider
     return result

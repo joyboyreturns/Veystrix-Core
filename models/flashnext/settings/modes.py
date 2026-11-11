@@ -50,7 +50,14 @@ AGENTIC_CONTEXT_LIMIT = 262144    # native window of the checkpoint (owner decis
 # evidence exists to 16K cold prefill (4K, 8K, 16K); 32K is implemented and unit-tested but NOT validated on the real checkpoint.
 DEFAULT_MAX_COLD_PREFILL = 32768
 DEFAULT_MAX_INCREMENTAL_PREFILL = 32768
+TIERED4_MAX_COLD_PREFILL = 65536  # 65,537-token real checkpoint cold prefill completed
 LONG_CONTEXT_LIMIT = 16384        # with --enable long-context; admission may lower it (prefill_readiness.LONG_TIER)
+
+
+def default_cold_prefill(kv_cache: str | None = None) -> int:
+    if kv_cache is None:
+        kv_cache = os.environ.get("FLASHNEXT_KV_CACHE_DTYPE", "bf16")
+    return TIERED4_MAX_COLD_PREFILL if kv_cache == "tiered4" else DEFAULT_MAX_COLD_PREFILL
 
 # Flags every mode sets. ChatGuard is the safety supervisor; native MTP is rejected by recorded results;
 # eager linear-state evaluation reproduced the 1K digest and cut retained memory (0.99 to 0.24 GB per 1K tokens).
@@ -336,6 +343,7 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
     cold = _positive(max_cold_prefill, "max cold prefill")
     incremental = _positive(max_incremental_prefill, "max incremental prefill")
     limit = context_limit if context_limit is not None else (default_limit if mode == AGENTIC else None)
+    default_cold = default_cold_prefill(env["FLASHNEXT_KV_CACHE_DTYPE"])
     if mode == AGENTIC:
         explicit_cold = cold or max_cold_prefill_from_environment()
         explicit_incremental = incremental or max_incremental_prefill_from_environment()
@@ -344,12 +352,13 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         if limit and explicit_incremental and explicit_incremental > limit:
             raise ModeError(f"max incremental prefill {explicit_incremental} exceeds the context limit {limit}")
         # Defaults never exceed the window (a smaller --context-limit lowers them); explicit values are honoured or refused.
-        cold = explicit_cold or min(DEFAULT_MAX_COLD_PREFILL, limit or DEFAULT_MAX_COLD_PREFILL)
+        cold = explicit_cold or min(default_cold, limit or default_cold)
         incremental = explicit_incremental or min(DEFAULT_MAX_INCREMENTAL_PREFILL, limit or DEFAULT_MAX_INCREMENTAL_PREFILL)
     if limit is not None and limit < 1:
         raise ModeError("context limit must be a positive number of tokens")
-    if mode == AGENTIC and cold and cold > VALIDATED_PREFILL_TOKENS:
-        warnings.append(f"max cold prefill {cold} is above the {VALIDATED_PREFILL_TOKENS}-token prefill that has real-checkpoint "
+    validated_cold = TIERED4_MAX_COLD_PREFILL if env["FLASHNEXT_KV_CACHE_DTYPE"] == "tiered4" else VALIDATED_PREFILL_TOKENS
+    if mode == AGENTIC and cold and cold > validated_cold:
+        warnings.append(f"max cold prefill {cold} is above the {validated_cold}-token prefill that has real-checkpoint "
                         "evidence; it is implemented and unit-tested only. Raise it step by step and watch swap growth.")
     return ModePlan(mode, PROFILE[mode], mode == AGENTIC if serve is None else bool(serve), env, gb, reason, limit,
                     enable, tuple(warnings), directory, disk_gb, labels, auto,
@@ -373,7 +382,8 @@ def apply_mode(environment: dict, plan: ModePlan) -> dict:
     else:
         environment.pop("VEYSTRIX_CONTEXT_REQUIRED", None)   # an inherited value must not turn a default into a requirement
     if plan.mode == AGENTIC:
-        environment["VEYSTRIX_MAX_COLD_PREFILL"] = str(plan.max_cold_prefill or DEFAULT_MAX_COLD_PREFILL)
+        environment["VEYSTRIX_MAX_COLD_PREFILL"] = str(
+            plan.max_cold_prefill or default_cold_prefill(plan.env.get("FLASHNEXT_KV_CACHE_DTYPE", "bf16")))
         environment["VEYSTRIX_MAX_INCREMENTAL_PREFILL"] = str(plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL)
     else:
         environment.pop("VEYSTRIX_MAX_COLD_PREFILL", None)
@@ -497,9 +507,10 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
     if plan.context_limit:
         rows.append(f"  context limit  {plan.context_limit} tokens (requests above it are refused, never truncated)")
     if plan.mode == AGENTIC:
-        rows.append(f"  prefill limits cold {plan.max_cold_prefill or DEFAULT_MAX_COLD_PREFILL}, uncached increment "
-                    f"{plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL} tokens per request (admission ceilings; "
-                    f"internal chunks stay 2048; current recovery verified to {VALIDATED_PREFILL_TOKENS} tokens)")
+        kv_cache = env.get("FLASHNEXT_KV_CACHE_DTYPE", "bf16")
+        rows.append(f"  prefill limits cold {plan.max_cold_prefill or default_cold_prefill(kv_cache)}, uncached increment "
+                    f"{plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL} tokens per request "
+                    "(internal chunks stay at 2048 tokens)")
     for name, label in plan.labels.items():
         rows.append(f"  EXPERIMENTAL   {name}: {label}")
     for warning in plan.warnings:

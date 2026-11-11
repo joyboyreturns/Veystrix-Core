@@ -24,12 +24,14 @@ public enum HarnessProfiles {
     public static let defaultKeyEnv = "VEYSTRIX_API_KEY"
 
     public static func snippet(for harness: Harness, port: Int, modelID: String = defaultModelID,
-                               suggestedClientContext: Int? = nil) -> HarnessSnippet {
+                               suggestedClientContext: Int? = nil, modelContext: Int? = nil) -> HarnessSnippet {
         let base = "http://127.0.0.1:\(port)/v1"
         // JSONEncoder supplies quotes and escaping for arbitrary model IDs.
         let jsonModelID = String(data: try! JSONEncoder().encode(modelID), encoding: .utf8)!
+        let resolvedModelContext = modelContext ?? suggestedClientContext.map { max(1, $0 - 4096) }
         switch harness {
         case .hermes:
+            let hermesContext = max(resolvedModelContext ?? 262144, 65536)
             return HarnessSnippet(
                 harness: harness,
                 whereToPutIt: "A dedicated Hermes profile (for example ~/.hermes/profiles/veystrix/config.yaml). Run: HERMES_HOME=~/.hermes/profiles/veystrix hermes",
@@ -40,16 +42,17 @@ public enum HarnessProfiles {
                   base_url: "\(base)"
                   # key from the environment: export \(defaultKeyEnv)=<your Veystrix key> (the server accepts any value on loopback unless a key is required)
                   key_env: "\(defaultKeyEnv)"
-                  context_length: \(suggestedClientContext ?? 16384)
+                  context_length: \(hermesContext)
                 fallback_providers: []
                 """,
                 notes: [
                     "Use a dedicated profile so your other providers are untouched.",
                     "fallback_providers is empty so Hermes never falls back to a cloud provider.",
                     "Set the auxiliary tasks (title generation, compression, vision, web) to this endpoint or turn them off; each extra request evicts the live cache.",
-                    "context_length must be no larger than the engine's configured limit. Check GET /v1/models once the engine is running.",
+                    "context_length must be at least 64,000 for Hermes and no larger than the engine's configured limit.",
                 ])
         case .qwenCode:
+            let qwenContext = resolvedModelContext ?? 262144
             return HarnessSnippet(
                 harness: harness,
                 whereToPutIt: "~/.qwen/settings.json (merge with your existing settings; keep other providers)",
@@ -58,8 +61,8 @@ public enum HarnessProfiles {
                   "modelProviders": {"openai": [{
                     "id": \(jsonModelID), "name": "Veystrix (local)",
                     "baseUrl": "\(base)", "envKey": "\(defaultKeyEnv)",
-                    "generationConfig": {"timeout": 3600000, "streamIdleTimeoutMs": 900000, "maxRetries": 0,
-                                         "contextWindowSize": \(suggestedClientContext ?? 45056)}}]},
+                    "generationConfig": {"timeout": 7200000, "streamIdleTimeoutMs": 7200000, "maxRetries": 0,
+                                         "contextWindowSize": \(qwenContext)}}]},
                   "security": {"auth": {"selectedType": "openai"}},
                   "model": {"name": \(jsonModelID)},
                   "memory": {"enableManagedAutoMemory": false, "enableManagedAutoDream": false, "enableAutoSkill": false},
@@ -68,10 +71,13 @@ public enum HarnessProfiles {
                 """,
                 notes: [
                     "maxRetries is 0: a retry after a timeout would restart a prefill the engine may still be running.",
+                    "No output token cap is configured, so generation runs uncapped up to remaining context.",
                     "The background memory and suggestion switches are off so no second model request evicts the live cache.",
                     "Qwen Code's tool schemas are large; see the engine's Qwen Code integration notes for the tool exclusion list.",
                 ])
         case .deepSeek:
+            let dshWindow = suggestedClientContext ?? resolvedModelContext.map { $0 + 4096 } ?? 266240
+            let dshMaxTokens = resolvedModelContext ?? max(1, dshWindow - 4096)
             return HarnessSnippet(
                 harness: harness,
                 whereToPutIt: "A patch file for dsh, for example veystrix.patch.yml (dsh headless --patch veystrix.patch.yml)",
@@ -85,17 +91,28 @@ public enum HarnessProfiles {
                         apiKeyEnv: \(defaultKeyEnv)
                         api: openai-completions
                         baseURL: \(base)
+                        streamIdleTimeoutMs: 7200000
+                        timeoutMs: 7200000
                         models:
                           - id: \(modelID)
                             name: Veystrix (local)
-                            contextWindow: \(suggestedClientContext ?? 20480)
-                            maxTokens: 1024
+                            contextWindow: \(dshWindow)
+                            maxTokens: \(dshMaxTokens)
+                            input: [text]
+                            reasoningEfforts:
+                              off: none
+                              low: low
+                              medium: medium
+                              high: high
+                              xhigh: xhigh
+                              max: max
                 - id: agent-default-model
                   name: "@deepseek-ai/dsh-agent-default-model"
                   config: {provider: veystrix, model: \(modelID)}
                 """,
                 notes: [
-                    "contextWindow is the engine's window plus the harness's fixed 4096-token reserve; the engine's /v1/models reports `suggested_client_context_window`.",
+                    "contextWindow includes the harness's fixed 4096-token safety reserve so available output never collapses to 1 token near the limit.",
+                    "maxTokens equals the full server context window so remaining context governs output length instead of a 1024-token ceiling.",
                     "Trim the harness's tool set as in the engine's DSH patch files to keep requests small.",
                 ])
         case .openAI:

@@ -144,7 +144,7 @@ class EightKProfileTests(unittest.TestCase):
         self.assertEqual(args[args.index("--pool-gb") + 1], "0")                  # 0 GB decode pool fallback kept
         patch = Path(G.PROFILE["patch"]).read_text()
         self.assertIn("contextWindow: 16384", patch)                              # server window 12288 + the harness's 4096
-        self.assertIn("maxTokens: 1024", patch)
+        self.assertIn("maxTokens: 12288", patch)
 
     def test_task_is_about_8k_real_tokens_guided_and_has_no_facts_in_it(self):
         text = G.load_task()

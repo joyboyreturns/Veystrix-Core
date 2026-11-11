@@ -21,8 +21,11 @@ class ModelProcessTests(unittest.TestCase):
   driver = ProcessDriver(flashnext_kv_cache="tiered4", flashnext_memory_policy="absolute-swap-only")
   flashnext = InstalledModel("flash", "flashnext", "test", "/tmp/flash", "qwen4_exp", {}, None, "test")
   nemotron = InstalledModel("nemo", "nemotron35-lightning", "test", "/tmp/nemo", "nemotron_h", {}, None, "test")
-  self.assertIn("kv-tiered4", driver._command(flashnext, 8080))
-  self.assertIn("--no-auto-purge", driver._command(flashnext, 8080))
+  command = driver._command(flashnext, 8080)
+  self.assertIn("kv-tiered4", command)
+  self.assertIn("--no-auto-purge", command)
+  self.assertEqual(command[command.index("--max-cold-prefill") + 1], "65536")
+  self.assertEqual(command[command.index("--max-incremental-prefill") + 1], "32768")
   self.assertNotIn("kv-tiered4", driver._command(nemotron, 8080))
 
  def test_real_child_is_verified_and_unloaded(self):

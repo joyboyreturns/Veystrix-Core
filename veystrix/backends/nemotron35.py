@@ -364,6 +364,9 @@ class NemotronBackend(Conversation):
                     self.core.cache = cache
         self.tape = self.tape + pending
         self.pending, self._replay_needed = [], False
+        context_limit = getattr(self, "context_limit", None)
+        if isinstance(context_limit, int) and not isinstance(context_limit, bool) and context_limit > 0:
+            horizon = min(horizon, max(0, context_limit - len(self.tape)))
         total_prompt = len(feed)
         feed = feed[restored:]
         snapshots = []

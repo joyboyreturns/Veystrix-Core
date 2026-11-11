@@ -509,7 +509,7 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
                                        source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         let m = try #require(plan.arguments.firstIndex(of: "--model")); #expect(plan.arguments[m + 1] == "nemotron35-lightning")
         let c = try #require(plan.arguments.firstIndex(of: "--checkpoint")); #expect(plan.arguments[c + 1] == d.path)
-        #expect(!plan.arguments.contains("--prefix-dir"))
+        #expect(plan.arguments.contains("--prefix-dir"))
         #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == "1")
         #expect(plan.arguments.contains("127.0.0.1"))
     }
@@ -578,5 +578,128 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         let openai = try #require(providers["openai"] as? [[String: Any]])
         #expect(model["name"] as? String == id)
         #expect(openai.first?["id"] as? String == id)
+        let gen = try #require(openai.first?["generationConfig"] as? [String: Any])
+        #expect(gen["timeout"] as? Int == 7_200_000)
+        #expect(gen["streamIdleTimeoutMs"] as? Int == 7_200_000)
+        #expect(gen["contextWindowSize"] as? Int == 262_144)
+        #expect(gen["maxTokens"] == nil)
+        #expect(gen["max_tokens"] == nil)
+    }
+
+    @Test func deepSeekUsesServerWindowAndOmitsLegacy1024Cap() {
+        let snippet = HarnessProfiles.snippet(
+            for: .deepSeek,
+            port: 8080,
+            modelID: "veystrix-flashnext",
+            suggestedClientContext: 266_240,
+            modelContext: 262_144
+        )
+        #expect(snippet.content.contains("contextWindow: 266240"))
+        #expect(snippet.content.contains("maxTokens: 262144"))
+        #expect(snippet.content.contains("timeoutMs: 7200000"))
+        #expect(snippet.content.contains("streamIdleTimeoutMs: 7200000"))
+        #expect(snippet.content.contains("xhigh: xhigh"))
+        #expect(snippet.content.contains("max: max"))
+        #expect(!snippet.content.contains("maxTokens: 1024"))
+
+        let fallback = HarnessProfiles.snippet(for: .deepSeek, port: 8080, modelID: "veystrix-flashnext")
+        #expect(fallback.content.contains("contextWindow: 266240"))
+        #expect(fallback.content.contains("maxTokens: 262144"))
+    }
+
+    @Test func hermesRespectsMinimumContextAndUnlimitedOutput() {
+        let small = HarnessProfiles.snippet(
+            for: .hermes,
+            port: 8080,
+            modelID: "veystrix-flashnext",
+            suggestedClientContext: 12_288,
+            modelContext: 8_192
+        )
+        #expect(small.content.contains("context_length: 65536"))
+        #expect(!small.content.contains("max_tokens"))
+
+        let native = HarnessProfiles.snippet(for: .hermes, port: 8080, modelID: "veystrix-flashnext")
+        #expect(native.content.contains("context_length: 262144"))
+    }
+}
+
+@Suite struct ChatClientTests {
+    @Test func uncappedPayloadByDefaultAndExplicitLimitOnlyWhenEnabled() throws {
+        #expect(try ChatRequestBuilder.parseExplicitLimit(enabled: false, rawText: "") == nil)
+        #expect(try ChatRequestBuilder.parseExplicitLimit(enabled: false, rawText: "invalid") == nil)
+        #expect(try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: " 512 ") == 512)
+        #expect(throws: ChatRequestBuilder.ValidationError.invalidExplicitLimit("0")) {
+            _ = try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: "0")
+        }
+        #expect(throws: ChatRequestBuilder.ValidationError.invalidExplicitLimit("-5")) {
+            _ = try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: "-5")
+        }
+        #expect(throws: ChatRequestBuilder.ValidationError.invalidExplicitLimit("abc")) {
+            _ = try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: "abc")
+        }
+
+        let uncapped = ChatRequestBuilder.payload(
+            model: "veystrix-flashnext",
+            messages: [["role": "user", "content": "hi"]],
+            reasoning: .xhigh,
+            maxOutputTokens: nil,
+            stream: true
+        )
+        #expect(uncapped["model"] as? String == "veystrix-flashnext")
+        #expect(uncapped["reasoning_effort"] as? String == "xhigh")
+        #expect(uncapped["stream"] as? Bool == true)
+        #expect((uncapped["stream_options"] as? [String: Any])?["include_usage"] as? Bool == true)
+        #expect(uncapped["max_tokens"] == nil)
+        #expect(uncapped["max_completion_tokens"] == nil)
+
+        let capped = ChatRequestBuilder.payload(
+            model: "veystrix-flashnext",
+            messages: [["role": "user", "content": "hi"]],
+            reasoning: .off,
+            maxOutputTokens: 256,
+            stream: true
+        )
+        #expect(capped["reasoning_effort"] as? String == "none")
+        #expect(capped["max_completion_tokens"] as? Int == 256)
+        #expect(capped["max_tokens"] == nil)
+    }
+
+    @Test func reasoningLevelsCoverOffThroughXHigh() {
+        #expect(ChatReasoningEffort.allCases.map(\.rawValue) == ["none", "low", "medium", "high", "xhigh"])
+        #expect(ChatReasoningEffort.allCases.map(\.label) == ["Off", "Low", "Medium", "High", "XHigh"])
+    }
+
+    @Test func wireMessagesIncludeSystemAndAssistantReasoningContent() {
+        let wire = ChatRequestBuilder.wireMessages(
+            systemPrompt: "Be concise.",
+            messages: [
+                ChatWireMessage(role: "user", content: "2+2?"),
+                ChatWireMessage(role: "assistant", content: "4", reasoningContent: "adding 2 and 2"),
+            ]
+        )
+        #expect(wire.count == 3)
+        #expect(wire[0]["role"] as? String == "system")
+        #expect(wire[1]["reasoning_content"] == nil)
+        #expect(wire[2]["reasoning_content"] as? String == "adding 2 and 2")
+    }
+
+    @Test func sseParserExtractsReasoningContentUsageFinishAndErrors() {
+        #expect(ChatSSEParser.parse(line: "event: ping").isEmpty)
+        #expect(ChatSSEParser.parse(line: "data: [DONE]") == [.done])
+        #expect(ChatSSEParser.parse(line: #"data: {"choices":[{"delta":{"reasoning_content":"step 1"}}]}"#)
+            == [.reasoning("step 1")])
+        #expect(ChatSSEParser.parse(line: #"data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"length"}]}"#)
+            == [.content("answer"), .finishReason("length")])
+        #expect(ChatSSEParser.parse(line: #"data: {"usage":{"prompt_tokens":120,"completion_tokens":45,"total_tokens":165,"prompt_tokens_details":{"cached_tokens":80}}}"#)
+            == [.usage(ChatUsage(promptTokens: 120, completionTokens: 45, totalTokens: 165, cachedTokens: 80))])
+        #expect(ChatSSEParser.parse(line: #"data: {"error":{"message":"memory_critical_stop"}}"#)
+            == [.error("memory_critical_stop")])
+    }
+
+    @Test func httpErrorParserExtractsStructuredAndPlainErrors() {
+        let jsonData = Data(#"{"error":{"code":"context_limit","message":"prompt exceeds window"}}"#.utf8)
+        #expect(ChatHTTPErrorParser.message(from: jsonData, statusCode: 400) == "HTTP 400 (context_limit): prompt exceeds window")
+        #expect(ChatHTTPErrorParser.message(from: Data("Service Busy".utf8), statusCode: 503) == "HTTP 503: Service Busy")
+        #expect(ChatHTTPErrorParser.message(from: Data(), statusCode: 500).contains("HTTP 500"))
     }
 }
