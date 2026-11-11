@@ -254,7 +254,8 @@ class AutoWarmer:
         key = os.environ.get("VEYSTRIX_API_KEY", "local")
         began = self.clock()
         try:
-            result = self.w.warm_one(base, entry, effort, key=key, timeout=3600.0, abort=abort)
+            result = self.w.warm_one(base, entry, effort, key=key, timeout=3600.0, abort=abort,
+                                     model_id=f"veystrix-{getattr(self.args, 'model', 'flashnext')}")
         except self.w.WarmAborted:
             self.log("auto_warm_aborted", client=entry["family"], effort=effort)
             return

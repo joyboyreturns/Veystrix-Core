@@ -2001,6 +2001,17 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             return
         except (BrokenPipeError, ConnectionResetError):
             return
+        # This server owns exactly one backend. Reject a different explicit model
+        # before queueing or touching session state; silently using the loaded
+        # model would misattribute output and can evict a coding session.
+        if "model" in payload:
+            requested = payload["model"]
+            if not isinstance(requested, str) or not requested:
+                self._error("model must be a non-empty string", 400, "invalid_model")
+                return
+            if requested != self.server.service.model:
+                self._error(f"the model {requested!r} is not loaded on this server", 404, "model_not_found")
+                return
         try:
             self.server.scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
         except Busy as exc:

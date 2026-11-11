@@ -61,6 +61,17 @@ class NemotronServerTests(unittest.TestCase):
         self.assertIn("Nemotron", text)
         self.assertNotIn("Flash-Next", text)
 
+    def test_wrong_model_is_rejected_before_inference_on_all_endpoints(self):
+        before = list(self.backend.tape)
+        for path in ("/v1/chat/completions", "/v1/messages", "/v1/responses"):
+            with self.subTest(path=path):
+                status, raw, _ = call(self.port, "POST", path, {
+                    "model": "veystrix-flashnext", "messages": [{"role": "user", "content": "hi"}],
+                    "input": "hi", "max_tokens": 2, "stream": True})
+                self.assertEqual(status, 404)
+                self.assertEqual(json.loads(raw)["error"]["code"], "model_not_found")
+                self.assertEqual(list(self.backend.tape), before)
+
     def test_health_reports_ready_model(self):
         status, raw, _ = call(self.port, "GET", "/health")
         body = json.loads(raw)
@@ -77,7 +88,7 @@ class NemotronServerTests(unittest.TestCase):
             log = Path(tmp) / "requests.jsonl"
             with mock.patch.dict(os.environ, {"VEYSTRIX_USAGE_LOG": str(log)}):
                 status, raw, _ = call(self.port, "POST", "/v1/chat/completions", {
-                    "model": "x", "messages": [{"role": "user", "content": "count me"}], "max_tokens": 3})
+                    "model": "veystrix-nemotron35-lightning", "messages": [{"role": "user", "content": "count me"}], "max_tokens": 3})
                 usage = json.loads(raw)["usage"]
             self.assertEqual(status, 200)
             row = json.loads(log.read_text().splitlines()[-1])
@@ -89,7 +100,7 @@ class NemotronServerTests(unittest.TestCase):
 
     def test_cache_diagnostics_carry_the_last_prefill_the_warmup_client_reads(self):
         call(self.port, "POST", "/v1/chat/completions", {
-            "model": "x", "messages": [{"role": "user", "content": "hi there"}], "max_tokens": 2})
+            "model": "veystrix-nemotron35-lightning", "messages": [{"role": "user", "content": "hi there"}], "max_tokens": 2})
         status, raw, _ = call(self.port, "GET", "/v1/cache/diagnostics")
         last = json.loads(raw)["last_prefix"]
         self.assertEqual(status, 200)

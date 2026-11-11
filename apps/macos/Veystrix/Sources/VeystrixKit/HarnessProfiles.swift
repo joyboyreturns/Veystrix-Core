@@ -26,6 +26,8 @@ public enum HarnessProfiles {
     public static func snippet(for harness: Harness, port: Int, modelID: String = defaultModelID,
                                suggestedClientContext: Int? = nil) -> HarnessSnippet {
         let base = "http://127.0.0.1:\(port)/v1"
+        // JSONEncoder supplies quotes and escaping for arbitrary model IDs.
+        let jsonModelID = String(data: try! JSONEncoder().encode(modelID), encoding: .utf8)!
         switch harness {
         case .hermes:
             return HarnessSnippet(
@@ -54,12 +56,12 @@ public enum HarnessProfiles {
                 content: """
                 {
                   "modelProviders": {"openai": [{
-                    "id": "veystrix-flashnext", "name": "Veystrix (local)",
+                    "id": \(jsonModelID), "name": "Veystrix (local)",
                     "baseUrl": "\(base)", "envKey": "\(defaultKeyEnv)",
                     "generationConfig": {"timeout": 3600000, "streamIdleTimeoutMs": 900000, "maxRetries": 0,
                                          "contextWindowSize": \(suggestedClientContext ?? 45056)}}]},
                   "security": {"auth": {"selectedType": "openai"}},
-                  "model": {"name": "veystrix-flashnext"},
+                  "model": {"name": \(jsonModelID)},
                   "memory": {"enableManagedAutoMemory": false, "enableManagedAutoDream": false, "enableAutoSkill": false},
                   "ui": {"enableFollowupSuggestions": false}
                 }

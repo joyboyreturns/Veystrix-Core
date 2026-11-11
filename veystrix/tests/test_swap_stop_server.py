@@ -122,6 +122,17 @@ class ServerCase(unittest.TestCase):
 
 
 class SafetyStopServerTests(ServerCase):
+    def test_wrong_model_does_not_start_qwen(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        self.addCleanup(conn.close)
+        conn.request("POST", "/v1/chat/completions", json.dumps({
+            "model": "veystrix-nemotron35-lightning", "messages": [{"role": "user", "content": "x"}]}),
+            {"Content-Type": "application/json"})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 404)
+        self.assertEqual(json.loads(response.read())["error"]["code"], "model_not_found")
+        self.assertFalse(self.backend.entered.is_set())
+
     def test_a_stop_cancels_the_prefill_and_the_client_gets_an_actionable_error_not_a_hang(self):
         sock = self.post_stream()
         self.assertTrue(self.backend.entered.wait(3))
@@ -147,7 +158,7 @@ class SafetyStopServerTests(ServerCase):
         self.assertEqual(health["memory_policy"]["stop_reason"], STOP_REASON)
         self.assertEqual(self.get("/ready")[0], 503)
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
-        conn.request("POST", "/v1/chat/completions", json.dumps({"model": "m", "messages": [{"role": "user", "content": "x"}]}),
+        conn.request("POST", "/v1/chat/completions", json.dumps({"model": "veystrix-flashnext", "messages": [{"role": "user", "content": "x"}]}),
                      {"Content-Type": "application/json"})
         response = conn.getresponse()
         payload = json.loads(response.read())
@@ -163,7 +174,7 @@ class SafetyStopServerTests(ServerCase):
         def call():
             conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
             conn.request("POST", "/v1/chat/completions",
-                         json.dumps({"model": "m", "messages": [{"role": "user", "content": "x"}]}),
+                         json.dumps({"model": "veystrix-flashnext", "messages": [{"role": "user", "content": "x"}]}),
                          {"Content-Type": "application/json"})
             response = conn.getresponse()
             result["status"], result["body"] = response.status, json.loads(response.read())

@@ -68,6 +68,7 @@ class NemotronAutoWarmTests(unittest.TestCase):
         warmer.tick(QUIET)
         self.assertEqual([(c[0], c[1]) for c in fake.calls], [("hermes", "medium")])
         self.assertEqual(list(fake.state), ["nemotron35-lightning|hermes:medium"])
+        self.assertEqual(fake.model_id, "veystrix-nemotron35-lightning")
         # Qwen's view of the same file does not see Nemotron's record, so Qwen still warms its own variants.
         qwen, _ = self.warmer("flashnext", fake)
         qwen.tick(QUIET)

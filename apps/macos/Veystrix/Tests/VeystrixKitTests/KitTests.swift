@@ -553,3 +553,16 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         #expect(store.loadRecords().isEmpty)
     }
 }
+
+@Suite struct HarnessModelSelectionTests {
+    @Test func qwenCodeUsesSelectedModelAndEscapesJSON() throws {
+        let id = "veystrix-nemotron35-\"test"
+        let snippet = HarnessProfiles.snippet(for: .qwenCode, port: 8080, modelID: id)
+        let json = try #require(JSONSerialization.jsonObject(with: Data(snippet.content.utf8)) as? [String: Any])
+        let model = try #require(json["model"] as? [String: Any])
+        let providers = try #require(json["modelProviders"] as? [String: Any])
+        let openai = try #require(providers["openai"] as? [[String: Any]])
+        #expect(model["name"] as? String == id)
+        #expect(openai.first?["id"] as? String == id)
+    }
+}
