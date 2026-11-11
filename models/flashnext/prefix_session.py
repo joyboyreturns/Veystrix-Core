@@ -131,7 +131,7 @@ class PrefixSession:
                 # The plan is a function of this budget and the candidate sizes; a different budget is a different plan.
                 plan["chunk_budget_mb"] = prefill_module.chunk_budget_bytes() / 1e6
                 plan["chunk_candidates"] = list(prefill_module.CANDIDATE_CHUNKS)
-            from . import expert_pool, layer_major, prefill_ring, quantized_kv
+            from . import expert_pool, layer_major, prefill_ring, quantized_kv, qsa_chunk
             # Layer-major execution is a different (versioned) execution plan until its states are proven equal on the real
             # checkpoint: its snapshots never mix with chunk-major ones. Chunk-major keeps the existing key.
             plan = {**plan, **({"prefill_order": layer_major.identity()} if layer_major.enabled() else {})}
@@ -143,7 +143,7 @@ class PrefixSession:
             fp = P.fingerprint(
                 **self._compatibility(), prefix_cache=P.FORMAT_VERSION,
                 snapshot_chain_semantics=2,
-                chunk=prefill_module.chunk_tokens(), **plan, **kv_part,
+                chunk=prefill_module.chunk_tokens(), **plan, **kv_part, **qsa_chunk.fingerprint_parts(),
                 # Prefill settings that change numerics are part of the key: a prefix computed one way
                 # is not the same state as one computed another way.
                 ring=os.environ.get("FLASHNEXT_PREFILL_RING_EXPERTS", "0"),

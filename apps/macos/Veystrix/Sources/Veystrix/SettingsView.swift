@@ -20,7 +20,7 @@ struct SettingsView: View {
                 Text(model.settings.decodePool.explanation).font(.callout).foregroundStyle(.secondary)
                 Toggle("Restart automatically after a crash or guard stop (bounded, logged)", isOn: $model.settings.supervisedRestarts)
                 Toggle("Keep the Mac awake while the engine runs", isOn: $model.settings.keepMacAwake)
-                Text("Safety guards are always on. Veystrix offers no setting that lowers or bypasses a memory or swap guard.")
+                Text("Flash-Next stops at 3 GiB of total system swap. Power and thermal checks follow the engine settings.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Power") {

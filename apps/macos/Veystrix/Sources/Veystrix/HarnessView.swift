@@ -128,6 +128,10 @@ struct HarnessView: View {
                         LabeledContent("Base URL") { Text(model.baseURL).textSelection(.enabled) }
                         LabeledContent("Connection") { Text(engine.state.label) }
                         LabeledContent("Active model") { Text(engine.health?.model ?? "None") }
+                        if let precision = engine.health?.flashNextKVCache {
+                            LabeledContent("Active Flash-Next KV cache",
+                                           value: FlashNextKVCache(rawValue: precision)?.title ?? precision)
+                        }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack {

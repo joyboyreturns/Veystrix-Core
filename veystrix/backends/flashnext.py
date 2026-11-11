@@ -634,6 +634,20 @@ class FlashNextBackend(Conversation):
                 pass
         return freed
 
+    def kv_diagnostics(self) -> dict:
+        from models.flashnext import kv_telemetry, pool_lifecycle, qsa_chunk, quantized_kv
+
+        expert_store = pool_lifecycle.store_of(self.language)
+        pool = getattr(expert_store, "_flashnext_expert_pool", None)
+        active, cached = int(mx.get_active_memory()), int(mx.get_cache_memory())
+        return {**kv_telemetry.cache_breakdown(self.cache), **quantized_kv.fingerprint_parts(),
+                "kv_dtype": quantized_kv.kv_dtype(), "qsa_kernel": qsa_chunk.kernel_mode(),
+                "logical_resident_weight_bytes": getattr(self.language, "_flashnext_resident_weight_bytes", None),
+                "expert_pool_mapped_bytes": pool_lifecycle.pool_bytes(pool),
+                "mlx_active_bytes": active, "mlx_cached_bytes": cached,
+                "mlx_working_set_bytes": active + cached, "mlx_peak_active_bytes": int(mx.get_peak_memory()),
+                "metal_recommended_working_set_bytes": mx.device_info().get("max_recommended_working_set_size")}
+
     def _turn_memory(self) -> dict:
         """Where this process and the machine stand right now (never raises; values are bytes unless named)."""
         from models.flashnext import memory_controller, purge_recovery
@@ -1120,6 +1134,8 @@ class FlashNextBackend(Conversation):
             pinned_bytes=self.routing.pinned_bytes,
             pinned_signature=self.routing.pinned_signature,
         )
+        self.last_decode_rate = stats.rate
+        self.last_prefill_seconds = prefill_seconds
         if gate_probe is not None:
             try:
                 gate_probe.finished(produced, stats)

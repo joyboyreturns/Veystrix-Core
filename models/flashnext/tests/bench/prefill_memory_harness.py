@@ -12,6 +12,7 @@ child-process supervisor, and the exactness, gate and paired-effect analysis.
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 import os
 import re
@@ -21,8 +22,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+from models.flashnext.memory_policy import ABSOLUTE_SWAP_CEILING_MIB
+
 SIZES = {"1k": 1024, "2k": 2048, "4k": 4096}                  # the planned matrix (section 14)
-DIAGNOSTIC_SIZES = {"128": 128, "256": 256}                   # short prompts for memory diagnosis only
+DIAGNOSTIC_SIZES = {"128": 128, "256": 256, "64k": 65536}     # opt-in memory probes
 ALL_SIZES = {**DIAGNOSTIC_SIZES, **SIZES}
 DECODE_TOKENS = 128
 RING_EXPERTS = 512
@@ -40,7 +43,7 @@ FAST_TRACE_SECONDS = 0.25         # child sampling interval during prefill (chea
 GUARD_EXIT_CODE = 75              # the child's own memory guard stopped it (EX_TEMPFAIL)
 CLEANUP_TOLERANCE_BYTES = 250_000_000   # G4
 MIN_ROUNDS_FOR_EFFECT = 3
-TIME_LIMIT_SECONDS = {"128": 300, "256": 300, "1k": 600, "2k": 1200, "4k": 2400}
+TIME_LIMIT_SECONDS = {"128": 300, "256": 300, "1k": 600, "2k": 1200, "4k": 2400, "64k": 7200}
 
 CACHE_WARNING = (
     "The first arm of a group reads the checkpoint cold from SSD and later arms find part of it in the page "
@@ -540,6 +543,16 @@ class SafetyPolicy:
     thermal_floor: int = 100
     thermal_samples: int = 2
     final: bool = False
+    swap_ceiling_only: bool = False
+
+
+def absolute_swap_stop(reading: dict) -> str | None:
+    used = reading.get("swap_used_mb")
+    if not isinstance(used, (float, int)) or not math.isfinite(used) or used < 0:
+        return "swap usage is unreadable"
+    if used >= ABSOLUTE_SWAP_CEILING_MIB:
+        return f"total swap used reached {used:.0f} MiB (limit {ABSOLUTE_SWAP_CEILING_MIB} MiB)"
+    return None
 
 
 @dataclass
@@ -591,6 +604,24 @@ class Watchdog:
                 return "AC is reported but the battery is discharging; final-run power is ambiguous"
             if sample.get("low_power") is None:
                 return "Low Power Mode state is unreadable in a final run"
+        if policy.swap_ceiling_only:
+            reason = absolute_swap_stop(sample)
+            if reason:
+                return reason
+        elif reason := self._staged_memory_stop(sample, vm, grown, growth):
+            return reason
+        limit = sample.get("thermal_speed_limit")
+        if limit is not None and limit < policy.thermal_floor:
+            self.throttled += 1
+            if self.throttled >= policy.thermal_samples:
+                return f"thermal throttling (CPU speed limit {limit})"
+        else:
+            self.throttled = 0
+        return None
+
+    def _staged_memory_stop(self, sample, vm, grown, growth):
+        policy = self.policy
+        level = sample.get("pressure_level")
         if level is not None and level >= policy.pressure_stop_level:
             return f"memory pressure level {level}"
         available = sample.get("available_mb")
@@ -614,13 +645,6 @@ class Watchdog:
         base = self.start.get("swap_used_mb")
         if used is not None and base is not None and used - base > policy.swap_growth_mb:
             return f"swap grew {used - base:.0f} MB"
-        limit = sample.get("thermal_speed_limit")
-        if limit is not None and limit < policy.thermal_floor:
-            self.throttled += 1
-            if self.throttled >= policy.thermal_samples:
-                return f"thermal throttling (CPU speed limit {limit})"
-        else:
-            self.throttled = 0
         return None
 
 

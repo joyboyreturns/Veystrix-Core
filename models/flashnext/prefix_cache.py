@@ -229,6 +229,8 @@ def kind_of(cache) -> str:
         return "qsa_kv"
     if name in ("QSAQuantizedKVCache", "AffineQuantizedQSAKVCache"):
         return "qsa_quantized_kv"
+    if name == "MixedPrecisionQSAKVCache":
+        return "qsa_mixed_v1"
     raise UnsupportedCache(f"cannot snapshot a {name}")
 
 
@@ -261,6 +263,11 @@ def capture(cache_list, tokens, fp: str, parent: Entry | None = None, language=N
         offset = int(cache.offset)
         if offset != len(tokens):
             raise ValueError(f"cache holds {offset} tokens but {len(tokens)} were given")
+        if kind == "qsa_mixed_v1":
+            if parent is not None and parent.layers[len(layers)].kind != kind:
+                raise ValueError("mixed KV parent has a different cache kind")
+            layers.append(Layer(kind, kv=cache.snapshot(parent_n, parent_n)))
+            continue
         kv = {}
         if kind == "qsa_quantized_kv":
             # Quantized keys & values (data, scales, biases)
@@ -303,6 +310,11 @@ def freeze_cache(cache):
         frozen.cache = [_own(a) for a in cache.cache]
         return frozen
     offset = int(cache.offset)
+    if kind == "qsa_mixed_v1":
+        for name in ("keys", "values", "recent_keys", "recent_values", "index_keys", "index_position_ids"):
+            value = getattr(cache, name)
+            setattr(frozen, name, tuple(_own(a) for a in value) if isinstance(value, tuple) else _own(value))
+        return frozen
     if kind == "qsa_quantized_kv":
         for attr in ("keys", "values"):
             parts = getattr(cache, attr)
@@ -327,6 +339,8 @@ def parent_prefix(entry: Entry) -> tuple:
 def _state_arrays(cache, kind):
     if kind == "arrays":
         return [a for a in cache.cache if a is not None]
+    if kind == "qsa_mixed_v1":
+        return cache.state
     if kind == "qsa_quantized_kv":
         arrays = []
         for tup in (cache.keys, cache.values):
@@ -357,6 +371,12 @@ def restore(chain, make_cache):
             for slot, value in enumerate(layer.states):
                 cache.cache[slot] = _own(value)
             continue
+        if kind == "qsa_mixed_v1":
+            try:
+                cache.restore_snapshot(_join_mixed(chain, index), leaf.n_tokens)
+            except (ValueError, TypeError, IndexError, KeyError) as error:
+                raise CorruptEntry(f"layer {index}: {error}") from error
+            continue
         fields = QUANTIZED_KV_FIELDS if kind == "qsa_quantized_kv" else KV_FIELDS
         parts = {name: [] for name in fields}
         for entry in chain:
@@ -380,6 +400,49 @@ def restore(chain, make_cache):
             cache.state = (joined["keys"], joined["values"], joined["index_keys"], joined["index_position_ids"])
     mx.eval([_state_arrays(c, kind_of(c)) for c in caches])
     return caches
+
+
+def _join_mixed(chain, index):
+    """Reconstruct packed history/index deltas; only the leaf's recent tier matters."""
+    parts = {}
+    history = 0
+    identity = None
+    for entry in chain:
+        layer = entry.layers[index]
+        if layer.kind != "qsa_mixed_v1":
+            raise ValueError("mixed KV chain contains a different cache kind")
+        fields = layer.kv
+        config = fields["config"]
+        if config.shape != (8,) or config.dtype != mx.int64:
+            raise ValueError("invalid mixed KV chain configuration")
+        values = config.tolist()
+        settings = values[:5] + values[7:]
+        if identity is None:
+            identity = settings
+        offset, end = values[5:7]
+        if identity != settings or offset != entry.n_tokens or not history <= end <= offset:
+            raise ValueError("incompatible mixed KV chain offsets or settings")
+        for name, value in fields.items():
+            if name.startswith(("keys_", "values_")):
+                axis, length = -2, entry.n_tokens - entry.parent_tokens
+            elif name in ("index_keys", "index_position_ids"):
+                axis = 1 if name == "index_keys" else -1
+                length = entry.n_tokens - entry.parent_tokens
+            else:
+                continue
+            if value.shape[axis] != length:
+                raise ValueError(f"wrong mixed KV delta length: {name}")
+            parts.setdefault(name, []).append(value)
+        history = end
+    result = {name: value for name, value in chain[-1].layers[index].kv.items()
+              if name == "config" or name.startswith("recent_")}
+    for name, values in parts.items():
+        axis = 1 if name == "index_keys" else -1 if name == "index_position_ids" else -2
+        if name == "index_position_ids" and any(a.ndim == 3 for a in values):
+            channels = next(a.shape[0] for a in values if a.ndim == 3)
+            values = [mx.broadcast_to(a[None], (channels, *a.shape)) if a.ndim == 2 else a for a in values]
+        result[name] = values[0] if len(values) == 1 else mx.concatenate(values, axis=axis)
+    return result
 
 
 # -- disk format -----------------------------------------------------------------------------
@@ -538,6 +601,12 @@ def read_entry(directory: Path, key: str, fp: str, verify_hash: bool = True) -> 
             if any(s is None for slot, s in enumerate(states) if slot not in meta["none"]):
                 raise CorruptEntry(f"layer {index}: missing state tensor")
             layers.append(Layer("arrays", states=states))
+        elif meta["kind"] == "qsa_mixed_v1":
+            prefix = f"l{index}."
+            kv = {name[len(prefix):]: a for name, a in tensors.items() if name.startswith(prefix)}
+            if "config" not in kv:
+                raise CorruptEntry(f"layer {index}: missing mixed KV configuration")
+            layers.append(Layer("qsa_mixed_v1", kv=kv))
         elif meta["kind"] == "qsa_quantized_kv":
             kv = {name: tensors[f"l{index}.{name}"] for name in QUANTIZED_KV_FIELDS if f"l{index}.{name}" in tensors}
             if not all(k in kv for k in ("keys_0", "keys_1", "keys_2", "values_0", "values_1", "values_2")):
@@ -1092,7 +1161,7 @@ class PrefixCache:
                 self._acquire(holding)                  # nothing in this chain may be evicted while it is restored
                 try:
                     try:
-                        chain, loaded = self._chain_loading(key)
+                        chain, loaded = self._chain_loading(key, for_restore=True)
                     except CorruptEntry:
                         self._release(holding)
                         holding = ()
@@ -1149,14 +1218,24 @@ class PrefixCache:
     def _chain(self, key) -> list:
         return self._chain_loading(key)[0]
 
-    def _chain_loading(self, key):
+    def _chain_loading(self, key, *, for_restore=False):
         chain, loaded, current = [], 0, key
         while current is not None:
             entry = self._ram.get(current)
             if entry is None:
                 entry, size = self._load_entry(current)
                 loaded += size
-            chain.append(entry)
+            if chain and for_restore and any(layer.kind == "qsa_mixed_v1" for layer in chain[0].layers):
+                # Ancestors contribute only history/index deltas. Holding their
+                # recurrent states and recent tiers throughout a long restore
+                # can dwarf the compressed live state.
+                slim = copy.copy(entry)
+                slim.layers = [Layer(layer.kind, kv={k: a for k, a in layer.kv.items()
+                                                     if not k.startswith("recent_")}) for layer in entry.layers]
+                slim.lang = {}
+                chain.append(slim)
+            else:
+                chain.append(entry)
             current = entry.parent
         chain.reverse()
         return chain, loaded

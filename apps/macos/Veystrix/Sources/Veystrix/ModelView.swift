@@ -26,6 +26,19 @@ struct ModelView: View {
                 Text("Only one model is loaded at a time. Model switches are initiated here.")
                     .font(.callout).foregroundStyle(.secondary)
             }
+            if model.settings.selectedModel == .flashnext {
+                Section("Flash-Next KV cache") {
+                    Picker("Precision", selection: $model.settings.flashNextKVCache) {
+                        ForEach(FlashNextKVCache.allCases) { Text($0.title).tag($0) }
+                    }
+                    .disabled(engine.state == .starting || engine.state == .stopping || engine.isExternallyManaged)
+                    if let active = engine.health?.flashNextKVCache {
+                        LabeledContent("Active precision", value: FlashNextKVCache(rawValue: active)?.title ?? active)
+                    }
+                    Text("Choose Tiered INT4 / INT8 to reduce cache memory. Apply the selection with Start or Switch to Selected Model.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
             Section("Model folder") {
                 LabeledContent("Folder") {
                     Text(model.settings.activeCheckpointPath.isEmpty ? "None chosen" : model.paths.abbreviate(model.settings.activeCheckpointPath))

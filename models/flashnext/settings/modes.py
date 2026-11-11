@@ -81,6 +81,9 @@ AGENTIC_PREFILL = {
     "FLASHNEXT_PREFIX_CACHE_BOUNDARIES": "all",   # message ends + every chunk edge: a cancelled or crashed prefill resumes
 }
 EXPERIMENTAL_OFF = {
+    "FLASHNEXT_QSA_KERNEL": "reference",
+    "FLASHNEXT_QSA_GATHER_TILE": "8",
+    "FLASHNEXT_KV_RECENT_TOKENS": "8192",
     "FLASHNEXT_KV_CACHE_DTYPE": "bf16",             # bf16 KV is the reference; quantized KV is an explicit opt-in below
     "FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS": "0",
     "FLASHNEXT_MEMORY_MANAGER": "0",
@@ -96,6 +99,14 @@ EXPERIMENTAL_OFF = {
 }
 # Offline-tested only. Each is explicit (--enable NAME), never a default, and labelled in the banner.
 EXPERIMENTAL = {
+    "qsa-gather": ({"FLASHNEXT_QSA_KERNEL": "gather"},
+                   "bounded selected-block attention; real-checkpoint qualification pending"),
+    "kv-k16v4": ({"FLASHNEXT_KV_CACHE_DTYPE": "k16v4", "FLASHNEXT_QSA_KERNEL": "gather"},
+                 "reference-precision keys / INT4 values; experimental, coding quality unvalidated"),
+    "kv-k8v4": ({"FLASHNEXT_KV_CACHE_DTYPE": "k8v4", "FLASHNEXT_QSA_KERNEL": "gather"},
+                "INT8 keys / INT4 values; experimental, coding quality unvalidated"),
+    "kv-tiered4": ({"FLASHNEXT_KV_CACHE_DTYPE": "tiered4", "FLASHNEXT_QSA_KERNEL": "gather"},
+                  "INT4 history / INT8 recent KV; experimental 262K candidate, NOT production qualified"),
     "ngram-dedup": ({"FLASHNEXT_NGRAM_DEDUP": "1"},
                     "deduplicate repeated n-gram rows within each lookup; offline exactness tests only, real-checkpoint speed unmeasured"),
     "long-context": ({"FLASHNEXT_PREFILL_CHUNK_POLICY": "budgeted", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048",
@@ -143,6 +154,7 @@ EXPERIMENTAL = {
 }
 OWNED = frozenset({*COMMON, *PREFILL_OFF, *AGENTIC_PREFILL, *EXPERIMENTAL_OFF,
                    "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB", "FLASHNEXT_PREFILL_WINDOW_TOKENS", "FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_BITS",
+                   "FLASHNEXT_KV_LAYER_MODES",
                    "FLASHNEXT_EXPERT_POOL_GB", "FLASHNEXT_EXPERT_POOL_AUTO", "FLASHNEXT_PREFIX_CACHE_DIR", "FLASHNEXT_PREFIX_CACHE_RAM_GB",
                    "FLASHNEXT_PREFIX_CACHE_DISK_GB", "FLASHNEXT_PREFIX_PROFILES_MAX_GB",
                    "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB", "FLASHNEXT_WATCHDOG",
@@ -245,13 +257,19 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         raise ModeError("long-context is an AGENTIC feature (CHAT keeps one-call prefill and its reference numerics)")
     if mode == CHAT and {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
         raise ModeError("layer-major is an AGENTIC feature (needs watchdog supervision and agentic mode)")
-    if len({"kv-affine4", "kv-affine8"} & set(enable)) > 1:
-        raise ModeError("choose one quantized KV mode: kv-affine4 or kv-affine8")
+    kv_modes = {"kv-affine4", "kv-affine8", "kv-k16v4", "kv-k8v4", "kv-tiered4"}
+    if len(kv_modes & set(enable)) > 1:
+        raise ModeError("choose one quantized KV mode")
     gb, reason = choose_pool_gb(pool_gb, available_gb)
     auto = (pool_gb is None or str(pool_gb).lower() == "auto") and gb > 0
     warnings = []
+    from models.flashnext import memory_policy
+
+    absolute_swap_only = memory_policy.is_absolute_swap_policy()
     env = {**COMMON, **PREFILL_OFF, **EXPERIMENTAL_OFF, "FLASHNEXT_EXPERT_POOL_GB": f"{gb:g}",
            "FLASHNEXT_EXPERT_POOL_AUTO": "1" if auto else "0"}
+    if absolute_swap_only:
+        env["FLASHNEXT_MEMORY_POLICY"] = memory_policy.POLICY_ABSOLUTE_SWAP_ONLY
     directory, disk_gb = None, 0.0
     if mode == AGENTIC:
         env.update(AGENTIC_PREFILL)
@@ -270,6 +288,8 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         # positive ceiling or larger margin requested by the operator.
         ceiling = min(ceiling, 3072.0) if ceiling > 0 else 3072.0
         margin = max(margin, 256.0)
+        if absolute_swap_only:
+            ceiling, margin = memory_policy.ABSOLUTE_SWAP_CEILING_MIB, 0.0
         if margin >= ceiling:
             raise ModeError("swap safety margin must be smaller than the ceiling")
         env.update({"FLASHNEXT_SWAP_CEILING_MIB": str(ceiling), "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": str(margin),
@@ -294,6 +314,21 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         flags, label = EXPERIMENTAL[name]
         env.update(flags)
         labels[name] = label
+    if {"kv-k16v4", "kv-k8v4", "kv-tiered4", "qsa-gather"} & set(enable):
+        # The experimental path needs the staged headroom and pressure stops,
+        # even when the normal AGENTIC profile is configured for swap-only.
+        if not absolute_swap_only:
+            env["FLASHNEXT_MEMORY_POLICY"] = "strict-staged"
+        env["FLASHNEXT_MEMORY_WAIVER"] = "0"
+        if "FLASHNEXT_KV_LAYER_MODES" in os.environ:
+            env["FLASHNEXT_KV_LAYER_MODES"] = os.environ["FLASHNEXT_KV_LAYER_MODES"]
+        if mode == CHAT:
+            env.update({"FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048", "FLASHNEXT_PREFILL_CHUNK_POLICY": "grid",
+                        "FLASHNEXT_PREFILL_CACHE_LIMIT_MB": "512"})
+    if kv_modes & set(enable) or "qsa-gather" in enable:
+        for flag in ("FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_RECENT_TOKENS", "FLASHNEXT_QSA_GATHER_TILE"):
+            if flag in os.environ:
+                env[flag] = os.environ[flag]
     if "prefix-profiles" in enable and env["FLASHNEXT_PREFIX_CACHE"] != "1":
         env["FLASHNEXT_PREFIX_PROFILES"] = "0"
         warnings.append("prefix-profiles ignored because the prefix cache is off")
@@ -355,6 +390,8 @@ def plan_from_environment(environ=None):
     if mode not in MODES:
         return None
     env = {key: environ[key] for key in OWNED if key in environ}
+    if "FLASHNEXT_MEMORY_POLICY" in environ:
+        env["FLASHNEXT_MEMORY_POLICY"] = environ["FLASHNEXT_MEMORY_POLICY"]
     enabled = tuple(name for name in environ.get("VEYSTRIX_ENABLE", "").split(",") if name in EXPERIMENTAL)
     try:
         gb = float(env.get("FLASHNEXT_EXPERT_POOL_GB", "0") or 0)
@@ -426,7 +463,10 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
         rows.append("  chunk policy   one call per prompt (reference numerics)")
     from models.flashnext import memory_policy
     swap_policy = memory_policy.is_swap_growth_policy({**env, "VEYSTRIX_MODE": plan.mode})
-    if swap_policy:
+    absolute = memory_policy.is_absolute_swap_policy(env)
+    if absolute:
+        ready = "absolute-swap-only (startup headroom is telemetry)"
+    elif swap_policy:
         if available_gb is not None and available_gb >= START_GATE_GB:
             ready = (
                 f"READY ({available_gb:.1f} GB available; start gate waived under swap-growth-only policy; "
@@ -444,7 +484,9 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
         ready = f"{available_gb:.1f} GB available, start gate {START_GATE_GB:g} GB: " + (
             "READY" if available_gb >= START_GATE_GB else "BELOW GATE")
     rows.append(f"  memory         {ready}")
-    if swap_policy:
+    if absolute:
+        guard = "ON (3 GiB total swap, thermal, battery stops)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
+    elif swap_policy:
         guard = "ON (swap growth +2.5 GiB, thermal, battery stops; pressure/available are telemetry)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
     else:
         guard = "ON (memory, swap, thermal, battery stops)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"

@@ -212,6 +212,8 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--pool-gb", default="0")
     parser.add_argument("--prefix-dir")
+    parser.add_argument("--flashnext-kv-cache", choices=("bf16", "tiered4"), default="bf16")
+    parser.add_argument("--flashnext-memory-policy", choices=("absolute-swap-only",))
     parser.add_argument("--overnight", action="store_true", help="restart after a worker failure within bounded supervisor limits")
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--model", choices=("flashnext", "nemotron35-lightning"), default="flashnext")
@@ -220,7 +222,9 @@ def main(argv=None):
     # Do not start the listener with an installation that discovery cannot validate.
     if model_registry.resolve(initial_id) is None:
         parser.error("selected model was not found in the configured model root or is incomplete")
-    driver = ProcessDriver(pool_gb=args.pool_gb, prefix_dir=args.prefix_dir)
+    driver = ProcessDriver(pool_gb=args.pool_gb, prefix_dir=args.prefix_dir,
+                           flashnext_kv_cache=args.flashnext_kv_cache,
+                           flashnext_memory_policy=args.flashnext_memory_policy)
     coordinator = ModelCoordinator(model_registry.resolve, driver)
     server = RouterServer((args.host, args.port), coordinator, driver, api_key=os.environ.get("VEYSTRIX_SERVER_API_KEY"))
     stopping = threading.Event()

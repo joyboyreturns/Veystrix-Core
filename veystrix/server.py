@@ -877,7 +877,11 @@ def health(service, scheduler) -> dict:
         report["fault"] = str(fault)
     state = getattr(service, "cache_state", None)
     if callable(state):
-        report["cache"] = state()
+        cache = state()
+        report["cache"] = cache
+        kv = cache.get("flashnext_kv") if isinstance(cache, dict) else None
+        if kv and kv.get("kv_dtype"):
+            report["flashnext_kv_cache"] = kv["kv_dtype"]
     engine = getattr(_service_backend(service), "health_snapshot", None)
     if callable(engine):
         try:
@@ -1100,9 +1104,17 @@ class ModelService:
             pass
 
         last_prefill_tok = getattr(last_prefix, "prefilled_tokens", 0) if last_prefix else 0
-        last_prefill_sec = getattr(last_prefix, "prefill_seconds", 0.0) if last_prefix else 0.0
+        last_prefill_sec = getattr(backend, "last_prefill_seconds", None)
+        if last_prefill_sec is None:
+            last_prefill_sec = getattr(last_prefix, "prefill_seconds", 0.0) if last_prefix else 0.0
         matched_prefix_tok = getattr(last_prefix, "hit_tokens", 0) if last_prefix else 0
         last_decode_rate = getattr(backend, "last_decode_rate", None)
+        kv_details = None
+        if callable(getattr(backend, "kv_diagnostics", None)):
+            try:
+                kv_details = backend.kv_diagnostics()
+            except Exception:
+                pass  # a diagnostics read must not fail the endpoint
 
         return {
             "cache_enabled": store is not None,
@@ -1114,6 +1126,7 @@ class ModelService:
             "ssd_cache_budget_bytes": ssd_budget,
             "ssd_cache_directory": ssd_dir,
             "active_model_state_bytes": active_bytes,
+            **({"flashnext_kv": kv_details} if kv_details is not None else {}),
             "matched_prefix_tokens": matched_prefix_tok,
             "reused_tokens": st.reused_tokens if st else 0,
             "ram_hits": st.ram_hits if st else 0,

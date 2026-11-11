@@ -41,6 +41,18 @@ public enum ModelFamily: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+public enum FlashNextKVCache: String, Codable, CaseIterable, Sendable, Identifiable {
+    case bf16, tiered4
+
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .bf16: return "BF16"
+        case .tiered4: return "Tiered INT4 / INT8 (experimental)"
+        }
+    }
+}
+
 /// User-visible settings. Stored as JSON in Application Support. Unknown or missing keys fall back to defaults,
 /// so an older settings file keeps working after an update (see `schemaVersion`).
 public struct AppSettings: Codable, Equatable, Sendable {
@@ -56,6 +68,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The Nemotron folder. Independent of the Flash-Next folder: switching models never overwrites the other path.
     public var nemotronCheckpointPath: String = ""
     public var decodePool: DecodePool = .none
+    public var flashNextKVCache: FlashNextKVCache = .bf16
     /// Let the engine's supervisor restart the server after a crash or memory guard stop (bounded and logged).
     public var supervisedRestarts: Bool = true
     public var keepMacAwake: Bool = true
@@ -85,7 +98,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case schemaVersion, port, checkpointPath, selectedModel, nemotronCheckpointPath, decodePool, supervisedRestarts, keepMacAwake, cacheQuotaGB,
              cacheDirectory, confirmBeforeLoading, requireAPIKey, checkForUpdatesAutomatically,
-             includeLogsInDiagnostics, developerRepoPath, allowBattery, minimumBatteryPercent, allowLowPowerMode
+             includeLogsInDiagnostics, developerRepoPath, allowBattery, minimumBatteryPercent, allowLowPowerMode,
+             flashNextKVCache
     }
 
     public init(from decoder: Decoder) throws {
@@ -97,6 +111,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.selectedModel = (try? c.decodeIfPresent(ModelFamily.self, forKey: .selectedModel)) ?? s.selectedModel
         s.nemotronCheckpointPath = try c.decodeIfPresent(String.self, forKey: .nemotronCheckpointPath) ?? s.nemotronCheckpointPath
         s.decodePool = try c.decodeIfPresent(DecodePool.self, forKey: .decodePool) ?? s.decodePool
+        s.flashNextKVCache = (try? c.decodeIfPresent(FlashNextKVCache.self, forKey: .flashNextKVCache)) ?? s.flashNextKVCache
         s.supervisedRestarts = try c.decodeIfPresent(Bool.self, forKey: .supervisedRestarts) ?? s.supervisedRestarts
         s.keepMacAwake = try c.decodeIfPresent(Bool.self, forKey: .keepMacAwake) ?? s.keepMacAwake
         s.allowBattery = try c.decodeIfPresent(Bool.self, forKey: .allowBattery) ?? s.allowBattery

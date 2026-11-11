@@ -120,6 +120,19 @@ def load_streaming(
     keep_vision: bool = True,
     use_mtp: bool = True,
 ) -> Tuple[nn.Module, dict, SafeTensorStore]:
+    from . import qsa_chunk, quantized_kv
+
+    mode = quantized_kv.kv_dtype()
+    layer_modes = quantized_kv.layer_modes()
+    qsa_mode = qsa_chunk.kernel_mode()
+    if qsa_mode == "gather":
+        qsa_chunk.gather_tile()  # reject invalid settings before touching checkpoint weights
+    if layer_modes or mode in quantized_kv.MIXED_MODES:
+        if qsa_mode != "gather" or use_mtp:
+            raise ValueError("mixed/tiered KV requires gather QSA and native MTP off")
+        quantized_kv.recent_tokens()
+        if {mode, *layer_modes.values()} & set(quantized_kv.MIXED_MODES) and quantized_kv.group_size() not in (32, 64):
+            raise ValueError("mixed KV group size must be 32 or 64")
     apply_wired_limit()
     apply_rmsnorm_fix()
     apply_adaptive_topk()
@@ -242,6 +255,8 @@ def load_streaming(
     _sanitize_conv1d_weights(model, resident)
     model.load_weights(list(resident.items()), strict=False)
     mx.eval(model.parameters())
+    # Logical tensor sizes; checkpoint mmap pages are not separately charged.
+    model.language_model._flashnext_resident_weight_bytes = sum(int(v.nbytes) for v in resident.values())
     model.eval()
 
     if verbose:

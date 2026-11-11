@@ -703,7 +703,9 @@ def session(language, tokens: int):
     from models.flashnext import flight_recorder
     flight_recorder.record("prefill_ring_acquire", enabled=state is not None,
                            reason=LAST_REASON[0] if state is None else None,
-                           scratch=bool(state is not None and state.owns_pool))
+                           scratch=bool(state is not None and state.owns_pool),
+                           ring_view_bytes=state.ring.ring_bytes if state is not None else 0,
+                           scratch_mapped_bytes=state._pool_bytes if state is not None and state.owns_pool else 0)
     failed = False
     try:
         yield state

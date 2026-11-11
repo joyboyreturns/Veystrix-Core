@@ -17,6 +17,14 @@ HTTPServer(('127.0.0.1',int(sys.argv[1])),H).serve_forever()
 '''
 
 class ModelProcessTests(unittest.TestCase):
+ def test_tiered_cache_is_only_passed_to_flashnext(self):
+  driver = ProcessDriver(flashnext_kv_cache="tiered4", flashnext_memory_policy="absolute-swap-only")
+  flashnext = InstalledModel("flash", "flashnext", "test", "/tmp/flash", "qwen4_exp", {}, None, "test")
+  nemotron = InstalledModel("nemo", "nemotron35-lightning", "test", "/tmp/nemo", "nemotron_h", {}, None, "test")
+  self.assertIn("kv-tiered4", driver._command(flashnext, 8080))
+  self.assertIn("--no-auto-purge", driver._command(flashnext, 8080))
+  self.assertNotIn("kv-tiered4", driver._command(nemotron, 8080))
+
  def test_real_child_is_verified_and_unloaded(self):
   m=InstalledModel('test-model','flashnext','test','/tmp/test','qwen4_exp',{},None,'test')
   driver=ProcessDriver(startup_timeout=5,stop_timeout=5,command_factory=lambda model,port:[sys.executable,'-c',CHILD,str(port)])

@@ -676,7 +676,7 @@ def _admit_agentic(prefs, benchmarking, display, verdict=None):
                 import dataclasses
                 tier = tiers[0] if memory_policy.is_swap_growth_policy() else tiers[-1]
                 verdict = dataclasses.replace(verdict, tier=tier)
-        if not verdict.admitted:
+        if not verdict.admitted and not memory_policy.is_absolute_swap_policy():
             print(f"memory admission note: former gates are telemetry-only under swap-growth-only policy; "
                   f"stopping condition is swap growth of 2.5 GiB over session baseline.",
                   file=display, flush=True)

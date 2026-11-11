@@ -78,6 +78,8 @@ public struct LaunchPlan: Equatable, Sendable {
                     "--pool-gb", poolArgument,
                     "--checkpoint", settings.activeCheckpointPath]
         args += ["--model", settings.selectedModel.rawValue]
+        args += ["--flashnext-kv-cache", settings.flashNextKVCache.rawValue,
+                 "--flashnext-memory-policy", "absolute-swap-only"]
         if settings.supervisedRestarts { args.append("--overnight") }
         // The router passes this directory only to Flash-Next, even when it is loaded later.
         if !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }

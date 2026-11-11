@@ -40,6 +40,7 @@ MODULE = "models.flashnext.tests.bench.bench_prefill_memory"
 PRODUCTION_RING_MIN_TOKENS = 512   # prefill_ring.min_tokens() with the flag unset (a test keeps this honest)
 SOURCE_TEXT = ROOT / "docs" / "flashnext" / "research.md"
 FINGERPRINTED = (
+    "models/flashnext/qsa_chunk.py", "models/flashnext/quantized_kv.py", "models/flashnext/mixed_kv.py",
     "models/flashnext/prefill.py", "models/flashnext/prefill_ring.py",
     "models/flashnext/prefill_memory.py", "models/flashnext/expert_pool.py",
     "models/flashnext/expert_cache.py", "models/flashnext/pool_ring.py",
@@ -436,22 +437,27 @@ class Instrument:
 
 
 def kv_digest(cache) -> str:
-    """Hash of every array in the KV cache, widened to float32 (exact for bf16)."""
+    """Hash populated cache state, with integer packed words kept bit-exact."""
     try:
         import mlx.core as mx
         import numpy as np
 
         digest = hashlib.sha256()
-        for entry in cache:
-            state = getattr(entry, "state", None)
-            if state is None:
-                continue
-            for array in state if isinstance(state, (list, tuple)) else (state,):
-                if array is None:
-                    continue
-                wide = array.astype(mx.float32)
+
+        def add(state):
+            if isinstance(state, (tuple, list)):
+                for value in state:
+                    add(value)
+            elif state is not None:
+                wide = state if state.dtype in (mx.uint32, mx.int64) else state.astype(mx.float32)
                 mx.eval(wide)
                 digest.update(np.asarray(wide).tobytes())
+
+        for entry in cache:
+            if hasattr(entry, "gather_selected"):
+                add(list(entry.snapshot(own=False).values()))
+            else:
+                add(getattr(entry, "state", None))
         return digest.hexdigest()[:16]
     except Exception:
         return "unavailable"
@@ -826,12 +832,14 @@ def child_main(args) -> int:
             os._exit(H.GUARD_EXIT_CODE)
 
     fast_interval = getattr(args, "fast_trace_interval", H.FAST_TRACE_SECONDS)
+    swap_ceiling_only = getattr(args, "swap_ceiling_only", False)
     stop_available_gib = getattr(args, "compressor_stop_available_gib", H.COMPRESSOR_STOP_AVAILABLE_GIB)
     tracer = MemoryTracer(
         probe, trace_path, interval=getattr(args, "trace_interval", 1.0), phase=phase,
         metal_limit=probe.metal_limit(), on_guard=leave,
         fast_interval=fast_interval or None, compressor_warn_mib=compressor_gib * 1024,
-        guard=lambda row: H.guard_reason(row, min_available_gb=min_available,
+        guard=lambda row: (None if row.get("fast") else H.absolute_swap_stop(row)) if swap_ceiling_only
+        else H.guard_reason(row, min_available_gb=min_available,
                                          compressor_limit_mib=compressor_gib * 1024,
                                          compressor_stop_available_mib=stop_available_gib * 1024))
     tracer.start()          # before the model loads, so the load is traced too
@@ -1058,6 +1066,7 @@ def check_ready(args, *, sampler=None, preflight_module=None, tokenizer_loader=N
     sample = sampler.sample()
     reason = H.Watchdog(H.SafetyPolicy(
         final=bool(getattr(args, "final", False)),
+        swap_ceiling_only=getattr(args, "swap_ceiling_only", False),
         min_available_gb=getattr(args, "min_available_gb", H.MIN_AVAILABLE_GB)), sample).check(sample)
     reason = reason or start_gate_reason(sample, getattr(args, "start_available_gb", None))
     avail_mb = sample.get("available_mb")
@@ -1152,6 +1161,8 @@ def diagnostic_args(args) -> list[str]:
            f"{getattr(args, 'compressor_stop_available_gib', H.COMPRESSOR_STOP_AVAILABLE_GIB):g}",
            "--trace-interval", f"{getattr(args, 'trace_interval', 1.0):g}",
            "--fast-trace-interval", f"{getattr(args, 'fast_trace_interval', H.FAST_TRACE_SECONDS):g}"]
+    if getattr(args, "swap_ceiling_only", False):
+        out.append("--swap-ceiling-only")
     if getattr(args, "expert_pool_gb", None) is not None:
         out += ["--expert-pool-gb", f"{args.expert_pool_gb:g}"]
     if getattr(args, "ring_min_tokens", None) is not None:
@@ -1167,7 +1178,8 @@ def diagnostic_args(args) -> list[str]:
 
 
 def diagnostic_overrides(args) -> dict:
-    return {"expert_pool_gb": getattr(args, "expert_pool_gb", None),
+    return {"swap_ceiling_only": getattr(args, "swap_ceiling_only", False),
+            "expert_pool_gb": getattr(args, "expert_pool_gb", None),
             "ring_min_tokens": getattr(args, "ring_min_tokens", None),
             "start_available_gb": getattr(args, "start_available_gb", None),
             "min_available_gb": getattr(args, "min_available_gb", H.MIN_AVAILABLE_GB),
@@ -1226,7 +1238,7 @@ def fingerprints() -> dict:
     return {name: source_hash(ROOT / name) for name in FINGERPRINTED if (ROOT / name).is_file()}
 
 
-def validate_arms(arms: list[dict]) -> dict:
+def validate_arms(arms: list[dict], *, swap_ceiling_only=False) -> dict:
     """Gates G1 to G5 for the arms collected so far."""
     by_id = {(a["size"], a["condition"], a["round"]): a for a in arms}
     report = {"exactness": H.exactness(arms), "arms": {}, "decode": H.decode_regression(arms)}
@@ -1235,7 +1247,7 @@ def validate_arms(arms: list[dict]) -> dict:
         base = by_id.get((arm["size"], H.BASELINES[cond.turn], arm["round"]))
         report["arms"][arm["arm_id"]] = {
             "G2": H.ring_health(arm, cond),
-            "G3": H.memory_gate(arm),
+            "G3": {"status": "n/a"} if swap_ceiling_only else H.memory_gate(arm),
             "G4": H.scratch_cleanup(arm, cond, base),
         }
     return report
@@ -1261,6 +1273,7 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
                                    memory=_memory_reading)
     policy = H.SafetyPolicy(
         final=args.final, min_available_gb=getattr(args, "min_available_gb", H.MIN_AVAILABLE_GB),
+        swap_ceiling_only=getattr(args, "swap_ceiling_only", False),
         compressor_limit_mib=getattr(args, "max_compressor_growth_gib",
                                      H.MAX_COMPRESSOR_GROWTH_GIB) * 1024,
         compressor_stop_available_mib=getattr(args, "compressor_stop_available_gib",
@@ -1299,7 +1312,7 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
         cond = H.ALL_CONDITIONS[arm.condition]
         if current is not None and arm.size != current:
             worst = H.worst_headroom(finished, current)
-            if worst is not None and worst < H.NEXT_SIZE_HEADROOM_BYTES:
+            if not policy.swap_ceiling_only and worst is not None and worst < H.NEXT_SIZE_HEADROOM_BYTES:
                 reason = (f"{current} left {worst / 1e9:.2f} GB of headroom, "
                           f"need {H.NEXT_SIZE_HEADROOM_BYTES / 1e9:.0f} GB for the next size")
                 run.failure(reason, error_type="size_gate", arm_id=arm.arm_id)
@@ -1307,7 +1320,7 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
                 continue
         current = arm.size
         guarded = (cond.guarded and finished and any(
-            v["status"] == "fail" for v in _gate_statuses(validate_arms(finished))))
+            v["status"] == "fail" for v in _gate_statuses(validate_arms(finished, swap_ceiling_only=policy.swap_ceiling_only))))
         if guarded:
             run.failure("an earlier arm failed a gate; the guarded condition is skipped",
                         error_type="guard", arm_id=arm.arm_id)
@@ -1354,7 +1367,7 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
                 samples=len(outcome.samples), result_file=str(result_path.name),
                 watchdog=H.trace_summary(outcome.trace))
         print(f"{arm.arm_id}: done", flush=True)
-        partial_report = validate_arms(finished)
+        partial_report = validate_arms(finished, swap_ceiling_only=policy.swap_ceiling_only)
         failed_gates = [gate for gate in _gate_statuses(partial_report) if gate.get("status") == "fail"]
         if failed_gates:
             for key, result in partial_report["exactness"].items():
@@ -1367,7 +1380,7 @@ def orchestrate(args, sampler=None, popen=subprocess.Popen, sleep=time.sleep) ->
             print(f"stopped after {arm.arm_id}: validation failed", flush=True)
             return 1
         sleep(args.settle)
-    report = validate_arms(finished)
+    report = validate_arms(finished, swap_ceiling_only=policy.swap_ceiling_only)
     for arm in finished:
         gates = report["arms"][arm["arm_id"]]
         ok = all(g["status"] in ("pass", "n/a") for g in gates.values())
@@ -1451,6 +1464,8 @@ def main(argv=None) -> int:
     parser.add_argument("--start-available-gb", type=float, default=None,
                         help="launch gate in GiB: refuse to start below this much available memory. "
                              "Unlike --min-available-gb it does not stop a running child")
+    parser.add_argument("--swap-ceiling-only", action="store_true",
+                        help="use 3072 MiB of total system swap as the sole memory stop")
     parser.add_argument("--max-compressor-growth-gib", type=float, default=H.MAX_COMPRESSOR_GROWTH_GIB,
                         help="stop when the compressor grows by this much within one arm, measured "
                              "from the arm's own start (default %(default)s)")
@@ -1486,6 +1501,8 @@ def main(argv=None) -> int:
     parser.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
     parser.add_argument("--reverse", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.swap_ceiling_only and args.start_available_gb:
+        parser.error("--swap-ceiling-only cannot be combined with --start-available-gb")
     if args.child:
         if not (args.size and args.condition):
             parser.error("--child needs --size and --condition")

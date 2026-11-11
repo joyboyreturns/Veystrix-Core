@@ -20,11 +20,13 @@ from models.flashnext.overnight import server_command
 class ProcessDriver:
     """Start one guarded CLI engine and prove its process group has exited on unload."""
     def __init__(self, *, pool_gb="0", prefix_dir=None, startup_timeout=1800, stop_timeout=60,
-                 command_factory=None):
+                 command_factory=None, flashnext_kv_cache="bf16", flashnext_memory_policy=None):
         self.pool_gb = pool_gb
         self.prefix_dir = prefix_dir
         self.startup_timeout = startup_timeout
         self.stop_timeout = stop_timeout
+        self.flashnext_kv_cache = flashnext_kv_cache
+        self.flashnext_memory_policy = flashnext_memory_policy
         self.command_factory = command_factory or self._command
         self.process = None
         self.port = None
@@ -34,10 +36,13 @@ class ProcessDriver:
         self._guard_pipe = None
 
     def _command(self, model, port):
+        is_flashnext = model.family == "flashnext"
+        tiered = is_flashnext and self.flashnext_kv_cache == "tiered4"
         args = Namespace(model=model.family, checkpoint=model.checkpoint, host="127.0.0.1", port=port,
                          pool_gb=("auto" if model.family == "nemotron35-lightning" and self.pool_gb == "0" else self.pool_gb),
-                         enable=[], prefix_dir=self.prefix_dir, preferences_file=None,
-                         no_auto_purge=False, threshold=None)
+                         enable=["kv-tiered4"] if tiered else [], prefix_dir=self.prefix_dir,
+                         preferences_file=None, no_auto_purge=is_flashnext and self.flashnext_memory_policy == "absolute-swap-only",
+                         threshold=1.0 if tiered else None)
         command = server_command(args)
         # Run the same CLI directly; no launcher shell or additional watchdog process is left behind.
         if command[0].endswith("chat.sh"):
@@ -73,6 +78,8 @@ class ProcessDriver:
         env = dict(os.environ)
         env.update(VEYSTRIX_SERVER_API_KEY=self.api_key, VEYSTRIX_ENGINE_INSTANCE_ID=self.instance,
                    VEYSTRIX_PYTHON=sys.executable)
+        if model.family == "flashnext" and self.flashnext_memory_policy:
+            env["FLASHNEXT_MEMORY_POLICY"] = self.flashnext_memory_policy
         env.setdefault("VEYSTRIX_NEMOTRON_AUTHORIZED", "1")
         read_fd, write_fd = os.pipe()
         command = [sys.executable, "-m", "veystrix.engine_guard", str(read_fd), *self.command_factory(model, port)]

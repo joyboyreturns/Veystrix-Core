@@ -114,6 +114,20 @@ private func tempDir() -> URL {
     }
     private let exists: (String) -> Bool = { _ in true }
 
+    @Test func tieredCacheSelectionReachesTheRouter() throws {
+        var (settings, checkpoint) = try good(tempDir())
+        settings.flashNextKVCache = .tiered4
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        #expect(decoded.flashNextKVCache == .tiered4)
+        let plan = try LaunchPlan.make(settings: decoded, checkpoint: checkpoint,
+                                       source: .bundled(engineRoot: URL(fileURLWithPath: "/engine")),
+                                       apiKey: nil, fileExists: exists, isExecutable: exists)
+        let cache = try #require(plan.arguments.firstIndex(of: "--flashnext-kv-cache"))
+        let policy = try #require(plan.arguments.firstIndex(of: "--flashnext-memory-policy"))
+        #expect(plan.arguments[cache + 1] == "tiered4")
+        #expect(plan.arguments[policy + 1] == "absolute-swap-only")
+    }
+
     @Test func tellsTheEngineWhereToWriteLifetimeStatistics() throws {
         let (s, c) = try good(tempDir())
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil,

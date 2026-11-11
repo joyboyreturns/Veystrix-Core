@@ -127,6 +127,9 @@ Gate (`quality_compare`):
 * `same-plan` (cached versus uncached, identical plan): **FAIL** on any token difference in any turn of any case.
 * `reordered` (chunked versus unchunked, other chunk size or planner): token identity is reported, not required;
   **FAIL** if a case that passed on the reference fails on the candidate or any category loses passes.
+* `kv-precision` (opt-in KV research): also requires complete arms, matching first-turn prompt token digests, and no new
+  tool schema failures. A pass is task-level evidence only. See [262K KV qualification](hifi-kv-262k.md) for the separate
+  synthetic, real-model, and promotion criteria.
 * Cases missing from either run fail the gate.
 
 Small, deterministic suites do not prove general quality. They detect large regressions and cache or state defects

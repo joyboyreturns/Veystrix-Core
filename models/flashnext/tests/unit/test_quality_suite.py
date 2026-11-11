@@ -248,6 +248,15 @@ def result_set(passed, ids=None, categories=None):
 
 
 class CompareTests(unittest.TestCase):
+    def test_kv_precision_requires_matching_stimulus_and_complete_arms(self):
+        ref, cand = result_set({"a": True}), result_set({"a": True}, ids={"a": [10]})
+        ref["cases"][0]["turns"][0]["prompt_digest"] = "prompt-a"
+        cand["cases"][0]["turns"][0]["prompt_digest"] = "prompt-a"
+        self.assertEqual(C.compare(ref, cand, "kv-precision")["verdict"], "PASS")
+        self.assertEqual(C.compare(ref, {**cand, "partial": True}, "kv-precision")["verdict"], "FAIL")
+        cand["cases"][0]["turns"][0]["prompt_digest"] = "different-prompt"
+        self.assertEqual(C.compare(ref, cand, "kv-precision")["verdict"], "FAIL")
+
     def test_same_plan_requires_identical_tokens(self):
         ref = result_set({"a": True, "b": True})
         same = C.compare(ref, result_set({"a": True, "b": True}), "same-plan")

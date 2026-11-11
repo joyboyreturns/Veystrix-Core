@@ -21,9 +21,137 @@ QSA_DENSE_MASK_MAX_BYTES = int(os.environ.get(
 
 QSA_CACHE_POOLED_KEYS = os.environ.get("FLASHNEXT_QSA_CACHE_POOLED_KEYS", "0") == "1"
 QSA_SCATTER_DECODE = os.environ.get("FLASHNEXT_QSA_SCATTER_DECODE", "0") == "1"
+FLAG_KERNEL = "FLASHNEXT_QSA_KERNEL"
+FLAG_GATHER_TILE = "FLASHNEXT_QSA_GATHER_TILE"
 
 _ORIGINAL_CALL = None
 _ORIGINAL_INDEXER_CALL = None
+
+
+def kernel_mode():
+    mode = os.environ.get(FLAG_KERNEL, "reference").strip().lower()
+    if mode not in ("reference", "gather"):
+        raise ValueError("FLASHNEXT_QSA_KERNEL must be reference or gather")
+    return mode
+
+
+def gather_tile():
+    value = int(os.environ.get(FLAG_GATHER_TILE, "8"))
+    if not 1 <= value <= 32:
+        raise ValueError("FLASHNEXT_QSA_GATHER_TILE must be between 1 and 32")
+    return value
+
+
+def fingerprint_parts():
+    if kernel_mode() == "reference":
+        return {}
+    return {"qsa_kernel": "gather-v1", "qsa_gather_tile": gather_tile(),
+            "qsa_pooled_indexer": QSA_CACHE_POOLED_KEYS}
+
+
+def _selected_blocks(indexer, query, pooled_keys, past_len, blocks, start, end):
+    # Keep the upstream reduction and argpartition, including its tie policy.
+    scores = query[:, :, start:end] @ pooled_keys.transpose(0, 1, 3, 2)
+    scores = mx.sum(mx.maximum(scores.astype(mx.float32), 0), axis=1)
+    scores = scores / math.sqrt(indexer.head_dim)
+    ends = past_len + mx.arange(start, end) + 1
+    counts = ends // indexer.compress_ratio
+    valid = mx.arange(blocks)[None, None, :] < counts[None, :, None]
+    scores = mx.where(valid, scores, -mx.inf)
+    return mx.argpartition(scores, kth=-indexer.block_topk, axis=-1)[
+        ..., -indexer.block_topk:
+    ]
+
+
+def _selected_indices(indexer, query, pooled_keys, key_len, past_len, blocks, start, end):
+    """Bounded token indices and validity; no [query, history] token mask.
+
+    Sort the selected set into original token order before SDPA. Invalid tail
+    slots remain masked, rather than duplicating a token's softmax mass.
+    """
+    ratio, topk = indexer.compress_ratio, indexer.block_topk
+    ends = past_len + mx.arange(start, end) + 1
+    counts = ends // ratio
+    slots = min(key_len, (topk + 1) * ratio)
+    dense = mx.broadcast_to(mx.arange(slots)[None, None, :],
+                            (query.shape[0], end - start, slots))
+    if pooled_keys is None:
+        return dense, dense < ends[None, :, None]
+    selected = _selected_blocks(indexer, query, pooled_keys, past_len, blocks, start, end)
+    selected = (selected[..., None] * ratio + mx.arange(ratio)).reshape(
+        query.shape[0], end - start, -1)
+    tail = mx.broadcast_to(counts[None, :, None] * ratio + mx.arange(ratio),
+                           (query.shape[0], end - start, ratio))
+    indices = mx.concatenate((selected, tail), axis=-1)
+    sparse = counts > topk
+    valid = indices < ends[None, :, None]
+    # Early queries see ALL causal tokens, even when later queries are sparse.
+    indices = mx.where(sparse[None, :, None], indices, dense)
+    valid = mx.where(sparse[None, :, None], valid, dense < ends[None, :, None])
+    indices = mx.sort(mx.where(valid, indices, key_len), axis=-1)
+    valid = indices < key_len
+    return mx.minimum(indices, key_len - 1), valid
+
+
+def _gather_rows(array, indices):
+    """[B,H,N,D] -> [B*T,H,S,D], broadcasting without copying history."""
+    batch, tile, selected = indices.shape
+    rows = mx.take_along_axis(array[:, None], indices[:, :, None, :, None], axis=3)
+    return rows.reshape(batch * tile, array.shape[1], selected, array.shape[-1])
+
+
+def _gather_kv(keys, values, cache, indices):
+    if hasattr(cache, "gather_selected"):
+        return cache.gather_selected(indices)
+    if isinstance(keys, tuple):
+        def dequantize(parts):
+            return mx.dequantize(*[mx.contiguous(_gather_rows(p, indices)) for p in parts],
+                                 group_size=cache.group_size, bits=cache.bits)
+        return dequantize(keys), dequantize(values)
+    return _gather_rows(keys, indices), _gather_rows(values, indices)
+
+
+def _gathered_call(self, x, mask, cache, position_ids, position_embeddings):
+    index_query, pooled, key_len, past, blocks = _prepare_indexer(
+        self.indexer, x, cache, position_ids)
+    queries, keys, values, gate, _ = self._prepare_projected_qkv(
+        self.q_proj(x), self.k_proj(x), self.v_proj(x), cache,
+        position_ids, position_embeddings, mask)
+    batch, heads, length, dim = queries.shape
+    outputs = []
+    tile_size = gather_tile()
+    slots = min(key_len, (self.indexer.block_topk + 1) * self.indexer.compress_ratio)
+    cache._flashnext_qsa_workspace = {
+        "max_queries": min(length, tile_size), "pooled_blocks": blocks,
+        "selected_slots": slots,
+        "selected_float_kv_pair_bytes": batch * min(length, tile_size) * slots
+        * self.num_key_value_heads * dim * queries.dtype.size * 2,
+        "largest_indexer_score_tensor_bytes": batch * self.indexer.n_heads * min(length, tile_size)
+        * (blocks if pooled is not None else 0) * max(index_query.dtype.size, 4),
+        "full_history_token_mask": False,
+    }
+    for start in range(0, length, tile_size):
+        end = min(start + tile_size, length)
+        indices, valid = _selected_indices(self.indexer, index_query, pooled,
+                                           key_len, past, blocks, start, end)
+        k, v = _gather_kv(keys, values, cache, indices)
+        q = queries[:, :, start:end].transpose(0, 2, 1, 3).reshape(
+            batch * (end - start), heads, 1, dim)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=self.scale,
+            mask=valid.reshape(batch * (end - start), 1, 1, -1))
+        # Realize each tile now. A lazy graph over all tiles retains every
+        # gathered KV and indexer score allocation until the final evaluation.
+        if start == 0 and hasattr(cache, "gather_selected"):
+            # At short prefixes attention reads only INT8. Materialize the
+            # direct INT4 writes too so their lazy graph cannot retain BF16
+            # inputs until the first recent row ages out.
+            mx.eval(out, cache.state)
+        else:
+            mx.eval(out)
+        outputs.append(out.reshape(batch, end - start, heads, -1))
+    output = mx.concatenate(outputs, axis=1).reshape(batch, length, -1)
+    return self.o_proj(output * mx.sigmoid(gate))
 
 
 def _dense_mask_bytes(batch, query, past, block_topk) -> int:
@@ -232,6 +360,11 @@ def _chunked_call(
         isinstance(mask, str) and mask == "causal"
     )
     past_len = getattr(cache, "offset", None)
+    if kernel_mode() == "gather" and cache is not None and isinstance(past_len, int) and supported_mask:
+        return _gathered_call(self, x, mask, cache, position_ids, position_embeddings)
+    if hasattr(cache, "gather_selected"):
+        # A compressed tier cache must NEVER reach upstream dense attention.
+        raise ValueError("mixed/tiered KV requires gather QSA with scalar offsets and a causal mask")
     dense_mask_bytes = (
         _dense_mask_bytes(x.shape[0], length, past_len, self.indexer.block_topk)
         if isinstance(past_len, int)
