@@ -14,6 +14,15 @@ from .attention import AttentionCache
 class SnapshotError(ValueError):
     pass
 
+def clone_cache(cache):
+    """Give each continuation fresh cache objects and independent MLX array handles."""
+    result = []
+    for entry in cache:
+        fresh = ArraysCache(size=len(entry.state)) if isinstance(entry, ArraysCache) else type(entry)()
+        fresh.state = [value[...] for value in entry.state]
+        result.append(fresh)
+    return result
+
 def fingerprint(identity: dict, tokens: list[int]) -> str:
     if not isinstance(identity, dict) or not identity or not all(isinstance(x, int) and x >= 0 for x in tokens):
         raise SnapshotError('invalid identity or tokens')

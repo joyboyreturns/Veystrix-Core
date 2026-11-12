@@ -25,7 +25,7 @@ import gzip
 import json
 from collections import OrderedDict
 
-POLICIES = ("lru", "arc", "bip8", "belady")
+POLICIES = ("lru", "arc", "bip8", "s3fifo", "belady")
 
 
 class Lru:
@@ -59,6 +59,36 @@ class Lru:
                 if self.count % self.every:
                     self.pool.move_to_end(key, last=False)
         return hits
+
+
+class S3Fifo:
+    """Replay the runtime eviction policy without allocating expert tensors."""
+
+    def __init__(self, slots):
+        from models.flashnext.expert_pool import _S3FIFO
+
+        self.slots = slots
+        self.policy = _S3FIFO(slots)
+
+    def contains(self, key):
+        return key in self.policy.small or key in self.policy.main
+
+    def access(self, layer, experts):
+        keys = list(dict.fromkeys((layer, expert) for expert in experts))
+        if len(keys) > self.slots:  # the runtime streams this batch without mutating the pool
+            return 0
+        protected = set(keys)
+        misses = []
+        for key in keys:
+            if self.contains(key):
+                self.policy.hit(key)
+            else:
+                misses.append(key)
+        for key in misses:
+            if len(self.policy.small) + len(self.policy.main) == self.slots:
+                self.policy.victim(protected, self.slots)
+            self.policy.insert(key)
+        return len(keys) - len(misses)
 
 
 class Arc:
@@ -160,6 +190,8 @@ def make_policy(name, slots, decode_events):
         return Lru(slots, insert_cold_every=8)
     if name == "arc":
         return Arc(slots)
+    if name == "s3fifo":
+        return S3Fifo(slots)
     if name == "belady":
         return Belady(slots, decode_events)
     raise ValueError(name)

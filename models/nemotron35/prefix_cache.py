@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from functools import wraps
@@ -31,6 +33,14 @@ MAX_TOKENS = 1_048_576
 # tokens. Keep that boundary so canonicalized tool history can reuse it.
 MIN_TOKENS = 256
 _MAGIC = b'VXT1'
+RAM_BUDGET_FLAG = "VEYSTRIX_NEMOTRON_PREFIX_RAM_MB"
+
+
+def ram_bytes_from_env() -> int:
+    mib = float(os.environ.get(RAM_BUDGET_FLAG) or "0")
+    if not math.isfinite(mib) or mib < 0:
+        raise ValueError(f"{RAM_BUDGET_FLAG} must be a finite nonnegative number")
+    return int(mib * 2**20)
 
 
 @dataclass
@@ -64,14 +74,16 @@ def _managed(method):
 class PrefixCache:
     """Doubles as the ``store()`` object the shared server reads for /health (``_disk``, ``stats`` ...)."""
 
-    def __init__(self, directory, identity: dict, *, quota_bytes: int, min_tokens: int = MIN_TOKENS, manager=None, compatible_positions=None):
+    def __init__(self, directory, identity: dict, *, quota_bytes: int, min_tokens: int = MIN_TOKENS,
+                 manager=None, compatible_positions=None, ram_budget=None):
         digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         self.identity = identity
         self.manager = manager
         self.directory = manager.namespace("nemotron35", digest) if manager else Path(directory).expanduser() / digest[:16]
         self.disk_budget = int(quota_bytes)
-        self.ram_budget = 0
-        self._ram, self._ram_bytes = {}, 0
+        self.ram_budget = ram_bytes_from_env() if ram_budget is None else max(0, int(ram_budget))
+        self._ram = OrderedDict()
+        self._ram_bytes = 0
         self.min_tokens = min_tokens
         self.compatible_positions = compatible_positions
         self.stats = Stats()
@@ -112,6 +124,30 @@ class PrefixCache:
             self._disk = {entry.key: {"bytes": entry.size, "tokens": entry.tokens, "mtime": entry.mtime}
                           for entry in tx.entries.values()
                           if entry.directory == self.directory and entry.tokens > 0}
+            if self._ram:
+                for key in self._ram.keys() - self._disk.keys():
+                    self._drop_ram(key)
+
+    def _drop_ram(self, key):
+        entry = self._ram.pop(key, None)
+        if entry is not None:
+            self._ram_bytes -= entry[1]
+
+    @staticmethod
+    def _version(path):
+        info = path.stat()
+        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+    def _admit_ram(self, key, cache, version):
+        size = sum(array.nbytes for entry in cache for array in entry.state)
+        if size > self.ram_budget:
+            return
+        self._drop_ram(key)
+        while self._ram_bytes + size > self.ram_budget:
+            self._drop_ram(next(iter(self._ram)))
+            self.stats.evicted_ram += 1
+        self._ram[key] = (state.clone_cache(cache), size, version)
+        self._ram_bytes += size
 
     def _scan(self) -> None:
         for tokens_path in self.directory.glob('*.tokens'):
@@ -179,7 +215,24 @@ class PrefixCache:
                 lease = tx.lease(self.directory, key) if tx is not None else None
             state_path, _ = self._paths(key)
             try:
-                cache = state.restore(state_path, self.identity, ids[:n].tolist())
+                ram_hit = False
+                version = None
+                if self.ram_budget:
+                    try:
+                        version = self._version(state_path)
+                    except OSError:
+                        pass  # the normal restore path handles missing or unreadable files
+                    resident = self._ram.get(key)
+                    if resident is not None and resident[2] == version:
+                        cache = state.clone_cache(resident[0])
+                        self._ram.move_to_end(key)
+                        ram_hit = True
+                    else:
+                        self._drop_ram(key)
+                if not ram_hit:
+                    cache = state.restore(state_path, self.identity, ids[:n].tolist())
+                    if version is not None:
+                        self._admit_ram(key, cache, version)
                 if lease is not None:
                     with self._lookup_transaction() as tx:
                         tx.record("nemotron35", self.directory, key, n)
@@ -199,10 +252,12 @@ class PrefixCache:
             finally:
                 if lease is not None:
                     os.close(lease)
-        self.stats.ssd_hits += 1
+        self.stats.ram_hits += ram_hit
+        self.stats.ssd_hits += not ram_hit
         self.stats.reused_tokens += n
-        self.stats.ssd_bytes_read += self._disk[key]['bytes']
-        if self.manager is None:
+        if not ram_hit:
+            self.stats.ssd_bytes_read += self._disk[key]['bytes']
+        if self.manager is None and key not in self._ram:
             try:
                 os.utime(state_path)
             except OSError:
@@ -286,6 +341,7 @@ class PrefixCache:
 
     def _forget(self, key: str) -> None:
         with self._lock:
+            self._drop_ram(key)
             self._disk.pop(key, None)
         for path in self._paths(key):
             path.unlink(missing_ok=True)
@@ -311,3 +367,4 @@ class PrefixCache:
             for entry in list(_tx.entries.values()):
                 if entry.directory == self.directory and _tx.remove(entry):
                     self._disk.pop(entry.key, None)
+                    self._drop_ram(entry.key)

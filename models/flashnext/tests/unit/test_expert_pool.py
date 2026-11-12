@@ -27,6 +27,23 @@ class _Store:
 
 
 class AssignTests(unittest.TestCase):
+    def test_s3fifo_does_not_reuse_protected_or_leased_slots(self):
+        from models.flashnext import pool_ring
+
+        with mock.patch.dict(os.environ, {expert_pool.POLICY_FLAG: "s3fifo"}):
+            pool = self.make(40)
+        self.addCleanup(pool.close)
+        old, _ = pool.assign(1, list(range(40)))
+        first = pool_ring.lease_range(pool, 20)
+        retained = [expert for expert, slot in old.items() if slot < first][:5]
+        slots, misses = pool.assign(1, retained + list(range(40, 55)))
+        self.assertEqual([slots[expert] for expert in retained], [old[expert] for expert in retained])
+        self.assertEqual(set(slots.values()), set(range(first)))
+        pool.invalidate(1, misses)
+        pool_ring.return_range(pool, first, 20)
+        _, new_misses = pool.assign(1, list(range(40, 55)))
+        self.assertEqual(len(new_misses), 15)
+
     def make(self, slots):
         stride = get_slab_layout(32).record_stride
         return expert_pool.ExpertPool(_Store(), expert_pool.HEADER + slots * stride)
@@ -284,10 +301,12 @@ class BufferedFillTests(unittest.TestCase):
             try:
                 with mock.patch.dict(os.environ, env):
                     slots, misses = pool.assign(4, [4, 0, 1, 3])
-                    with mock.patch.object(os, "preadv", wraps=os.preadv) as read:
-                        for future in pool.fill(PREFIX, misses, workers.submit, chunk=2):
+                    with mock.patch.object(os, "preadv", wraps=os.preadv) as read, \
+                            mock.patch.object(workers, "submit", wraps=workers.submit) as submit:
+                        for future in pool.fill(PREFIX, misses, submit, chunk=2):
                             future.result()
                     self.assertEqual(read.call_count, 2 * len(tensors))
+                    self.assertEqual(submit.call_count, 12)  # 6 weight tasks, 6 small-part tasks
                     data = {}
                     for expert, slot in slots.items():
                         base = expert_pool.HEADER + slot * layout.record_stride

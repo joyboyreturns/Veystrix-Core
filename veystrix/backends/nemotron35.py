@@ -173,6 +173,7 @@ class NemotronBackend(Conversation):
         from models.nemotron35.backend_core import EngineCore
         from models.nemotron35.config import validate_config
         from models.nemotron35.inventory import estimate_bytes
+        from models.nemotron35.prefix_cache import PrefixCache, ram_bytes_from_env
         from models.nemotron35.streamed_model import load_streamed
         if not model_path:
             raise SystemExit("Nemotron requires --model-path/--checkpoint pointing at a complete local checkpoint")
@@ -195,10 +196,13 @@ class NemotronBackend(Conversation):
         requested_context = os.environ.get("VEYSTRIX_NEMOTRON_CONTEXT")
         if context_tokens is None and requested_context:
             context_tokens = int(requested_context)
+        if prefix_cache is None:
+            prefix_cache = os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_CACHE", "1") != "0"
+        prefix_ram = ram_bytes_from_env() if prefix_cache else 0
         # Plan from the exact dense-core size implied by the verified inventory, BEFORE reading any weight.
         plan = admission.make_plan(config, machine, dense_bytes=estimate_bytes(config)["dense_bytes"],
                                    context_tokens=context_tokens, chunk_tokens=chunk, pool_bytes=pool,
-                                   int8_kv=kv == "int8", lightning=config_check is None)
+                                   int8_kv=kv == "int8", lightning=config_check is None, prefix_cache_bytes=prefix_ram)
         self.plan = plan
         if tokenizer is None:
             from veystrix.backends.flashnext import _load_transformers_tokenizer
@@ -233,15 +237,12 @@ class NemotronBackend(Conversation):
         self._identity = None
         self.snapshot_tokens = snapshot_tokens or int(os.environ.get("VEYSTRIX_NEMOTRON_SNAPSHOT_TOKENS") or 4096)
         self.prefix_cache = None
-        if prefix_cache is None:
-            prefix_cache = os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_CACHE", "1") != "0"
         if prefix_cache:
-            from models.nemotron35.prefix_cache import PrefixCache
             from veystrix.universal_cache import CacheManager, GB
             quota = int(prefix_quota_gb * GB) if prefix_quota_gb is not None else None
             manager = CacheManager(prefix_dir, quota_bytes=quota)
             self.prefix_cache = PrefixCache(None, self._session_identity(), quota_bytes=manager.default_quota,
-                                           manager=manager, compatible_positions=(self._prefix_positions
+                                           manager=manager, ram_budget=prefix_ram, compatible_positions=(self._prefix_positions
                                                                                    if self._strict_prefix_plan else None))
             self._prefix_session = lambda: self.prefix_cache      # what the shared server asks for (health, adoption)
 
@@ -365,7 +366,8 @@ class NemotronBackend(Conversation):
             st = self.prefix_cache.stats
             snapshot["prefix_cache"] = {"snapshots": len(self.prefix_cache._disk),
                                         "gb": round(sum(m["bytes"] for m in list(self.prefix_cache._disk.values())) / 1e9, 2),
-                                        "ssd_hits": st.ssd_hits, "cold_lookups": st.cold_lookups,
+                                        "ssd_hits": st.ssd_hits, "ram_hits": st.ram_hits,
+                                        "ram_bytes": self.prefix_cache._ram_bytes, "cold_lookups": st.cold_lookups,
                                         "reused_tokens": st.reused_tokens, "restore_failures": st.restore_failures,
                                         "evicted": st.evicted_ssd}
         return snapshot
@@ -400,12 +402,15 @@ class NemotronBackend(Conversation):
         cached = 0 if fresh else self.cache_tokens
         admission.check_request(self.plan, self._current_machine(), new_tokens=len(feed), cached_tokens=cached)
         restored = 0
+        restored_from_ram = False
         restore_started = time.perf_counter()
         if fresh:
             self.core.reset()
             if self.prefix_cache is not None and len(feed) > self.prefix_cache.min_tokens:
+                previous_ram_hits = self.prefix_cache.stats.ram_hits
                 cache, restored = self.prefix_cache.restore(feed)
                 if restored:
+                    restored_from_ram = self.prefix_cache.stats.ram_hits > previous_ram_hits
                     self.core.bind_cache(cache)
         prefill_limit = self.max_incremental_prefill if restored or cached else self.max_cold_prefill
         if len(feed) - restored > prefill_limit:
@@ -475,7 +480,9 @@ class NemotronBackend(Conversation):
             interrupted()
             raise
         prefill_seconds = began.since(prefill_began)
-        outcome = ("extended" if not fresh else "ssd_hit" if restored else "cold")
+        outcome = "extended" if not fresh else "cold"
+        if restored:
+            outcome = "ram_hit" if restored_from_ram else "ssd_hit"
         snapshot_began = time.perf_counter()
         if capture and compatible(len(self.tape)) and len(feed) >= self.prefix_cache.min_tokens:
             try:   # the prompt boundary: the next request usually shares this whole prefix

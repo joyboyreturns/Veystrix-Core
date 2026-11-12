@@ -39,6 +39,7 @@ SIZE_FLAG = "FLASHNEXT_EXPERT_POOL_GB"
 # unchanged, so results are identical; the prefill ring keeps its own uncached descriptors. Unset/0 = the existing behaviour.
 BUFFERED_FILL_FLAG = "FLASHNEXT_EXPERT_POOL_BUFFERED_FILL"
 LOCK_FLAG = "FLASHNEXT_EXPERT_POOL_LOCK"
+POLICY_FLAG = "FLASHNEXT_EXPERT_POOL_POLICY"
 HEADER = 4096
 SLOT_BIT = 0x80000000
 _PARTS = (
@@ -77,6 +78,9 @@ def enabled() -> bool:
 class ExpertPool:
     def __init__(self, store, size_bytes: int, group_size: int = 32,
                  lock: bool = False):
+        policy = os.environ.get(POLICY_FLAG, "lru").strip().lower() or "lru"
+        if policy not in ("lru", "s3fifo"):
+            raise ValueError(f"{POLICY_FLAG} must be 'lru' or 's3fifo'")
         layout = get_slab_layout(group_size)
         self.store = store
         self.stride = layout.record_stride
@@ -100,6 +104,7 @@ class ExpertPool:
         )
         self._view = memoryview(self._mm)
         self._slot_of: "OrderedDict[tuple, int]" = OrderedDict()
+        self._s3 = _S3FIFO(self.slots) if policy == "s3fifo" else None
         self._free = list(range(self.slots - 1, -1, -1))
         self._fds: dict = {}
         self._fill_fds: dict = {}
@@ -119,12 +124,17 @@ class ExpertPool:
         if len(distinct) > self.usable_slots:
             raise ValueError("requested experts exceed expert pool capacity")
         slot_of = self._slot_of
+        policy = self._s3
+        protected = {(layer, expert) for expert in distinct} if policy else None
         slots, misses = {}, []
         for expert in distinct:
             key = (layer, expert)
             slot = slot_of.get(key)
             if slot is not None:
-                slot_of.move_to_end(key)
+                if policy is None:
+                    slot_of.move_to_end(key)
+                else:
+                    policy.hit(key)
                 slots[expert] = slot
         self.hits += len(slots)
         for expert in distinct:
@@ -132,9 +142,13 @@ class ExpertPool:
                 continue
             if self._free:
                 slot = self._free.pop()
-            else:
+            elif policy is None:
                 _old, slot = slot_of.popitem(last=False)
+            else:
+                slot = slot_of.pop(policy.victim(protected, self.usable_slots))
             slot_of[(layer, expert)] = slot
+            if policy is not None:
+                policy.insert((layer, expert))
             slots[expert] = slot
             misses.append((expert, slot))
         self.misses += len(misses)
@@ -210,21 +224,33 @@ class ExpertPool:
         for expert, slot in misses:
             key = (layer, expert)
             if self._slot_of.get(key) == slot:
-                del self._slot_of[key]
-                self._free.append(slot)
+                self._free.append(self.discard_slot(key))
+
+    def discard_slot(self, key):
+        """Remove a mapping without making its slot available to decode."""
+        if self._s3 is not None:
+            self._s3.small.pop(key, None)
+            self._s3.main.pop(key, None)
+        return self._slot_of.pop(key)
 
     def fill(self, prefix: str, misses, submit, chunk: int = 2):
         """Queue the nine row reads of every miss; returns the futures."""
+        from .store import expert_read_batch_rows
+
+        if chunk < 1:
+            raise ValueError("expert pool fill chunk must be positive")
         misses = sorted(misses, key=lambda target: target[0])
         futures = []
         try:
             for projection, part in _PARTS:
                 name = f"{prefix}.{projection}.{part}"
                 offset = HEADER + self.offsets[(projection, part)]
-                for start in range(0, len(misses), chunk):
+                ref = self.store.refs.get(name)
+                batch = expert_read_batch_rows(ref.row_bytes, chunk) if ref is not None else chunk
+                for start in range(0, len(misses), batch):
                     targets = [
                         (expert, offset + slot * self.stride)
-                        for expert, slot in misses[start:start + chunk]
+                        for expert, slot in misses[start:start + batch]
                     ]
                     futures.append(submit(self._fill_part, name, targets))
         except BaseException:
@@ -243,6 +269,50 @@ class ExpertPool:
             os.close(fd)
         self._fds.clear()
         self._fill_fds.clear()
+
+
+class _S3FIFO:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.small = OrderedDict()
+        self.main = OrderedDict()
+        self.ghost = OrderedDict()
+
+    def hit(self, key):
+        lane = self.small if key in self.small else self.main
+        lane[key] = min(3, lane[key] + 1)
+
+    def insert(self, key):
+        if key in self.ghost:
+            del self.ghost[key]
+            self.main[key] = 0
+        else:
+            self.small[key] = 0
+
+    def victim(self, protected, capacity):
+        # The batch fits, so at least one resident is outside the requested set.
+        # A main-queue entry has at most three second chances before eviction.
+        while True:
+            prefer_small = len(self.small) >= max(1, capacity // 10)
+            lanes = (self.small, self.main) if prefer_small else (self.main, self.small)
+            for lane in lanes:
+                key = next((candidate for candidate in lane if candidate not in protected), None)
+                if key is not None:
+                    break
+            else:
+                raise RuntimeError("expert pool has no unprotected S3-FIFO victim")
+            count = lane.pop(key)
+            if lane is self.small:
+                if count:
+                    self.main[key] = 0
+                    continue
+                self.ghost[key] = None
+                if len(self.ghost) > self.capacity:
+                    self.ghost.popitem(last=False)
+            elif count:
+                self.main[key] = count - 1
+                continue
+            return key
 
 
 AUTO_FLAG = "FLASHNEXT_EXPERT_POOL_AUTO"

@@ -275,7 +275,7 @@ class ExpertPool:
                 self.prefetch_wasted += 1
 
     # -- demand ------------------------------------------------------------------------------------------------
-    def fetch(self, layer: int, experts, *, after_submit=None) -> dict:
+    def fetch(self, layer: int, experts, *, after_submit=None, compute_resident=None) -> dict:
         """Arrays for every requested expert; missing ones are read in parallel. Returns {expert: arrays}."""
         if self.cancel_check():
             raise Cancelled()
@@ -310,6 +310,8 @@ class ExpertPool:
                 direct[expert] = self.reader.submit_expert(self._demand, layer, expert)
         if after_submit is not None:
             after_submit()
+        if compute_resident is not None and out and (waiting or direct):
+            compute_resident(out)
         began = time.perf_counter()
         for expert, future in waiting.items():
             self.prefetch_used += 1
@@ -434,8 +436,20 @@ class StreamedSwitchMLP(nn.Module):
         rows_n, k = ids.shape
         unique = np.unique(ids)
         if rows_n == 1 and not GATHER:
-            arrays = self.pool.fetch(self.layer, unique.tolist(), after_submit=lambda: self._prefetch_next(flat, rows_n))
-            outputs = [self._expert(flat, arrays[int(expert)]) for expert in ids[0]]
+            partial = {}
+
+            def compute_resident(resident):
+                partial.update((expert, self._expert(flat, weights)) for expert, weights in resident.items())
+                mx.async_eval(*partial.values())
+
+            options = {}
+            if os.environ.get("VEYSTRIX_NEMOTRON_DECODE_OVERLAP") == "1":
+                options["compute_resident"] = compute_resident
+            arrays = self.pool.fetch(
+                self.layer, unique.tolist(), after_submit=lambda: self._prefetch_next(flat, rows_n), **options,
+            )
+            outputs = [partial[expert] if expert in partial else self._expert(flat, arrays[expert])
+                       for expert in map(int, ids[0])]
             return mx.stack(outputs, axis=-2).reshape(*lead, k, hidden).astype(x.dtype)
         self._prefetch_next(flat, rows_n)
         arrays = self.pool.fetch(self.layer, unique.tolist())

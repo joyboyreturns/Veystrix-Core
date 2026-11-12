@@ -271,10 +271,21 @@ class ChainTests(Base):
     def test_restoring_a_chain_equals_the_live_cache(self):
         cache = self.cache()
         live = self.run_chunks(cache, [64, 128, 200])
+        entries, _ = cache._chain_loading(P.chain_key(self.fp, self.ids[:200]), for_restore=True)
+        self.assertTrue(entries[-1].layers[0].states)
+        self.assertTrue(all(not entry.layers[0].states for entry in entries[:-1]))
         hit, restored = cache.lookup(self.ids, self.make_cache)
         self.assertEqual(hit.n_tokens, 200)
         self.assertEqual(len(hit.chain), 3)
         self.same(cache_bits(restored), cache_bits(live))
+
+    def test_rolling_lookup_can_match_a_deep_prefix_and_respects_plan_veto(self):
+        cache = self.cache()
+        self.run_chunks(cache, [32, 64, 96, 128, 160, 192])
+        changed = list(self.ids)
+        changed[100] = (changed[100] + 1) % VOCAB
+        self.assertEqual(cache.peek(changed), 96)
+        self.assertEqual(cache.peek(changed, accept=lambda length, _: length != 96), 64)
 
     def test_longest_valid_prefix_wins_and_it_is_strictly_shorter(self):
         cache = self.cache()
