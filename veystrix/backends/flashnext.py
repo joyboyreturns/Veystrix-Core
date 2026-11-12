@@ -634,6 +634,20 @@ class FlashNextBackend(Conversation):
                 pass
         return freed
 
+    def kv_diagnostics(self) -> dict:
+        from models.flashnext import kv_telemetry, pool_lifecycle, qsa_chunk, quantized_kv
+
+        expert_store = pool_lifecycle.store_of(self.language)
+        pool = getattr(expert_store, "_flashnext_expert_pool", None)
+        active, cached = int(mx.get_active_memory()), int(mx.get_cache_memory())
+        return {**kv_telemetry.cache_breakdown(self.cache), **quantized_kv.fingerprint_parts(),
+                "kv_dtype": quantized_kv.kv_dtype(), "qsa_kernel": qsa_chunk.kernel_mode(),
+                "logical_resident_weight_bytes": getattr(self.language, "_flashnext_resident_weight_bytes", None),
+                "expert_pool_mapped_bytes": pool_lifecycle.pool_bytes(pool),
+                "mlx_active_bytes": active, "mlx_cached_bytes": cached,
+                "mlx_working_set_bytes": active + cached, "mlx_peak_active_bytes": int(mx.get_peak_memory()),
+                "metal_recommended_working_set_bytes": mx.device_info().get("max_recommended_working_set_size")}
+
     def _turn_memory(self) -> dict:
         """Where this process and the machine stand right now (never raises; values are bytes unless named)."""
         from models.flashnext import memory_controller, purge_recovery
@@ -799,6 +813,23 @@ class FlashNextBackend(Conversation):
                 "predicted_decode_headroom": plan.predicted_decode_headroom, "reasons": list(plan.reasons),
                 "available_before": report["snapshot"].available, "pool_before": report["snapshot"].pool_bytes}
 
+    def _context_ceiling(self) -> int | None:
+        """Configured or checkpoint-declared context ceiling, or None when unavailable."""
+        configured = getattr(self, "context_limit", None)
+        if isinstance(configured, int) and not isinstance(configured, bool) and configured > 0:
+            return configured
+        for holder in (getattr(self, "language", None), getattr(self, "tokenizer", None)):
+            if holder is None:
+                continue
+            for source in (holder, getattr(holder, "config", None), getattr(holder, "init_kwargs", None)):
+                if source is None:
+                    continue
+                for attr in ("context_window", "max_position_embeddings", "model_max_length", "n_positions"):
+                    raw = source.get(attr) if isinstance(source, dict) else getattr(source, attr, None)
+                    if isinstance(raw, int) and not isinstance(raw, bool) and 0 < raw < 10_000_000:
+                        return raw
+        return None
+
     def _generate(self, max_tokens: int, out=None, on_prefilled=None,
                   on_prefill_progress=None, on_decode_token=None,
                   should_cancel=None) -> tuple[str, Stats]:
@@ -910,6 +941,9 @@ class FlashNextBackend(Conversation):
         self.tape.extend(self.pending)
         self.pending = []
         self._replay_needed = False
+        context_ceiling = self._context_ceiling()
+        if context_ceiling is not None:
+            generation_horizon = min(generation_horizon, max(0, context_ceiling - len(self.tape)))
         cancelled = False
 
         def check_cancel():
@@ -1043,6 +1077,12 @@ class FlashNextBackend(Conversation):
                 if budget_state is not None:
                     budget_state["forced_close"] = force_close
                 yield value
+                if _index + 1 == generation_horizon:
+                    # Commit the final token to the live cache without
+                    # projecting or sampling a token the caller cannot use.
+                    self.language(token[None], cache=self.cache, skip_logits=True)
+                    mx.eval([entry.state for entry in self.cache])
+                    return
                 sampler.observe(value)
                 step = self.language(token[None], cache=self.cache)
                 token = sampler(step.logits[:, -1, :])
@@ -1120,6 +1160,8 @@ class FlashNextBackend(Conversation):
             pinned_bytes=self.routing.pinned_bytes,
             pinned_signature=self.routing.pinned_signature,
         )
+        self.last_decode_rate = stats.rate
+        self.last_prefill_seconds = prefill_seconds
         if gate_probe is not None:
             try:
                 gate_probe.finished(produced, stats)

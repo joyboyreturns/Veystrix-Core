@@ -79,7 +79,7 @@ class TestCacheTools(unittest.TestCase):
             P._release_directory(*owner)
 
     def test_cli_argument_aliases(self):
-        with mock.patch("sys.argv", ["cache_tools", "--cleanup", "--target-disk-gb", "20", "--directory", str(self.cache_dir)]):
+        with mock.patch("sys.argv", ["cache_tools", "--legacy", "--cleanup", "--target-disk-gb", "20", "--directory", str(self.cache_dir)]):
             with mock.patch("veystrix.cache_tools.clean_cache") as mock_clean:
                 mock_clean.return_value = {"status": "ok"}
                 with mock.patch("builtins.print"):

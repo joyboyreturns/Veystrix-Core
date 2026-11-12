@@ -30,6 +30,7 @@ points where the engine is idle or between evaluated chunks (``checkpoint``, ``s
 """
 from __future__ import annotations
 
+import math
 import os
 import threading
 import time
@@ -43,7 +44,7 @@ MIB = 2 ** 20
 from . import memory_policy
 
 FLAG_SWAP_GROWTH = "FLASHNEXT_SWAP_GROWTH_STOP_GIB"
-FLAG_SWAP_CEILING = "FLASHNEXT_SWAP_CEILING_MIB"                # absolute swap in use (not growth): the owner's 3 GiB rule; 0 disables
+FLAG_SWAP_CEILING = memory_policy.FLAG_SWAP_CEILING_MIB
 FLAG_SWAP_CEILING_MARGIN = "FLASHNEXT_SWAP_CEILING_MARGIN_MIB"  # stop this far below the ceiling so a fast spike cannot cross it
 FLAG_PERSIST = "FLASHNEXT_PRESSURE_PERSIST_S"
 FLAG_CRITICAL_CONFIRM = "FLASHNEXT_CRITICAL_CONFIRM_S"
@@ -91,6 +92,7 @@ class Policy:
     swap_ceiling_mib: float = 0.0         # opt-in: FLASHNEXT_SWAP_CEILING_MIB=3072 enforces the owner's 3 GiB rule as an absolute number
     swap_ceiling_margin_mib: float = 256.0
     swap_only: bool = False               # approved agentic policy: only the swap-growth hard stop (and missing probe) can stop
+    absolute_swap_only: bool = False
 
     def telemetry_only_checks(self) -> list[str]:
         return list(memory_policy.TELEMETRY_ONLY_CHECKS) if self.swap_only else []
@@ -102,16 +104,20 @@ class Policy:
         # The experimental layer-major runtime is not promoted to the stable path.
         # It needs an absolute limit even when swap was already in use at launch.
         layer_major = env.get("FLASHNEXT_PREFILL_ORDER", "").strip().lower() == "layer"
+        absolute = memory_policy.is_absolute_swap_policy(env)
         effective_swap_only = (
             memory_policy.is_swap_growth_policy(environ)
             if swap_only is None
             else bool(swap_only)
         )
         return cls(
-            swap_only=effective_swap_only,
+            swap_only=effective_swap_only or absolute,
+            absolute_swap_only=absolute,
             swap_growth_stop_gib=_number(FLAG_SWAP_GROWTH, d.swap_growth_stop_gib, 0.25, 64, environ),
-            swap_ceiling_mib=_number(FLAG_SWAP_CEILING, 3072.0 if layer_major else d.swap_ceiling_mib, 0, 1048576, environ),
-            swap_ceiling_margin_mib=_number(FLAG_SWAP_CEILING_MARGIN, 0.0 if layer_major else d.swap_ceiling_margin_mib, 0, 65536, environ),
+            swap_ceiling_mib=(memory_policy.absolute_swap_ceiling_mib(environ) if absolute else
+                              _number(FLAG_SWAP_CEILING, 3072.0 if layer_major else d.swap_ceiling_mib, 0, 1048576, environ)),
+            swap_ceiling_margin_mib=(0.0 if absolute else
+                                     _number(FLAG_SWAP_CEILING_MARGIN, 0.0 if layer_major else d.swap_ceiling_margin_mib, 0, 65536, environ)),
             persist_s=_number(FLAG_PERSIST, d.persist_s, 5, 3600, environ),
             critical_confirm_s=_number(FLAG_CRITICAL_CONFIRM, d.critical_confirm_s, 1, 60, environ),
             recover_s=_number(FLAG_RECOVER, d.recover_s, 1, 300, environ),
@@ -167,12 +173,25 @@ class Controller:
             "available_mb": available_mb is not None,
             "compressor_mb": compressor_mb is not None,
         }
-        missing = [k for k, ok in self._probes.items() if not ok]
+        absolute = self.policy.absolute_swap_only
+        missing = [k for k, ok in self._probes.items() if not ok and (not absolute or k == "swap_used_mb")]
         if missing:
             return self._stop(f"memory controller probe unavailable: {', '.join(missing)}")
-        if not isinstance(swap_used_mb, (int, float)) or swap_used_mb < 0:
+        if not isinstance(swap_used_mb, (int, float)) or not math.isfinite(swap_used_mb) or swap_used_mb < 0:
             return self._stop(f"invalid swap measurement: {swap_used_mb!r}")
         with self._lock:
+            if absolute:
+                if self.baseline is None:
+                    self.baseline = {"t": now, "swap_used_mb": float(swap_used_mb)}
+                increase = float(swap_used_mb) - self.baseline["swap_used_mb"]
+                self.peak["swap_increase_mib"] = max(self.peak["swap_increase_mib"], increase)
+                self.last = {"mono_t": round(now, 2), "swap_increase_mib": round(increase, 1),
+                             "swap_used_mb": float(swap_used_mb), "pressure": pressure,
+                             "available_mb": available_mb}
+                if swap_used_mb >= self.policy.swap_ceiling_mib:
+                    return self._stop(f"total swap used reached {swap_used_mb:.0f} MiB "
+                                      f"(limit {self.policy.swap_ceiling_mib:.0f} MiB)")
+                return None
             if self.baseline is None:
                 self.baseline = {"t": now, "swap_used_mb": float(swap_used_mb), "compressor_mb": float(compressor_mb)}
             dt = 0.0 if self._last_t is None else max(0.0, now - self._last_t)
@@ -352,15 +371,18 @@ class Controller:
             base = self.baseline or {}
             cur_swap = self.last.get("swap_increase_mib", 0.0)
             peak_swap = self.peak.get("swap_increase_mib", 0.0)
+            limit = (self.policy.swap_ceiling_mib if self.policy.absolute_swap_only else
+                     self.policy.swap_growth_stop_gib * 1024)
             return {
                 "policy_identifier": (
+                    memory_policy.POLICY_ABSOLUTE_SWAP_ONLY if self.policy.absolute_swap_only else
                     memory_policy.POLICY_SWAP_GROWTH_ONLY if self.policy.swap_only else "threshold-governed"
                 ),
                 "swap_baseline_mb": base.get("swap_used_mb"),
                 "current_swap_growth_mb": round(cur_swap, 1),
                 "peak_swap_growth_mb": round(peak_swap, 1),
-                "threshold_gib": self.policy.swap_growth_stop_gib,
-                "threshold_mb": self.policy.swap_growth_stop_gib * 1024,
+                "threshold_gib": limit / 1024,
+                "threshold_mb": limit,
                 "stop_reason": self.stop_reason,
                 "stopped_at": self.stopped_at,
                 "can_admit": self.can_admit(),

@@ -1,0 +1,4 @@
+[supervisor 2026-11-11T20:20:08+0530] supervisor_started overnight=False port=50848 pool_gb=1 power={'source': 'ac', 'percent': 80}
+[supervisor 2026-11-11T20:20:08+0530] server_started pid=59687 start=1 logfile=/Users/vincent/Documents/Veystrix/results/nemotron-short-20261111/after-repeat/supervisor/server-launch-20261111-202008-1.log command=/Users/vincent/Documents/Veystrix/chat.sh --server --host 127.0.0.1 --port 50848 --pool-gb 1 --model nemotron35-lightning --checkpoint /Users/vincent/models/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit-mlx-community power={'source': 'ac', 'percent': 80} swap_mb=1820
+[supervisor 2026-11-11T20:20:18+0530] server_ready pid=59687
+[supervisor 2026-11-11T20:20:49+0530] server_exited exit=0 action=stop reason=stopped by the owner cooldown=0.0

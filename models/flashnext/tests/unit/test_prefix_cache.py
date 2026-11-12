@@ -26,6 +26,16 @@ from models.flashnext import prefix_cache as P
 VOCAB = 512
 
 
+class TokenEncodingTests(unittest.TestCase):
+    def test_preserves_signed_little_endian_token_bytes(self):
+        tokens = (0, 256, -1, -(2 ** 31), 2 ** 31 - 1)
+        expected = bytes.fromhex("00000000 00010000 ffffffff 00000080 ffffff7f")
+        self.assertEqual(P._token_bytes(tokens), expected)
+        self.assertEqual(P._token_bytes(iter(tokens)), expected)
+        with self.assertRaises(OverflowError):
+            P._token_bytes([2 ** 31])
+
+
 def build_model():
     from mlx_vlm.models.qwen4_exp.config import TextConfig
     from mlx_vlm.models.qwen4_exp.language import LanguageModel

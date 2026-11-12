@@ -1,0 +1,1173 @@
+{
+  "scope": "one-layer synthetic Apple M4 Metal probe; no checkpoint loaded",
+  "memory_bytes": 17179869184,
+  "metal_recommended_working_set_bytes": 12713115648,
+  "runs": {
+    "affine4": [
+      {
+        "mode": "affine4",
+        "group": 64,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 1048576,
+          "attention_v_bytes": 1048576,
+          "quantization_metadata_bytes": 262144,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 3457024,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 25165824,
+          "quantization_metadata_bytes": 3145728,
+          "attention_total_bytes": 28311552,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 156942336
+        },
+        "one_layer_append_tokens_s": 333605.9632689913,
+        "append_peak_active_bytes": 21693592,
+        "eight_query_seconds_mean": 0.003404100006446242,
+        "attention_start_active_bytes": 11388004,
+        "attention_peak_active_bytes": 53860208,
+        "mlx_cached_bytes": 48124780,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "affine4",
+        "group": 64,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 2097152,
+          "attention_v_bytes": 2097152,
+          "quantization_metadata_bytes": 524288,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 6914048,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 50331648,
+          "quantization_metadata_bytes": 6291456,
+          "attention_total_bytes": 56623104,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 198426624
+        },
+        "one_layer_append_tokens_s": 864864.8697058375,
+        "append_peak_active_bytes": 28697752,
+        "eight_query_seconds_mean": 0.002496483200229704,
+        "attention_start_active_bytes": 17777764,
+        "attention_peak_active_bytes": 57886576,
+        "mlx_cached_bytes": 46826344,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "affine4",
+        "group": 64,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 4194304,
+          "attention_v_bytes": 4194304,
+          "quantization_metadata_bytes": 1048576,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 13828096,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 100663296,
+          "quantization_metadata_bytes": 12582912,
+          "attention_total_bytes": 113246208,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 281395200
+        },
+        "one_layer_append_tokens_s": 849432.7473027675,
+        "append_peak_active_bytes": 42542232,
+        "eight_query_seconds_mean": 0.002581549994647503,
+        "attention_start_active_bytes": 30458980,
+        "attention_peak_active_bytes": 66414544,
+        "mlx_cached_bytes": 57336776,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "affine4",
+        "group": 64,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 2097152,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 27656192,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 201326592,
+          "quantization_metadata_bytes": 25165824,
+          "attention_total_bytes": 226492416,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 447332352
+        },
+        "one_layer_append_tokens_s": 795867.7809376064,
+        "append_peak_active_bytes": 70132888,
+        "eight_query_seconds_mean": 0.0027694917982444165,
+        "attention_start_active_bytes": 55772260,
+        "attention_peak_active_bytes": 82864144,
+        "mlx_cached_bytes": 69444632,
+        "swap_growth_bytes": 0
+      }
+    ],
+    "affine8": [
+      {
+        "mode": "affine8",
+        "group": 64,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 2097152,
+          "attention_v_bytes": 2097152,
+          "quantization_metadata_bytes": 262144,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 5554176,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 50331648,
+          "quantization_metadata_bytes": 3145728,
+          "attention_total_bytes": 53477376,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 182108160
+        },
+        "one_layer_append_tokens_s": 344410.3265860269,
+        "append_peak_active_bytes": 26936472,
+        "eight_query_seconds_mean": 0.0051263916073367,
+        "attention_start_active_bytes": 13485156,
+        "attention_peak_active_bytes": 116725632,
+        "mlx_cached_bytes": 108893044,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "affine8",
+        "group": 64,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 4194304,
+          "attention_v_bytes": 4194304,
+          "quantization_metadata_bytes": 524288,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 11108352,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 100663296,
+          "quantization_metadata_bytes": 6291456,
+          "attention_total_bytes": 106954752,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 248758272
+        },
+        "one_layer_append_tokens_s": 867850.1282493009,
+        "append_peak_active_bytes": 38102168,
+        "eight_query_seconds_mean": 0.0028818750055506826,
+        "attention_start_active_bytes": 21955684,
+        "attention_peak_active_bytes": 70469488,
+        "mlx_cached_bytes": 59409264,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "affine8",
+        "group": 64,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 1048576,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 22216704,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 201326592,
+          "quantization_metadata_bytes": 12582912,
+          "attention_total_bytes": 213909504,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 382058496
+        },
+        "one_layer_append_tokens_s": 728520.4076335848,
+        "append_peak_active_bytes": 60368024,
+        "eight_query_seconds_mean": 0.003129758406430483,
+        "attention_start_active_bytes": 38880356,
+        "attention_peak_active_bytes": 83224528,
+        "mlx_cached_bytes": 65725384,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "affine8",
+        "group": 64,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 16777216,
+          "attention_v_bytes": 16777216,
+          "quantization_metadata_bytes": 2097152,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 44433408,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 402653184,
+          "quantization_metadata_bytes": 25165824,
+          "attention_total_bytes": 427819008,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 648658944
+        },
+        "one_layer_append_tokens_s": 619715.0323618111,
+        "append_peak_active_bytes": 104735896,
+        "eight_query_seconds_mean": 0.0033796665957197547,
+        "attention_start_active_bytes": 72549476,
+        "attention_peak_active_bytes": 108029968,
+        "mlx_cached_bytes": 77833236,
+        "swap_growth_bytes": 0
+      }
+    ],
+    "bf16": [
+      {
+        "mode": "bf16",
+        "group": 64,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 4194304,
+          "attention_v_bytes": 4194304,
+          "quantization_metadata_bytes": 0,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 9486336,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 100663296,
+          "quantization_metadata_bytes": 0,
+          "attention_total_bytes": 100663296,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 229294080
+        },
+        "one_layer_append_tokens_s": 478011.42298316676,
+        "append_peak_active_bytes": 32572556,
+        "eight_query_seconds_mean": 0.007675341796129942,
+        "attention_start_active_bytes": 17417316,
+        "attention_peak_active_bytes": 84809600,
+        "mlx_cached_bytes": 73044852,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "bf16",
+        "group": 64,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 0,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 18972672,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 201326592,
+          "quantization_metadata_bytes": 0,
+          "attention_total_bytes": 201326592,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 343130112
+        },
+        "one_layer_append_tokens_s": 762951.4008487008,
+        "append_peak_active_bytes": 51569804,
+        "eight_query_seconds_mean": 0.0038773500127717853,
+        "attention_start_active_bytes": 29787236,
+        "attention_peak_active_bytes": 60376944,
+        "mlx_cached_bytes": 41485156,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "bf16",
+        "group": 64,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 16777216,
+          "attention_v_bytes": 16777216,
+          "quantization_metadata_bytes": 0,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 37945344,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 402653184,
+          "quantization_metadata_bytes": 0,
+          "attention_total_bytes": 402653184,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 570802176
+        },
+        "one_layer_append_tokens_s": 625890.9492762589,
+        "append_peak_active_bytes": 89531532,
+        "eight_query_seconds_mean": 0.003885391796939075,
+        "attention_start_active_bytes": 54527076,
+        "attention_peak_active_bytes": 80947152,
+        "mlx_cached_bytes": 47801292,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "bf16",
+        "group": 64,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 33554432,
+          "attention_v_bytes": 33554432,
+          "quantization_metadata_bytes": 0,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 75890688,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 805306368,
+          "quantization_metadata_bytes": 0,
+          "attention_total_bytes": 805306368,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 1026146304
+        },
+        "one_layer_append_tokens_s": 476592.52584174037,
+        "append_peak_active_bytes": 165405836,
+        "eight_query_seconds_mean": 0.0038486249977722764,
+        "attention_start_active_bytes": 104006756,
+        "attention_peak_active_bytes": 121563152,
+        "mlx_cached_bytes": 59909124,
+        "swap_growth_bytes": 0
+      }
+    ],
+    "k16v4": [
+      {
+        "mode": "k16v4",
+        "group": 64,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 4194304,
+          "attention_v_bytes": 1048576,
+          "quantization_metadata_bytes": 131072,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 6471680,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 62914560,
+          "quantization_metadata_bytes": 1572864,
+          "attention_total_bytes": 64487424,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 193118208
+        },
+        "one_layer_append_tokens_s": 368276.33622461674,
+        "append_peak_active_bytes": 21759112,
+        "eight_query_seconds_mean": 0.0045883168000727895,
+        "attention_start_active_bytes": 14402660,
+        "attention_peak_active_bytes": 52107120,
+        "mlx_cached_bytes": 43357028,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "k16v4",
+        "group": 64,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 2097152,
+          "quantization_metadata_bytes": 262144,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 12943360,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 125829120,
+          "quantization_metadata_bytes": 3145728,
+          "attention_total_bytes": 128974848,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 270778368
+        },
+        "one_layer_append_tokens_s": 856440.9682040646,
+        "append_peak_active_bytes": 39036050,
+        "eight_query_seconds_mean": 0.0033127584028989077,
+        "attention_start_active_bytes": 23757924,
+        "attention_peak_active_bytes": 59115376,
+        "mlx_cached_bytes": 46252904,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "k16v4",
+        "group": 64,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 16777216,
+          "attention_v_bytes": 4194304,
+          "quantization_metadata_bytes": 524288,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 25886720,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 251658240,
+          "quantization_metadata_bytes": 6291456,
+          "attention_total_bytes": 257949696,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 426098688
+        },
+        "one_layer_append_tokens_s": 829051.8742863954,
+        "append_peak_active_bytes": 64922770,
+        "eight_query_seconds_mean": 0.003602091618813574,
+        "attention_start_active_bytes": 42484836,
+        "attention_peak_active_bytes": 73672656,
+        "mlx_cached_bytes": 52569036,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "k16v4",
+        "group": 64,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 33554432,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 1048576,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 51773440,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 503316480,
+          "quantization_metadata_bytes": 12582912,
+          "attention_total_bytes": 515899392,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 736739328
+        },
+        "one_layer_append_tokens_s": 716314.8075378978,
+        "append_peak_active_bytes": 116712594,
+        "eight_query_seconds_mean": 0.0034334749914705755,
+        "attention_start_active_bytes": 79905892,
+        "attention_peak_active_bytes": 102230032,
+        "mlx_cached_bytes": 64676868,
+        "swap_growth_bytes": 0
+      }
+    ],
+    "k8v4": [
+      {
+        "mode": "k8v4",
+        "group": 64,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 2097152,
+          "attention_v_bytes": 1048576,
+          "quantization_metadata_bytes": 262144,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 4505600,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 37748736,
+          "quantization_metadata_bytes": 3145728,
+          "attention_total_bytes": 40894464,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 169525248
+        },
+        "one_layer_append_tokens_s": 248658.1063016297,
+        "append_peak_active_bytes": 20907144,
+        "eight_query_seconds_mean": 0.0029937582090497016,
+        "attention_start_active_bytes": 12436548,
+        "attention_peak_active_bytes": 59103088,
+        "mlx_cached_bytes": 52319076,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "k8v4",
+        "group": 64,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 4194304,
+          "attention_v_bytes": 2097152,
+          "quantization_metadata_bytes": 524288,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 9011200,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 75497472,
+          "quantization_metadata_bytes": 6291456,
+          "attention_total_bytes": 81788928,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 223592448
+        },
+        "one_layer_append_tokens_s": 830158.0921692717,
+        "append_peak_active_bytes": 32351384,
+        "eight_query_seconds_mean": 0.002700775000266731,
+        "attention_start_active_bytes": 19858532,
+        "attention_peak_active_bytes": 64178032,
+        "mlx_cached_bytes": 55214952,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "k8v4",
+        "group": 64,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 4194304,
+          "quantization_metadata_bytes": 1048576,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 18022400,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 150994944,
+          "quantization_metadata_bytes": 12582912,
+          "attention_total_bytes": 163577856,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 331726848
+        },
+        "one_layer_append_tokens_s": 792687.9207735006,
+        "append_peak_active_bytes": 50390168,
+        "eight_query_seconds_mean": 0.0026684417854994534,
+        "attention_start_active_bytes": 34686052,
+        "attention_peak_active_bytes": 74835920,
+        "mlx_cached_bytes": 61531084,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "k8v4",
+        "group": 64,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 16777216,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 2097152,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 36044800,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 301989888,
+          "quantization_metadata_bytes": 25165824,
+          "attention_total_bytes": 327155712,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 547995648
+        },
+        "one_layer_append_tokens_s": 760263.7456524605,
+        "append_peak_active_bytes": 86385816,
+        "eight_query_seconds_mean": 0.002696550008840859,
+        "attention_start_active_bytes": 64177252,
+        "attention_peak_active_bytes": 95463440,
+        "mlx_cached_bytes": 73638964,
+        "swap_growth_bytes": 0
+      }
+    ],
+    "tiered4-g32": [
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 3145728,
+          "attention_v_bytes": 3145728,
+          "quantization_metadata_bytes": 1048576,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 8437760,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 75497472,
+          "quantization_metadata_bytes": 12582912,
+          "attention_total_bytes": 88080384,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 216711168
+        },
+        "one_layer_append_tokens_s": 298017.35504849267,
+        "append_peak_active_bytes": 31523992,
+        "eight_query_seconds_mean": 0.004747916804626584,
+        "attention_start_active_bytes": 16368740,
+        "attention_peak_active_bytes": 68425608,
+        "mlx_cached_bytes": 57709448,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 6291456,
+          "attention_v_bytes": 6291456,
+          "quantization_metadata_bytes": 2097152,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 16875520,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 150994944,
+          "quantization_metadata_bytes": 25165824,
+          "attention_total_bytes": 176160768,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 317964288
+        },
+        "one_layer_append_tokens_s": 653547.5362170801,
+        "append_peak_active_bytes": 45868184,
+        "eight_query_seconds_mean": 0.002941708383150399,
+        "attention_start_active_bytes": 27690084,
+        "attention_peak_active_bytes": 77399944,
+        "mlx_cached_bytes": 60605344,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 3145728,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 24313856,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 201326592,
+          "quantization_metadata_bytes": 37748736,
+          "attention_total_bytes": 239075328,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 407224320
+        },
+        "one_layer_append_tokens_s": 627146.7743543388,
+        "append_peak_active_bytes": 79176872,
+        "eight_query_seconds_mean": 0.0054102831985801455,
+        "attention_start_active_bytes": 40961124,
+        "attention_peak_active_bytes": 130869240,
+        "mlx_cached_bytes": 102917104,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 12582912,
+          "attention_v_bytes": 12582912,
+          "quantization_metadata_bytes": 5242880,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 39190528,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 301989888,
+          "quantization_metadata_bytes": 62914560,
+          "attention_total_bytes": 364904448,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 585744384
+        },
+        "one_layer_append_tokens_s": 567255.7238765573,
+        "append_peak_active_bytes": 108848296,
+        "eight_query_seconds_mean": 0.005711991805583239,
+        "attention_start_active_bytes": 67355748,
+        "attention_peak_active_bytes": 148416568,
+        "mlx_cached_bytes": 123413552,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 65536,
+        "one_layer": {
+          "attention_k_bytes": 20971520,
+          "attention_v_bytes": 20971520,
+          "quantization_metadata_bytes": 9437184,
+          "qsa_indexer_bytes": 17563648,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 68943872,
+          "min_attention_offset": 65536,
+          "max_attention_offset": 65536,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 503316480,
+          "quantization_metadata_bytes": 113246208,
+          "attention_total_bytes": 616562688,
+          "qsa_indexer_bytes_upper": 210763776,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 942784512
+        },
+        "one_layer_append_tokens_s": 496853.0996522427,
+        "append_peak_active_bytes": 168322216,
+        "eight_query_seconds_mean": 0.007137408410198986,
+        "attention_start_active_bytes": 120161380,
+        "attention_peak_active_bytes": 183494840,
+        "mlx_cached_bytes": 114074796,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 131072,
+        "one_layer": {
+          "attention_k_bytes": 37748736,
+          "attention_v_bytes": 37748736,
+          "quantization_metadata_bytes": 17825792,
+          "qsa_indexer_bytes": 35127296,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 128450560,
+          "min_attention_offset": 131072,
+          "max_attention_offset": 131072,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 905969664,
+          "quantization_metadata_bytes": 213909504,
+          "attention_total_bytes": 1119879168,
+          "qsa_indexer_bytes_upper": 421527552,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 1656864768
+        },
+        "one_layer_append_tokens_s": 386070.32173615915,
+        "append_peak_active_bytes": 287335592,
+        "eight_query_seconds_mean": 0.006516641587950289,
+        "attention_start_active_bytes": 225772644,
+        "attention_peak_active_bytes": 253651384,
+        "mlx_cached_bytes": 128951724,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 196608,
+        "one_layer": {
+          "attention_k_bytes": 54525952,
+          "attention_v_bytes": 54525952,
+          "quantization_metadata_bytes": 26214400,
+          "qsa_indexer_bytes": 52690944,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 187957248,
+          "min_attention_offset": 196608,
+          "max_attention_offset": 196608,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 1308622848,
+          "quantization_metadata_bytes": 314572800,
+          "attention_total_bytes": 1623195648,
+          "qsa_indexer_bytes_upper": 632291328,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 2370945024
+        },
+        "one_layer_append_tokens_s": 322935.5376994958,
+        "append_peak_active_bytes": 406299816,
+        "eight_query_seconds_mean": 0.0063934831880033014,
+        "attention_start_active_bytes": 331416612,
+        "attention_peak_active_bytes": 323889848,
+        "mlx_cached_bytes": 118515368,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 32,
+        "tokens": 262144,
+        "one_layer": {
+          "attention_k_bytes": 71303168,
+          "attention_v_bytes": 71303168,
+          "quantization_metadata_bytes": 34603008,
+          "qsa_indexer_bytes": 70254592,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 247463936,
+          "min_attention_offset": 262144,
+          "max_attention_offset": 262144,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 1711276032,
+          "quantization_metadata_bytes": 415236096,
+          "attention_total_bytes": 2126512128,
+          "qsa_indexer_bytes_upper": 843055104,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 3085025280
+        },
+        "one_layer_append_tokens_s": 264416.0392362378,
+        "append_peak_active_bytes": 525313192,
+        "eight_query_seconds_mean": 0.007658208184875548,
+        "attention_start_active_bytes": 437060644,
+        "attention_peak_active_bytes": 394030008,
+        "mlx_cached_bytes": 134217728,
+        "swap_growth_bytes": 0
+      }
+    ],
+    "tiered4": [
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 4096,
+        "one_layer": {
+          "attention_k_bytes": 3145728,
+          "attention_v_bytes": 3145728,
+          "quantization_metadata_bytes": 524288,
+          "qsa_indexer_bytes": 1097728,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 7913472,
+          "min_attention_offset": 4096,
+          "max_attention_offset": 4096,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 75497472,
+          "quantization_metadata_bytes": 6291456,
+          "attention_total_bytes": 81788928,
+          "qsa_indexer_bytes_upper": 13172736,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 210419712
+        },
+        "one_layer_append_tokens_s": 330875.16881500656,
+        "append_peak_active_bytes": 30475416,
+        "eight_query_seconds_mean": 0.0059799249982461335,
+        "attention_start_active_bytes": 15844452,
+        "attention_peak_active_bytes": 66852744,
+        "mlx_cached_bytes": 56660860,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 8192,
+        "one_layer": {
+          "attention_k_bytes": 6291456,
+          "attention_v_bytes": 6291456,
+          "quantization_metadata_bytes": 1048576,
+          "qsa_indexer_bytes": 2195456,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 15826944,
+          "min_attention_offset": 8192,
+          "max_attention_offset": 8192,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 150994944,
+          "quantization_metadata_bytes": 12582912,
+          "attention_total_bytes": 163577856,
+          "qsa_indexer_bytes_upper": 26345472,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 305381376
+        },
+        "one_layer_append_tokens_s": 724442.8601187572,
+        "append_peak_active_bytes": 44065944,
+        "eight_query_seconds_mean": 0.0031954831909388305,
+        "attention_start_active_bytes": 26739812,
+        "attention_peak_active_bytes": 75401096,
+        "mlx_cached_bytes": 59556764,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 16384,
+        "one_layer": {
+          "attention_k_bytes": 8388608,
+          "attention_v_bytes": 8388608,
+          "quantization_metadata_bytes": 1572864,
+          "qsa_indexer_bytes": 4390912,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 22740992,
+          "min_attention_offset": 16384,
+          "max_attention_offset": 16384,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 201326592,
+          "quantization_metadata_bytes": 18874368,
+          "attention_total_bytes": 220200960,
+          "qsa_indexer_bytes_upper": 52690944,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 388349952
+        },
+        "one_layer_append_tokens_s": 565295.2594383941,
+        "append_peak_active_bytes": 74966184,
+        "eight_query_seconds_mean": 0.005838741594925523,
+        "attention_start_active_bytes": 39421028,
+        "attention_peak_active_bytes": 127231992,
+        "mlx_cached_bytes": 100819948,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 32768,
+        "one_layer": {
+          "attention_k_bytes": 12582912,
+          "attention_v_bytes": 12582912,
+          "quantization_metadata_bytes": 2621440,
+          "qsa_indexer_bytes": 8781824,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 36569088,
+          "min_attention_offset": 32768,
+          "max_attention_offset": 32768,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 301989888,
+          "quantization_metadata_bytes": 31457280,
+          "attention_total_bytes": 333447168,
+          "qsa_indexer_bytes_upper": 105381888,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 554287104
+        },
+        "one_layer_append_tokens_s": 458108.96456252015,
+        "append_peak_active_bytes": 102556840,
+        "eight_query_seconds_mean": 0.012516533397138119,
+        "attention_start_active_bytes": 64717924,
+        "attention_peak_active_bytes": 143681592,
+        "mlx_cached_bytes": 121316396,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 65536,
+        "one_layer": {
+          "attention_k_bytes": 20971520,
+          "attention_v_bytes": 20971520,
+          "quantization_metadata_bytes": 4718592,
+          "qsa_indexer_bytes": 17563648,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 64225280,
+          "min_attention_offset": 65536,
+          "max_attention_offset": 65536,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 503316480,
+          "quantization_metadata_bytes": 56623104,
+          "attention_total_bytes": 559939584,
+          "qsa_indexer_bytes_upper": 210763776,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 886161408
+        },
+        "one_layer_append_tokens_s": 411404.39399522793,
+        "append_peak_active_bytes": 157901992,
+        "eight_query_seconds_mean": 0.00907379158306867,
+        "attention_start_active_bytes": 115459172,
+        "attention_peak_active_bytes": 176695480,
+        "mlx_cached_bytes": 111977644,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 131072,
+        "one_layer": {
+          "attention_k_bytes": 37748736,
+          "attention_v_bytes": 37748736,
+          "quantization_metadata_bytes": 8912896,
+          "qsa_indexer_bytes": 35127296,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 119537664,
+          "min_attention_offset": 131072,
+          "max_attention_offset": 131072,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 905969664,
+          "quantization_metadata_bytes": 106954752,
+          "attention_total_bytes": 1012924416,
+          "qsa_indexer_bytes_upper": 421527552,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 1549910016
+        },
+        "one_layer_append_tokens_s": 388864.60677427263,
+        "append_peak_active_bytes": 268526760,
+        "eight_query_seconds_mean": 0.007165633398108185,
+        "attention_start_active_bytes": 216925284,
+        "attention_peak_active_bytes": 242706872,
+        "mlx_cached_bytes": 126854572,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 196608,
+        "one_layer": {
+          "attention_k_bytes": 54525952,
+          "attention_v_bytes": 54525952,
+          "quantization_metadata_bytes": 13107200,
+          "qsa_indexer_bytes": 52690944,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 174850048,
+          "min_attention_offset": 196608,
+          "max_attention_offset": 196608,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 1308622848,
+          "quantization_metadata_bytes": 157286400,
+          "attention_total_bytes": 1465909248,
+          "qsa_indexer_bytes_upper": 632291328,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 2213658624
+        },
+        "one_layer_append_tokens_s": 331090.50862646406,
+        "append_peak_active_bytes": 379085992,
+        "eight_query_seconds_mean": 0.0064931915840134025,
+        "attention_start_active_bytes": 318325796,
+        "attention_peak_active_bytes": 308685496,
+        "mlx_cached_bytes": 116401832,
+        "swap_growth_bytes": 0
+      },
+      {
+        "mode": "tiered4",
+        "group": 64,
+        "tokens": 262144,
+        "one_layer": {
+          "attention_k_bytes": 71303168,
+          "attention_v_bytes": 71303168,
+          "quantization_metadata_bytes": 17301504,
+          "qsa_indexer_bytes": 70254592,
+          "qsa_pooled_bytes": 0,
+          "gdn_state_bytes": 0,
+          "logical_cache_bytes": 230162432,
+          "min_attention_offset": 262144,
+          "max_attention_offset": 262144,
+          "last_qsa_workspace_shape": null
+        },
+        "projected_model": {
+          "attention_data_bytes": 1711276032,
+          "quantization_metadata_bytes": 207618048,
+          "attention_total_bytes": 1918894080,
+          "qsa_indexer_bytes_upper": 843055104,
+          "gdn_state_bytes_estimate": 115458048,
+          "live_state_bytes_estimate": 2877407232
+        },
+        "one_layer_append_tokens_s": 264548.9264751996,
+        "append_peak_active_bytes": 489661608,
+        "eight_query_seconds_mean": 0.007635316601954401,
+        "attention_start_active_bytes": 419759140,
+        "attention_peak_active_bytes": 374631352,
+        "mlx_cached_bytes": 134217728,
+        "swap_growth_bytes": 0
+      }
+    ]
+  }
+}

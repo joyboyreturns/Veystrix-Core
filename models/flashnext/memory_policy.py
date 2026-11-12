@@ -23,6 +23,9 @@ from typing import Any
 
 POLICY_SWAP_GROWTH_ONLY = "swap-growth-only"
 POLICY_STRICT_STAGED = "strict-staged"
+POLICY_ABSOLUTE_SWAP_ONLY = "absolute-swap-only"
+ABSOLUTE_SWAP_CEILING_MIB = 3072
+FLAG_SWAP_CEILING_MIB = "FLASHNEXT_SWAP_CEILING_MIB"
 FLAG_POLICY = "FLASHNEXT_MEMORY_POLICY"
 DEFAULT_SWAP_GROWTH_THRESHOLD_GIB = 2.5
 
@@ -48,7 +51,7 @@ def is_swap_growth_policy(environ: dict[str, str] | None = None) -> bool:
     configured = env.get(FLAG_POLICY, "").strip().lower()
     if configured == POLICY_SWAP_GROWTH_ONLY:
         return True
-    if configured == POLICY_STRICT_STAGED:
+    if configured in (POLICY_STRICT_STAGED, POLICY_ABSOLUTE_SWAP_ONLY):
         return False
     # Backward compatibility with historical waiver flag
     if env.get("FLASHNEXT_MEMORY_WAIVER", "").strip().lower() == "swap-only":
@@ -58,25 +61,48 @@ def is_swap_growth_policy(environ: dict[str, str] | None = None) -> bool:
     return mode == "agentic"
 
 
+def is_absolute_swap_policy(environ: dict[str, str] | None = None) -> bool:
+    env = os.environ if environ is None else environ
+    return env.get(FLAG_POLICY, "").strip().lower() == POLICY_ABSOLUTE_SWAP_ONLY
+
+
+def absolute_swap_ceiling_mib(environ: dict[str, str] | None = None) -> float:
+    env = os.environ if environ is None else environ
+    raw = env.get(FLAG_SWAP_CEILING_MIB, "")
+    if not raw:
+        return ABSOLUTE_SWAP_CEILING_MIB
+    try:
+        ceiling = float(raw)
+    except ValueError:
+        raise ValueError(f"{FLAG_SWAP_CEILING_MIB} must be a number") from None
+    if not 1 <= ceiling <= 1048576:
+        raise ValueError(f"{FLAG_SWAP_CEILING_MIB} must be between 1 and 1048576")
+    return ceiling
+
+
 def policy_identifier(environ: dict[str, str] | None = None) -> str:
+    if is_absolute_swap_policy(environ):
+        return POLICY_ABSOLUTE_SWAP_ONLY
     return POLICY_SWAP_GROWTH_ONLY if is_swap_growth_policy(environ) else POLICY_STRICT_STAGED
 
 
 def telemetry_only_checks(environ: dict[str, str] | None = None) -> list[str]:
-    if is_swap_growth_policy(environ):
+    if is_swap_growth_policy(environ) or is_absolute_swap_policy(environ):
         return list(TELEMETRY_ONLY_CHECKS)
     return []
 
 
 def policy_summary(environ: dict[str, str] | None = None) -> dict[str, Any]:
-    active = is_swap_growth_policy(environ)
+    absolute = is_absolute_swap_policy(environ)
+    active = is_swap_growth_policy(environ) or absolute
+    limit = absolute_swap_ceiling_mib(environ) if absolute else DEFAULT_SWAP_GROWTH_THRESHOLD_GIB * 1024
     return {
-        "policy_identifier": POLICY_SWAP_GROWTH_ONLY if active else POLICY_STRICT_STAGED,
+        "policy_identifier": policy_identifier(environ),
         "swap_baseline_mb": None,
         "current_swap_growth_mb": 0.0,
         "peak_swap_growth_mb": 0.0,
-        "threshold_gib": DEFAULT_SWAP_GROWTH_THRESHOLD_GIB,
-        "threshold_mb": DEFAULT_SWAP_GROWTH_THRESHOLD_GIB * 1024,
+        "threshold_gib": limit / 1024,
+        "threshold_mb": limit,
         "stop_reason": None,
         "can_admit": True,
         "probe_availability": {},
@@ -87,6 +113,9 @@ def policy_summary(environ: dict[str, str] | None = None) -> dict[str, Any]:
 
 def banner(environ: dict[str, str] | None = None) -> str:
     """Human-readable startup banner describing the memory policy."""
+    if is_absolute_swap_policy(environ):
+        limit_gib = absolute_swap_ceiling_mib(environ) / 1024
+        return f"MEMORY POLICY: {POLICY_ABSOLUTE_SWAP_ONLY} (stop at {limit_gib:g} GiB total system swap)"
     if is_swap_growth_policy(environ):
         return (
             f"MEMORY POLICY: {POLICY_SWAP_GROWTH_ONLY} (approved AGENTIC policy)\n"

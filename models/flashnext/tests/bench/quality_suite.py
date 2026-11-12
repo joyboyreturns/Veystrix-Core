@@ -430,6 +430,7 @@ def run_case(backend, case: Case, systems: dict, *, prefix_report=lambda backend
         else:
             backend.append_user(turn.user, enable_thinking=False)
         pending = len(backend.pending)
+        prompt_digest = digest([*getattr(backend, "tape", ()), *backend.pending])
         began = now()
         text, stats = backend.generate(turn.max_tokens)
         wall = now() - began
@@ -442,7 +443,8 @@ def run_case(backend, case: Case, systems: dict, *, prefix_report=lambda backend
             calls = [{"error": str(error)}]
         schema_issues = tool_schema_issues(text)
         turns.append({
-            "turn": index, "prompt_tokens_added": pending, "text": text, "ids": ids, "digest": digest(ids),
+            "turn": index, "prompt_tokens_added": pending, "prompt_digest": prompt_digest,
+            "text": text, "ids": ids, "digest": digest(ids),
             "generated": len(ids), "finish": getattr(stats, "finish", None), "passed": bool(passed), "detail": detail, "tool_calls": calls, "schema_issues": schema_issues,
             "prefill_s": getattr(stats, "prefill_seconds", None), "wall_s": wall, "prefix": prefix_report(backend) if index == 0 else None,
             "pool_release": getattr(backend, "last_pool_release", None) if index == 0 else None,

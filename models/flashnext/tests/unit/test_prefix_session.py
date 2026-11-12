@@ -108,7 +108,7 @@ class WorkflowTests(Base):
                 mock.patch.object(layer_major, "window_tokens", return_value=128):
             model, session = self.engine()
             _, _, report = self.go(model, session, self.system + self.suffix_a)
-        self.assertEqual(report.execution_order, "layer-major-v1/w128")
+        self.assertEqual(report.execution_order, "layer-major-v1/w128/min0")
         self.assertTrue(report.execution_windows)
         self.assertTrue(all(segment["execution"] == "layer" for segment in report.execution_segments))
         self.assertEqual(report.execution_windows[0][0], 0)
@@ -489,7 +489,7 @@ class BalancedPolicyTests(Base):
             with mock.patch.object(prefill, "_prefill_target", cancel):
                 with self.assertRaises(GenerationCancelled):
                     session.prefill(model, prompt, model.make_cache())
-            files = sorted(p.name for p in (self.tmp / "x").iterdir())
+            files = sorted(p.name for p in session.store().directory.iterdir())
             self.assertEqual(len([f for f in files if f.endswith(".safetensors")]), 1, files)
             self.assertFalse([f for f in files if "tmp" in f or f.endswith(".partial")], files)
             token, cache, report = self.go(model, S.PrefixSession(encode, compat), system + [5] * 70)
@@ -515,7 +515,7 @@ class BalancedPolicyTests(Base):
                 with self.assertRaises(GenerationCancelled):
                     session.prefill(model, system + [6] * 90, model.make_cache())
             self.assertEqual(len(calls), 1)
-            self.assertEqual([p.name for p in (self.tmp / "y").iterdir()], [P.OWNER_LOCK])
+            self.assertEqual(list(session.store().directory.glob("*.safetensors")), [])
             token, cache, report = self.go(model, S.PrefixSession(encode, compat), system + [6] * 90)
             self.assertEqual(report.hit_tokens, 0)
         ref_token, ref_cache, _ = self.cold_reference(system + [6] * 90)

@@ -14,7 +14,8 @@
 #   retried: a safety-stopped request must never be retried automatically.
 # * session-title-llm disabled: the title call is a second, unrelated request to the single-slot server. It replaces the live
 #   conversation state and, on a cold start, competes with the first real request (seen in the 2026-11-09 incident).
-# * contextWindow 262144 / maxTokens 16128: DSH computes max_completion_tokens = min(maxTokens, window - prompt - 4096).
+# * contextWindow 266240 / maxTokens 262144: DSH computes max_completion_tokens = min(maxTokens, window - prompt - 4096),
+#   which equals min(262144, 262144 - prompt) = remaining native context instead of imposing an artificial cap.
 #
 # The remote DeepSeek provider routes of the shipped profile are untouched (this file only adds the veystrix route).
 - id: llm-pi-ai
@@ -41,8 +42,8 @@
         models:
           - id: "veystrix-flashnext"
             name: "VEYSTRIX Flash-Next 262K"
-            contextWindow: 262144
-            maxTokens: 16128
+            contextWindow: 266240
+            maxTokens: 262144
             input:
               - text
             reasoningEfforts:

@@ -1,0 +1,4 @@
+{"t": 1794408543.707, "iso": "2026-11-11T20:19:03+0530", "event": "supervisor_started", "overnight": false, "port": 50819, "pool_gb": "1", "power": {"source": "ac", "percent": 80}}
+{"t": 1794408543.719, "iso": "2026-11-11T20:19:03+0530", "event": "server_started", "pid": 58520, "start": 1, "logfile": "/Users/vincent/Documents/Veystrix/results/nemotron-short-20261111/after/supervisor/server-launch-20261111-201903-1.log", "command": "/Users/vincent/Documents/Veystrix/chat.sh --server --host 127.0.0.1 --port 50819 --pool-gb 1 --model nemotron35-lightning --checkpoint /Users/vincent/models/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit-mlx-community", "power": {"source": "ac", "percent": 80}, "swap_mb": 1828}
+{"t": 1794408553.739, "iso": "2026-11-11T20:19:13+0530", "event": "server_ready", "pid": 58520}
+{"t": 1794408584.264, "iso": "2026-11-11T20:19:44+0530", "event": "server_exited", "exit": 0, "action": "stop", "reason": "stopped by the owner", "cooldown": 0.0}

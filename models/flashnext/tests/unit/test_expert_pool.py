@@ -283,16 +283,20 @@ class BufferedFillTests(unittest.TestCase):
             env = {expert_pool.BUFFERED_FILL_FLAG: "1"} if buffered else {expert_pool.BUFFERED_FILL_FLAG: "0"}
             try:
                 with mock.patch.dict(os.environ, env):
-                    slots, misses = pool.assign(4, [3, 0, 4])
-                    for future in pool.fill(PREFIX, misses, workers.submit, chunk=2):
-                        future.result()
+                    slots, misses = pool.assign(4, [4, 0, 1, 3])
+                    with mock.patch.object(os, "preadv", wraps=os.preadv) as read:
+                        for future in pool.fill(PREFIX, misses, workers.submit, chunk=2):
+                            future.result()
+                    self.assertEqual(read.call_count, 2 * len(tensors))
                     data = {}
                     for expert, slot in slots.items():
                         base = expert_pool.HEADER + slot * layout.record_stride
                         for projection in ("gate_proj", "up_proj", "down_proj"):
                             for part, size in ROWS.items():
                                 start = base + layout.offset(projection, part)
-                                data[(expert, projection, part)] = bytes(pool.array[start:start + size])
+                                row = bytes(pool.array[start:start + size])
+                                self.assertEqual(row, np.array(tensors[f"{PREFIX}.{projection}.{part}"][expert]).tobytes())
+                                data[(expert, projection, part)] = row
                     return data, dict(pool._fds), dict(pool._fill_fds)
             finally:
                 workers.shutdown()

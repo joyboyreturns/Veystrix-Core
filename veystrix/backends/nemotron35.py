@@ -112,6 +112,7 @@ class LastPrefix:
     prefilled_tokens: int = 0
     prefill_seconds: float = 0.0
     snapshot_seconds: float = 0.0
+    restore_seconds: float = 0.0
     outcome: str = "cold"
     layer_major: bool = False
 
@@ -119,7 +120,7 @@ class LastPrefix:
         return {"prompt_tokens": self.prompt_tokens, "hit_tokens": self.hit_tokens,
                 "reused_tokens": self.hit_tokens, "prefilled_tokens": self.prefilled_tokens,
                 "prefill_seconds": round(self.prefill_seconds, 3), "snapshot_seconds": round(self.snapshot_seconds, 3),
-                "outcome": self.outcome, "layer_major": self.layer_major}
+                "restore_seconds": round(self.restore_seconds, 3), "outcome": self.outcome, "layer_major": self.layer_major}
 
 
 @dataclass
@@ -168,6 +169,7 @@ class NemotronBackend(Conversation):
                  prefix_dir=None, prefix_cache: bool | None = None, prefix_quota_gb: float | None = None,
                  snapshot_tokens: int | None = None, layer_major_tokens: int | None = None):
         from models.nemotron35 import admission
+        from models.nemotron35.attention import FORMAT
         from models.nemotron35.backend_core import EngineCore
         from models.nemotron35.config import validate_config
         from models.nemotron35.inventory import estimate_bytes
@@ -186,10 +188,17 @@ class NemotronBackend(Conversation):
         machine = machine or admission.read_machine()
         chunk = chunk_tokens or int(os.environ.get("FLASHNEXT_PREFILL_CHUNK_TOKENS") or 2048)
         pool = admission.pool_bytes_from_env() if pool_bytes is None else pool_bytes   # None: sized from the plan
+        kv = os.environ.get("VEYSTRIX_NEMOTRON_KV", "int8" if config_check is None else "bf16")
+        if kv not in ("int8", "bf16"):
+            raise ValueError("VEYSTRIX_NEMOTRON_KV must be int8 or bf16")
+        self.kv_format = FORMAT if kv == "int8" else "bf16"
+        requested_context = os.environ.get("VEYSTRIX_NEMOTRON_CONTEXT")
+        if context_tokens is None and requested_context:
+            context_tokens = int(requested_context)
         # Plan from the exact dense-core size implied by the verified inventory, BEFORE reading any weight.
         plan = admission.make_plan(config, machine, dense_bytes=estimate_bytes(config)["dense_bytes"],
-                                   context_tokens=context_tokens or admission.DEFAULT_CONTEXT,
-                                   chunk_tokens=chunk, pool_bytes=pool)
+                                   context_tokens=context_tokens, chunk_tokens=chunk, pool_bytes=pool,
+                                   int8_kv=kv == "int8", lightning=config_check is None)
         self.plan = plan
         if tokenizer is None:
             from veystrix.backends.flashnext import _load_transformers_tokenizer
@@ -198,10 +207,15 @@ class NemotronBackend(Conversation):
         self.streamed = load_streamed(root, pool_bytes=plan.pool_bytes, config_check=check, verify=verify)
         if layer_major_tokens is None:
             layer_major_tokens = int(os.environ.get("VEYSTRIX_NEMOTRON_LAYER_MAJOR_TOKENS") or LAYER_MAJOR_DEFAULT)
-        self.core = EngineCore(self.streamed, chunk_tokens=plan.chunk_tokens, layer_major_tokens=layer_major_tokens)
+        self.core = EngineCore(self.streamed, chunk_tokens=plan.chunk_tokens, layer_major_tokens=layer_major_tokens, int8_kv=kv == "int8")
         self.model_path = str(root)
         self.config = config
-        self.context_limit = plan.context_tokens
+        self._strict_prefix_plan = config_check is None
+        self._system_header = self.encode(f"{IM_START}system\n")
+        self._message_end = self.encode(IM_END)
+        self.context_limit = self.configured_context = plan.context_tokens
+        self.max_cold_prefill = min(self.context_limit, admission.PREFILL_LIMIT)
+        self.max_incremental_prefill = self.max_cold_prefill
         self.session_dir = session_dir
         self.thinking_enabled = False
         self.sampling = Sampling.greedy_settings()
@@ -223,9 +237,12 @@ class NemotronBackend(Conversation):
             prefix_cache = os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_CACHE", "1") != "0"
         if prefix_cache:
             from models.nemotron35.prefix_cache import PrefixCache
-            quota = prefix_quota_gb if prefix_quota_gb is not None else float(os.environ.get("VEYSTRIX_CACHE_GB") or 20)
-            directory = prefix_dir or os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_DIR") or "~/.cache/veystrix/nemotron35/prefix"
-            self.prefix_cache = PrefixCache(directory, self._session_identity(), quota_bytes=int(quota * 2**30))
+            from veystrix.universal_cache import CacheManager, GB
+            quota = int(prefix_quota_gb * GB) if prefix_quota_gb is not None else None
+            manager = CacheManager(prefix_dir, quota_bytes=quota)
+            self.prefix_cache = PrefixCache(None, self._session_identity(), quota_bytes=manager.default_quota,
+                                           manager=manager, compatible_positions=(self._prefix_positions
+                                                                                   if self._strict_prefix_plan else None))
             self._prefix_session = lambda: self.prefix_cache      # what the shared server asks for (health, adoption)
 
     # -- framing: exactly the model's chat template (see chat_template.jinja) ----------------------------------
@@ -313,15 +330,27 @@ class NemotronBackend(Conversation):
                 self._current_machine, plan=self.plan, resident_pool_bytes=self.streamed.pool.resident_bytes,
                 reclaim=self.reclaim_owned_memory, purge=self._purge)
         with P.ACTIVITY.request():         # a purge never overlaps a request
-            return self._generate(max_tokens, out, on_prefilled, on_prefill_progress, on_decode_token, should_cancel)
+            try:
+                return self._generate(max_tokens, out, on_prefilled, on_prefill_progress, on_decode_token, should_cancel)
+            finally:
+                if self.prefix_cache is not None:
+                    self.prefix_cache.release_recovery()
 
     def health_snapshot(self) -> dict:
         """What /health reports about this engine: pool, prefetch, prefix cache, last prefill, memory readiness."""
+        import mlx.core as mx
+        import resource
+
         pool = self.streamed.pool.stats()
         asked = pool["hits"] + pool["misses"]
         used, issued = pool["prefetch_used"], pool["prefetch_issued"]
         snapshot = {
             "model": "nemotron35-lightning", "runtime": RUNTIME_VERSION,
+            "configured_context": self.configured_context, "admitted_context": self.context_limit,
+            "kv_format": self.kv_format, "million_token_validation": False,
+            "planned_memory": self.plan.summary(),
+            "metal_active_bytes": mx.get_active_memory(), "metal_peak_bytes": mx.get_peak_memory(),
+            "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "pool": {"budget_gib": round(pool["budget_bytes"] / 2**30, 2), "resident_gib": round(pool["resident_bytes"] / 2**30, 2),
                      "hit_rate": round(pool["hits"] / asked, 3) if asked else None,
                      "staged_mib": round(pool["staged_bytes"] / 2**20, 1)},
@@ -341,6 +370,21 @@ class NemotronBackend(Conversation):
                                         "evicted": st.evicted_ssd}
         return snapshot
 
+    def _system_boundary(self, ids):
+        header, end = self._system_header, self._message_end
+        if len(end) != 1 or not header or list(ids[:len(header)]) != list(header):
+            return None
+        for index in range(len(header), len(ids) - 1):
+            if ids[index] == end[0]:
+                boundary = index + 1
+                return boundary if boundary >= self.prefix_cache.min_tokens else None
+        return None
+
+    def _prefix_positions(self, ids):
+        anchor = self._system_boundary(ids)
+        chunk = self.core.chunk_tokens
+        return lambda n: (n - anchor if anchor and n >= anchor else n) % chunk == 0
+
     def _generate(self, max_tokens: int, out=None, on_prefilled=None, on_prefill_progress=None,
                   on_decode_token=None, should_cancel=None):
         import mlx.core as mx
@@ -356,26 +400,43 @@ class NemotronBackend(Conversation):
         cached = 0 if fresh else self.cache_tokens
         admission.check_request(self.plan, self._current_machine(), new_tokens=len(feed), cached_tokens=cached)
         restored = 0
+        restore_started = time.perf_counter()
         if fresh:
             self.core.reset()
             if self.prefix_cache is not None and len(feed) > self.prefix_cache.min_tokens:
                 cache, restored = self.prefix_cache.restore(feed)
                 if restored:
-                    self.core.cache = cache
+                    self.core.bind_cache(cache)
+        prefill_limit = self.max_incremental_prefill if restored or cached else self.max_cold_prefill
+        if len(feed) - restored > prefill_limit:
+            raise admission.AdmissionRefused(
+                f"request needs {len(feed) - restored} uncached prefill tokens; the limit is {prefill_limit}. "
+                f"Extend a cached or active conversation in smaller increments within the {self.context_limit}-token window.")
+        restore_seconds = time.perf_counter() - restore_started if restored else 0.0
         self.tape = self.tape + pending
         self.pending, self._replay_needed = [], False
+        context_limit = getattr(self, "context_limit", None)
+        if isinstance(context_limit, int) and not isinstance(context_limit, bool) and context_limit > 0:
+            horizon = min(horizon, max(0, context_limit - len(self.tape)))
         total_prompt = len(feed)
         feed = feed[restored:]
         snapshots = []
         start = restored if fresh else cached          # tokens the cache already holds before this prefill
         mark = [start]
+        anchor = self._system_boundary(self.tape) if fresh and self.prefix_cache and self._strict_prefix_plan else None
+        capture = self.prefix_cache is not None and (fresh or not self._strict_prefix_plan)
+        compatible = self._prefix_positions(self.tape) if capture and self._strict_prefix_plan else lambda n: True
 
-        def checkpoint(done):
+        def checkpoint(done, frozen=None):
             # A cancelled or restarted long prompt resumes from here instead of from zero.
             at = start + done
-            if self.prefix_cache is not None and at < len(self.tape) and at - mark[0] >= self.snapshot_tokens:
-                if self.prefix_cache.save(self.core.cache, self.tape[:at]):
-                    snapshots.append(at)
+            if (capture and compatible(at) and at < len(self.tape)
+                    and (at == anchor or at - mark[0] >= max(self.snapshot_tokens, at // 16))):
+                try:
+                    if self.prefix_cache.save(self.core.cache if frozen is None else frozen, self.tape[:at], hold=True):
+                        snapshots.append(at)
+                except (OSError, ValueError):
+                    pass
                 mark[0] = at
         cancel = should_cancel or (lambda: False)
         pool0 = self.streamed.pool.stats()
@@ -392,8 +453,21 @@ class NemotronBackend(Conversation):
 
         if on_prefill_progress:
             on_prefill_progress(restored, total_prompt)
+        split = (anchor or 0) - start
+        anchored_segment = (self.core.layer_major_tokens > 0 and 0 < split <= self.core.chunk_tokens
+                            and 0 < len(feed) - split <= self.core.chunk_tokens)
         try:
-            logits = self.core.prefill(feed, cancelled=cancel, progress=progress, boundary=checkpoint)
+            if anchored_segment:
+                logits = self.core.prefill(feed, cancelled=cancel, progress=progress, boundary=checkpoint,
+                                          anchor=split, save_anchor=checkpoint)
+            elif 0 < split < len(feed):
+                self.core.prefill(feed[:split], cancelled=cancel, emit_logits=False, boundary=checkpoint,
+                                  progress=lambda done, _: progress(done, len(feed)))
+                logits = self.core.prefill(
+                    feed[split:], cancelled=cancel, boundary=lambda done: checkpoint(split + done),
+                    progress=lambda done, _: progress(split + done, len(feed)))
+            else:
+                logits = self.core.prefill(feed, cancelled=cancel, progress=progress, boundary=checkpoint)
         except Cancelled as exc:
             interrupted()
             raise GenerationCancelled() from exc
@@ -403,9 +477,9 @@ class NemotronBackend(Conversation):
         prefill_seconds = began.since(prefill_began)
         outcome = ("extended" if not fresh else "ssd_hit" if restored else "cold")
         snapshot_began = time.perf_counter()
-        if self.prefix_cache is not None and len(feed) >= self.prefix_cache.min_tokens:
+        if capture and compatible(len(self.tape)) and len(feed) >= self.prefix_cache.min_tokens:
             try:   # the prompt boundary: the next request usually shares this whole prefix
-                if self.prefix_cache.save(self.core.cache, self.tape):
+                if self.prefix_cache.save(self.core.cache, self.tape, hold=True):
                     snapshots.append(len(self.tape))
                 self.prefix_cache.prune(self.tape, snapshots)
             except Exception:
@@ -413,8 +487,8 @@ class NemotronBackend(Conversation):
         self.last_prefix = LastPrefix(
             prompt_tokens=(restored if fresh else cached) + len(feed), hit_tokens=(restored if fresh else cached),
             prefilled_tokens=len(feed),
-            prefill_seconds=prefill_seconds, snapshot_seconds=time.perf_counter() - snapshot_began, outcome=outcome,
-            layer_major=bool(self.core.layer_major_tokens and len(feed) > self.core.chunk_tokens))
+            prefill_seconds=prefill_seconds, restore_seconds=restore_seconds, snapshot_seconds=time.perf_counter() - snapshot_began, outcome=outcome,
+            layer_major=anchored_segment or bool(self.core.layer_major_tokens and len(feed) > self.core.chunk_tokens))
         if on_prefilled:
             on_prefilled()
         sampler = Sampler(self.sampling)
@@ -433,9 +507,8 @@ class NemotronBackend(Conversation):
         finish = "length"
         timer = DecodeTimer()
         try:
+            token = sampler(logits) if horizon > 0 else None
             while len(produced) < horizon:
-                token = sampler(logits)
-                mx.eval(token)
                 value = int(token.item())
                 forced = (budgets is not None and phase == "thinking" and think_budget and close_token is not None
                           and counts["thinking"] == think_budget - 1)
@@ -472,7 +545,9 @@ class NemotronBackend(Conversation):
                         with timer.emitting():
                             out(piece)
                 try:
-                    logits = self.core.decode(value)   # one step is ~0.1 s: cancel is checked between tokens so state stays valid
+                    # Commit the last emitted token to the cache too. Only sample
+                    # when another iteration can consume the result.
+                    token = self.core.decode(value, sampler=sampler, emit_logits=len(produced) < horizon)
                 except Cancelled as exc:
                     raise GenerationCancelled() from exc
         except GenerationCancelled:
@@ -530,13 +605,25 @@ class NemotronBackend(Conversation):
                 "config": digest("config.json"), "tokenizer": digest("tokenizer.json"),
                 "template": digest("chat_template.jinja"),
                 "total_size": (index.get("metadata") or {}).get("total_size"),
-                "quantization": self.config.get("quantization"), "state_dtypes": "bf16-kv/fp32-ssm"}
+                "quantization": self.config.get("quantization"), "state_dtypes": f"{self.kv_format}-kv/fp32-ssm",
+                "weight_index": digest("model.safetensors.index.json"),
+                "weights": [(name, info.st_size, info.st_mtime_ns, info.st_ino)
+                            for name in sorted(set(index["weight_map"].values()))
+                            for info in [(root / name).stat()]],
+                "chunk_tokens": self.core.chunk_tokens, "layer_major_tokens": self.core.layer_major_tokens,
+                "prefix_plan": "system-anchor-v1"}
         return self._identity
 
-    def _session_paths(self, name: str):
+    def _legacy_session_identity(self):
+        identity = self._session_identity()
+        legacy = {key: identity[key] for key in ("runtime", "model", "config", "tokenizer",
+                                                  "template", "total_size", "quantization")}
+        return {**legacy, "state_dtypes": "bf16-kv/fp32-ssm"}
+
+    def _session_paths(self, name: str, identity=None):
         if not isinstance(name, str) or not _SESSION_NAME.match(name):
             raise ValueError("session names use letters, digits, '.', '_' and '-' (max 64)")
-        identity = hashlib.sha256(json.dumps(self._session_identity(), sort_keys=True).encode()).hexdigest()[:16]
+        identity = hashlib.sha256(json.dumps(identity or self._session_identity(), sort_keys=True).encode()).hexdigest()[:16]
         base = Path(self.session_dir).expanduser() / identity
         return base / f"{name}.safetensors", base / f"{name}.tokens.json"
 
@@ -553,24 +640,35 @@ class NemotronBackend(Conversation):
     def load_session(self, name: str) -> str:
         from models.nemotron35 import state
         state_path, tokens_path = self._session_paths(name)
+        legacy = not tokens_path.exists()
+        if legacy:
+            _, tokens_path = self._session_paths(name, self._legacy_session_identity())
         try:
+            if tokens_path.stat().st_size > 16 * self.context_limit + 4096:
+                raise state.SnapshotError("token record exceeds admitted context")
             meta = json.loads(tokens_path.read_text())
             tokens = meta["tokens"]
-            if not isinstance(tokens, list) or len(tokens) > self.context_limit:
+            vocab_size = self.config["vocab_size"]
+            if (not isinstance(tokens, list) or not 0 < len(tokens) <= self.context_limit
+                    or any(type(t) is not int or not 0 <= t < vocab_size for t in tokens)):
                 raise state.SnapshotError("invalid token record")
-            cache = state.restore(state_path, self._session_identity(), tokens)
+            cache = None if legacy else state.restore(state_path, self._session_identity(), tokens)
         except (OSError, KeyError, ValueError) as exc:  # SnapshotError is a ValueError
             return f"cannot load {name}: {exc}"
-        self.core.cache = cache
+        if legacy:
+            self.core.reset()
+        else:
+            self.core.bind_cache(cache)
         self.tape, self.pending = list(tokens), []
         self.turn_closed = bool(meta.get("turn_closed", True))
-        self._replay_needed = False
-        return f"loaded {name} ({len(tokens)} tokens)"
+        self._replay_needed = legacy
+        return f"loaded {name} ({len(tokens)} tokens)" + (" · state will replay on the next turn" if legacy else "")
 
     def list_sessions(self) -> str:
         state_path, _ = self._session_paths("x")
-        names = sorted(p.stem for p in state_path.parent.glob("*.safetensors")) if state_path.parent.is_dir() else []
-        return "\n".join(names) if names else "no saved sessions"
+        legacy_path, _ = self._session_paths("x", self._legacy_session_identity())
+        names = {p.stem for directory in (state_path.parent, legacy_path.parent) for p in directory.glob("*.safetensors")}
+        return "\n".join(sorted(names)) if names else "no saved sessions"
 
     def delete_session(self, name: str) -> str:
         state_path, tokens_path = self._session_paths(name)

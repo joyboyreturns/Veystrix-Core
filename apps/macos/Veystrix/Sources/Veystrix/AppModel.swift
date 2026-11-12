@@ -73,11 +73,31 @@ final class AppModel: ObservableObject {
     func revalidateCheckpoint() {
         let path = settings.activeCheckpointPath
         let family = settings.selectedModel
-        guard !path.isEmpty else { checkpoint = nil; return }
+        checkpoint = nil
+        guard !path.isEmpty else { return }
         Task.detached(priority: .utility) {
             let report = CheckpointValidator.validate(directory: URL(fileURLWithPath: path), family: family)
-            await MainActor.run { [weak self] in self?.checkpoint = report }
+            await MainActor.run { [weak self] in
+                guard let self, self.settings.activeCheckpointPath == path, self.settings.selectedModel == family else { return }
+                self.checkpoint = report
+            }
         }
+    }
+
+    /// Select a discovered installation by exact path; explicit confirmation handles any restart.
+    func selectInstalled(_ installed: InstalledModelsReport.Entry) async {
+        guard !engine.isExternallyManaged else { alertMessage = "The engine is managed outside Veystrix. Stop it where it was started."; return }
+        guard engine.state != .running || engine.health?.busy == false else { alertMessage = "Wait until the engine is idle before switching models."; return }
+        guard let family = ModelFamily(rawValue: installed.family) else { alertMessage = "Unsupported model family."; return }
+        let path = installed.checkpoint
+        let report = await Task.detached(priority: .utility) {
+            CheckpointValidator.validate(directory: URL(fileURLWithPath: path), family: family)
+        }.value
+        guard report.isUsable else { alertMessage = "This model no longer passes checkpoint validation."; return }
+        settings.selectedModel = family
+        settings.activeCheckpointPath = path
+        checkpoint = report
+        if engine.state == .running { requestRestart() } else if !engine.state.isActive { requestStart() }
     }
 
     // MARK: engine
@@ -102,6 +122,8 @@ final class AppModel: ObservableObject {
     }
 
     func restartNow() async {
+        guard !engine.isExternallyManaged else { alertMessage = "Stop the externally managed engine where it was started."; return }
+        guard engine.state != .running || engine.health?.busy == false else { alertMessage = "The engine is busy or its activity is unknown. Wait for active work to finish before switching."; return }
         do {
             try await engine.restart(settings: settings, checkpoint: checkpoint, apiKey: effectiveKey,
                                      source: EngineLocator.resolve(settings: settings))

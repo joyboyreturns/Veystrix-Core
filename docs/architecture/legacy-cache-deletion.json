@@ -1,0 +1,22 @@
+[
+  {
+    "directory": "/Users/vincent/.flashnext/prefix-cache",
+    "model": "flashnext",
+    "verified_snapshots": 239,
+    "verified_bytes": 35092811541,
+    "deleted_snapshots": 239,
+    "deleted_bytes": 35092811541,
+    "skipped": [
+      ".veystrix-owner.lock"
+    ]
+  },
+  {
+    "directory": "/Users/vincent/.cache/veystrix/nemotron35/prefix",
+    "model": "nemotron35",
+    "verified_snapshots": 52,
+    "verified_bytes": 10213458072,
+    "deleted_snapshots": 52,
+    "deleted_bytes": 10213458072,
+    "skipped": []
+  }
+]

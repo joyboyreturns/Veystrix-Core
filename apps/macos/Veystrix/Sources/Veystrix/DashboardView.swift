@@ -25,8 +25,8 @@ struct DashboardView: View {
                         Tile(title: "Endpoint", value: "127.0.0.1:\(model.settings.port)", detail: "Loopback only")
                     }
                     GridRow {
-                        Tile(title: "Checkpoint", value: checkpointName, detail: model.checkpoint.map { "\($0.humanSize) · \($0.verdictText)" } ?? "No model folder chosen")
-                        Tile(title: "Model", value: engine.models?.data.first?.id ?? engine.health?.model ?? "—",
+                        Tile(title: "Startup model", value: checkpointName, detail: model.checkpoint.map { "\($0.humanSize) · \($0.verdictText)" } ?? "No model folder chosen")
+                        Tile(title: "Model", value: engine.health?.installedModelID ?? engine.health?.model ?? "—",
                              detail: contextDetail)
                     }
                     GridRow {
@@ -78,8 +78,7 @@ struct DashboardView: View {
     }
     private var contextDetail: String {
         var parts: [String] = []
-        if let w = engine.models?.data.first?.contextWindow { parts.append("context \(w)") }
-        else if let l = engine.health?.contextLimit { parts.append("context \(l)") }
+        if let l = engine.health?.contextLimit { parts.append("context \(l)") }
         if let c = engine.health?.maxColdPrefill { parts.append("max cold prefill \(c)") }
         return parts.isEmpty ? "Shown when the engine is running" : parts.joined(separator: " · ")
     }
@@ -129,7 +128,7 @@ struct DashboardView: View {
                 let budget = cache["ssd_cache_budget_bytes"]
                 if let used, let budget, budget > 0 {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Persistent cache: \(ByteCountFormatter.string(fromByteCount: Int64(used), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(budget), countStyle: .file))")
+                        Text("Current model cache / shared quota: \(ByteCountFormatter.string(fromByteCount: Int64(used), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(budget), countStyle: .file))")
                             .font(.callout)
                         ProgressView(value: min(used / budget, 1.0))
                         if let entries = cache["ssd_cache_entries"] {

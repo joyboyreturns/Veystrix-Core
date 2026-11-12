@@ -2,11 +2,12 @@ import SwiftUI
 import VeystrixKit
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case dashboard = "Dashboard", statistics = "Statistics", model = "Model", harness = "Agents", logs = "Logs", settings = "Settings"
+    case dashboard = "Dashboard", chat = "Chat", statistics = "Statistics", model = "Model", harness = "Agents", logs = "Logs", settings = "Settings"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .dashboard: return "gauge.with.dots.needle.67percent"
+        case .chat: return "bubble.left.and.bubble.right"
         case .statistics: return "chart.bar.xaxis"
         case .model: return "externaldrive"
         case .harness: return "point.3.connected.trianglepath.dotted"
@@ -33,6 +34,7 @@ struct ContentView: View {
         } detail: {
             switch selection.value ?? .dashboard {
             case .dashboard: DashboardView()
+            case .chat: ChatView()
             case .statistics: StatisticsView()
             case .model: ModelView()
             case .harness: HarnessView()
@@ -50,7 +52,7 @@ struct ContentView: View {
         .confirmationDialog("Restart the engine?", isPresented: $model.pendingRestartConfirmation, titleVisibility: .visible) {
             Button("Restart") { Task { await model.restartNow() } }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("The engine stops gracefully, then loads the model again.") }
+        } message: { Text("The app-managed engine stops gracefully, discarding its live model cache, then loads the selected model. Finish active harness sessions first.") }
         .alert("Veystrix", isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })) {
             Button("OK") { model.alertMessage = nil }
         } message: { Text(model.alertMessage ?? "") }

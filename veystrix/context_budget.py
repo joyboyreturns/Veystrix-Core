@@ -48,18 +48,27 @@ class Budget:
         return dict(self.__dict__)
 
 
-def evaluate(server_window: int | None, input_tokens: int, requested_output: int) -> Budget:
+def evaluate(server_window: int | None, input_tokens: int, requested_output: int | None) -> Budget:
     """Budget of one request. ``server_window`` None means no enforced limit (nothing is claimed)."""
+    req = -1 if requested_output is None or int(requested_output) < 0 else int(requested_output)
     if not server_window:
-        return Budget(0, input_tokens, requested_output, requested_output, 0, True)
-    reserved = max(1, min(int(requested_output), int(server_window) - int(input_tokens)))
+        return Budget(0, int(input_tokens), req, req, 0, True)
+    available = max(0, int(server_window) - int(input_tokens))
+    if req < 0:
+        reserved = max(1, available)
+        remaining = max(0, int(server_window) - int(input_tokens) - reserved)
+        return Budget(int(server_window), int(input_tokens), req, reserved, remaining,
+                      available >= CONTINUATION_WARN_TOKENS)
+    reserved = max(1, min(req, available))
     remaining = int(server_window) - int(input_tokens) - reserved
-    return Budget(int(server_window), int(input_tokens), int(requested_output), reserved, remaining,
+    return Budget(int(server_window), int(input_tokens), req, reserved, remaining,
                   remaining >= CONTINUATION_WARN_TOKENS)
 
 
-def too_small_for_tools(max_tokens: int, has_tools: bool) -> str | None:
+def too_small_for_tools(max_tokens: int | None, has_tools: bool) -> str | None:
     """An error message when a tool-using request asks for an output cap that cannot hold a tool call."""
+    if max_tokens is None or int(max_tokens) < 0:
+        return None
     if has_tools and int(max_tokens) < MIN_TOOL_OUTPUT:
         return (f"max_completion_tokens={max_tokens} cannot hold a tool call (at least {MIN_TOOL_OUTPUT} are needed). "
                 "The client computed it from a context window that leaves no room for the answer. Set the client's "

@@ -1,0 +1,25 @@
+{"t":1794503514.486,"event":"server_start","pid":32744,"host":"127.0.0.1","port":63248,"context_limit":262144,"max_cold_prefill":32768,"max_incremental_prefill":32768}
+{"t":1794503514.525,"event":"request_begin","pid":32744,"path":"/v1/chat/completions","seq":1,"user_agent":"","session_header":true,"stream":true,"messages":2,"tools":0,"reasoning_fields":{"reasoning_effort":"none"},"max_tokens":8,"waiting":0}
+{"t":1794503514.539,"event":"adopt","pid":32744,"prompt_tokens":37,"matched_tokens":0,"needed_prefill":37,"extends":false,"outcome":"MISS","warm_tokens":0,"session_hint":false}
+{"t":1794503514.539,"event":"generate_begin","pid":32744,"prompt_tokens":37,"max_tokens":8,"thinking":false,"effort":null}
+{"t":1794503514.56,"event":"prefill_progress","pid":32744,"done":0,"total":37,"elapsed":0.0}
+{"t":1794503514.561,"event":"prefill_allocator_cap_begin","pid":32744,"limit_mib":512.0,"cache_bytes":23820,"active_bytes":2794743176}
+{"t":1794503514.561,"event":"prefill_ring_acquire","pid":32744,"enabled":false,"reason":"short prompt","scratch":false,"ring_view_bytes":0,"scratch_mapped_bytes":0}
+{"t":1794503514.562,"event":"prefill_plan","pid":32744,"offset":0,"total":37,"spans":[[0,37]]}
+{"t":1794503514.562,"event":"prefill_chunk_begin","pid":32744,"start":0,"end":37,"final":true}
+{"t":1794503514.562,"event":"prefill_forward_begin","pid":32744,"tokens":37,"final":true,"full_logits":false}
+{"t":1794503524.066,"event":"prefill_forward_end","pid":32744,"final":true}
+{"t":1794503524.066,"event":"prefill_projection_begin","pid":32744,"sampler":true}
+{"t":1794503524.066,"event":"prefill_token_state_eval_begin","pid":32744}
+{"t":1794503524.086,"event":"prefill_token_state_eval_end","pid":32744}
+{"t":1794503524.086,"event":"prefill_target_return","pid":32744}
+{"t":1794503524.086,"event":"prefill_chunk_end","pid":32744,"start":0,"end":37,"seconds":9.524}
+{"t":1794503524.086,"event":"prefill_allocator_cap_end","pid":32744,"limit_mib":512.0,"cache_bytes":77073912,"active_bytes":2943794442}
+{"t":1794503524.086,"event":"prefill_backend_return","pid":32744,"seconds":9.526}
+{"t":1794503524.086,"event":"prefill_progress","pid":32744,"done":37,"total":37,"elapsed":9.5}
+{"t":1794503524.086,"event":"decode_enter","pid":32744}
+{"t":1794503524.087,"event":"first_token","pid":32744,"seconds_since_start":9.548}
+{"t":1794503525.538,"event":"first_model_delta_forwarded","pid":32744,"transport":"sse"}
+{"t":1794503529.039,"event":"generate_end","pid":32744,"finish":"length","prompt_tokens":37,"completion_tokens":8,"prefill_seconds":9.53,"decode_tokens_per_second":1.63}
+{"t":1794503529.04,"event":"request_end","pid":32744,"path":"/v1/chat/completions"}
+{"t":1794503529.046,"event":"server_stop","pid":32744}

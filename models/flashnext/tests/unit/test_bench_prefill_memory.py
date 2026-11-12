@@ -288,6 +288,13 @@ class ParserTests(unittest.TestCase):
 
 
 class WatchdogTests(unittest.TestCase):
+    def test_absolute_swap_ceiling_ignores_other_memory_thresholds(self):
+        watchdog = H.Watchdog(H.SafetyPolicy(swap_ceiling_only=True), {"swap_used_mb": 100})
+        sample = {"swap_used_mb": 3071.9, "pressure_level": 4, "available_mb": 100}
+        self.assertIsNone(watchdog.check(sample, {"swapout": 99999, "swapin": 99999}))
+        self.assertIn("3072 MiB", watchdog.check({**sample, "swap_used_mb": 3072}))
+        self.assertIn("unreadable", watchdog.check({**sample, "swap_used_mb": None}))
+
     def dog(self, **policy):
         return H.Watchdog(H.SafetyPolicy(**policy), good_sample())
 

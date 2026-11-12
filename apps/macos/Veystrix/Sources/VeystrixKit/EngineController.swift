@@ -21,6 +21,7 @@ public final class EngineController: ObservableObject {
     private let healthFactory: @Sendable (Int, String?) -> HealthChecking
     private var process: EngineProcess?
     private var monitor: Task<Void, Never>?
+    private var startInProgress = false
     private var stopRequested = false
     private var lastExitStatus: Int32?
 
@@ -60,7 +61,9 @@ public final class EngineController: ObservableObject {
     public func start(settings: AppSettings, checkpoint: CheckpointReport?, apiKey: String?, userInitiated: Bool,
                       source: LaunchPlan.Source?) async throws {
         guard userInitiated else { throw StartError.notUserInitiated }
-        guard state == .stopped || isErrorState else { throw StartError.alreadyActive }
+        guard canStart, !startInProgress else { throw StartError.alreadyActive }
+        startInProgress = true
+        defer { startInProgress = false }
         // Battery use is allowed; a battery below the floor refuses the start before anything is launched.
         let power = snapshot()
         if !settings.allowBattery && power.onACPower != true { throw StartError.batteryTooLow("Plug in the Mac or enable battery operation in Settings.") }
@@ -76,6 +79,7 @@ public final class EngineController: ObservableObject {
         // Refuse if something already answers on the port: never start a second model.
         let probe = healthFactory(settings.port, apiKey)
         if case .unreachable = await probe.check() {} else { throw StartError.portInUse(settings.port) }
+        try Task.checkCancellation()
 
         state = .starting
         health = nil; models = nil; lastSafetyStop = nil; stopRequested = false; lastExitStatus = nil
@@ -91,7 +95,7 @@ public final class EngineController: ObservableObject {
                     Task { @MainActor [weak self] in self?.lastSafetyStop = first }
                 }
             }, onExit: { [weak self] status in
-                Task { @MainActor [weak self] in self?.processExited(status) }
+                Task { @MainActor [weak self] in self?.processExited(status, port: settings.port) }
             })
         } catch {
             state = .error("launch failed: \(error.localizedDescription)")
@@ -102,6 +106,7 @@ public final class EngineController: ObservableObject {
     }
 
     private var isErrorState: Bool { if case .error = state { return true }; return false }
+    private var canStart: Bool { process == nil && !isExternallyManaged && (state == .stopped || isErrorState) }
 
     // MARK: monitor
 
@@ -117,12 +122,13 @@ public final class EngineController: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 if Task.isCancelled { return }
                 let outcome = await checker.check()
-                await self.apply(outcome: outcome, begun: begun, lost: &lost)
+                if Task.isCancelled { return }
+                self.apply(outcome: outcome, begun: begun, lost: &lost)
             }
         }
     }
 
-    private func apply(outcome: HealthClient.Outcome, begun: Date, lost: inout Int) async {
+    private func apply(outcome: HealthClient.Outcome, begun: Date, lost: inout Int) {
         memory = snapshot()
         switch outcome {
         case .healthy(let report):
@@ -159,7 +165,7 @@ public final class EngineController: ObservableObject {
         models = await healthFactory(port, apiKey).models()
     }
 
-    private func processExited(_ status: Int32) {
+    private func processExited(_ status: Int32, port: Int) {
         lastExitStatus = status
         loadedTimeRecorder?.interrupt()
         monitor?.cancel(); monitor = nil
@@ -169,7 +175,9 @@ public final class EngineController: ObservableObject {
             state = .stopped
             logs.append("Engine stopped.", source: .app)
         } else {
-            var message = "The engine exited unexpectedly (status \(status))."
+            // The model router uses status 98 for a failed bind (EADDRINUSE).
+            var message = status == 98 ? StartError.portInUse(port).description
+                : "The engine exited unexpectedly (status \(status))."
             if let stop = lastSafetyStop { message += " Last safety message: \(stop)" }
             state = .error(message)
             logs.append(message, source: .app)
@@ -189,6 +197,7 @@ public final class EngineController: ObservableObject {
         guard state != .stopping else { return }
         stopRequested = true
         state = .stopping
+        monitor?.cancel()
         logs.append("Stopping the engine (graceful).", source: .app)
         process.interrupt()
         if await waitForExit(process, seconds: gracefulStopSeconds) { return }
@@ -230,8 +239,10 @@ public final class EngineController: ObservableObject {
     // MARK: detect an engine started elsewhere (read-only; never starts anything)
 
     public func detectExternalEngine(port: Int, apiKey: String?) async {
-        guard state == .stopped else { return }
-        switch await healthFactory(port, apiKey).check() {
+        guard state == .stopped, !startInProgress else { return }
+        let outcome = await healthFactory(port, apiKey).check()
+        guard state == .stopped, !startInProgress else { return }
+        switch outcome {
         case .healthy(let report), .unhealthy(let report):
             isExternallyManaged = true
             health = report

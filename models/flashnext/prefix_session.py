@@ -24,6 +24,7 @@ import mlx.core as mx
 from . import prefill as prefill_module
 from . import prefix_cache as P
 from . import prefix_profiles
+from .settings.modes import DEFAULT_MAX_INCREMENTAL_PREFILL, default_cold_prefill
 
 FLAG = "FLASHNEXT_PREFIX_CACHE"
 FLAG_DIR = "FLASHNEXT_PREFIX_CACHE_DIR"
@@ -131,7 +132,7 @@ class PrefixSession:
                 # The plan is a function of this budget and the candidate sizes; a different budget is a different plan.
                 plan["chunk_budget_mb"] = prefill_module.chunk_budget_bytes() / 1e6
                 plan["chunk_candidates"] = list(prefill_module.CANDIDATE_CHUNKS)
-            from . import expert_pool, layer_major, prefill_ring, quantized_kv
+            from . import expert_pool, layer_major, prefill_ring, quantized_kv, qsa_chunk
             # Layer-major execution is a different (versioned) execution plan until its states are proven equal on the real
             # checkpoint: its snapshots never mix with chunk-major ones. Chunk-major keeps the existing key.
             plan = {**plan, **({"prefill_order": layer_major.identity()} if layer_major.enabled() else {})}
@@ -143,23 +144,24 @@ class PrefixSession:
             fp = P.fingerprint(
                 **self._compatibility(), prefix_cache=P.FORMAT_VERSION,
                 snapshot_chain_semantics=2,
-                chunk=prefill_module.chunk_tokens(), **plan, **kv_part,
+                chunk=prefill_module.chunk_tokens(), **plan, **kv_part, **qsa_chunk.fingerprint_parts(),
                 # Prefill settings that change numerics are part of the key: a prefix computed one way
                 # is not the same state as one computed another way.
                 ring=os.environ.get("FLASHNEXT_PREFILL_RING_EXPERTS", "0"),
                 qsa_chunk=os.environ.get("FLASHNEXT_QSA_QUERY_CHUNK", "2048"),
             )
-            directory = os.path.expanduser(os.environ.get(FLAG_DIR) or DEFAULT_DIR)
+            from veystrix.universal_cache import CacheManager
+            manager = CacheManager()
+            directory = manager.root
             if prefix_profiles.enabled():
-                # Opt-in profile manager: same exact snapshots, plus frequency-aware eviction, pins, a size budget and
-                # a free-space reserve (its own settings, FLASHNEXT_PREFIX_PROFILES_*).
+                # Profile annotations and pins use the shared budget and free-space policy.
                 self._store = prefix_profiles.ProfiledPrefixCache(
                     fp, int(_number(FLAG_RAM_GB, "0.75") * 1e9), Path(directory),
-                    config=self.execution_profile(), **prefix_profiles.settings_from_env())
+                    config=self.execution_profile(), manager=manager, **prefix_profiles.settings_from_env())
             else:
                 self._store = P.PrefixCache(
                     fp, int(_number(FLAG_RAM_GB, "0.75") * 1e9), Path(directory),
-                    int(_number(FLAG_DISK_GB, "24") * 1e9))
+                    manager=manager)
         return self._store
 
     @staticmethod
@@ -290,8 +292,8 @@ class PrefixSession:
             report.bytes_restored = hit.bytes_loaded
 
         needed = len(prompt) - offset
-        max_cold = int(os.environ.get("VEYSTRIX_MAX_COLD_PREFILL") or 32768)
-        max_inc = int(os.environ.get("VEYSTRIX_MAX_INCREMENTAL_PREFILL") or max_cold)
+        max_cold = int(os.environ.get("VEYSTRIX_MAX_COLD_PREFILL") or default_cold_prefill())
+        max_inc = int(os.environ.get("VEYSTRIX_MAX_INCREMENTAL_PREFILL") or min(max_cold, DEFAULT_MAX_INCREMENTAL_PREFILL))
         # Use the incremental allowance only after an actual successful restore;
         # a failed or incompatible lookup remains subject to the cold limit.
         effective_limit = max_inc if offset > 0 else max_cold

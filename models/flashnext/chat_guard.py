@@ -101,26 +101,28 @@ class ChatGuard:
                               compressor_stop_available_mib=0.0 if waived else H.COMPRESSOR_STOP_AVAILABLE_GIB * 1024)
 
     def _reason(self, row):
-        for key in ("mlx_active", "mlx_cache", "available_mb", "compressor_mb", "swapout", "swapin"):
-            if row.get(key) is None:
-                return f"critical probe unavailable: {key}"
-        if not row.get("metal_limit_bytes"):
-            return "critical probe unavailable: Metal working-set limit"
+        absolute = memory_policy.is_absolute_swap_policy()
         waived = memory_policy.is_swap_growth_policy() or memory_waiver.active()
-        reason = H.guard_reason(row, min_available_gb=0.0 if waived else H.MIN_AVAILABLE_GB,
-                                compressor_stop_available_mib=0.0 if waived else H.COMPRESSOR_STOP_AVAILABLE_GIB * 1024)
-        if reason and reason.startswith("MLX holds"):
-            # The cache part is reclaimable buffer memory, not a live allocation. Release it once and re-read before
-            # treating the total as a real approach to the Metal limit (a 10.7K layer-major prefill stopped at
-            # 12.22 GB active+cache). Active memory still near the limit stops the process as before.
-            reason = self._recheck_after_cache_release(row, waived)
-        if reason:
-            return reason
+        if not absolute:
+            for key in ("mlx_active", "mlx_cache", "available_mb", "compressor_mb", "swapout", "swapin"):
+                if row.get(key) is None:
+                    return f"critical probe unavailable: {key}"
+            if not row.get("metal_limit_bytes"):
+                return "critical probe unavailable: Metal working-set limit"
+            reason = H.guard_reason(row, min_available_gb=0.0 if waived else H.MIN_AVAILABLE_GB,
+                                    compressor_stop_available_mib=0.0 if waived else H.COMPRESSOR_STOP_AVAILABLE_GIB * 1024)
+            if reason and reason.startswith("MLX holds"):
+                reason = self._recheck_after_cache_release(row, waived)
+            if reason:
+                return reason
         now = time.monotonic()
         if self.start_sample is None or now - self.last_power_check >= 1:
             self.last_power_check = now
             sample = self.sampler.sample()
-            for key in ("power_source", "low_power", "pressure_level", "swap_used_mb"):
+            required = ["power_source", "low_power", "swap_used_mb"]
+            if not absolute:
+                required.append("pressure_level")
+            for key in required:
                 if sample.get(key) is None:
                     return f"critical probe unavailable: {key}"
             if sample.get("battery_percent") is None:
@@ -138,7 +140,7 @@ class ChatGuard:
                 return "critical probe unavailable: thermal speed limit"
             if sample.get("thermal_warning"):
                 return "thermal warning"
-            vm = {"swapout": row["swapout"], "swapin": row["swapin"]}
+            vm = {"swapout": row.get("swapout"), "swapin": row.get("swapin")}
             if self.start_sample is None:
                 if row["available_mb"] < 9 * 1024 and not waived:
                     return "startup available memory is below 9 GiB"
@@ -147,7 +149,10 @@ class ChatGuard:
                 # thermal. Pressure and swap are decided by the staged controller below (owner decision 2026-11-08), so
                 # the watchdog's immediate pressure-2 stop, its 64 MB swap-growth stop and its "any swap-out" stop are
                 # switched off here and replaced by: level 4 held, level >= 2 persisting, +2.5 GiB swap, active swap rate.
-                policy = H.SafetyPolicy(pressure_stop_level=99, swap_growth_mb=float("inf"), swapin_limit_mib=float("inf"))
+                policy = H.SafetyPolicy(pressure_stop_level=99, swap_growth_mb=float("inf"),
+                                        swapin_limit_mib=float("inf"), swap_ceiling_only=absolute,
+                                        swap_ceiling_mib=(memory_policy.absolute_swap_ceiling_mib() if absolute
+                                                          else H.ABSOLUTE_SWAP_CEILING_MIB))
                 policy.allow_low_power = os.environ.get("VEYSTRIX_ALLOW_LOW_POWER") == "1"
                 policy.require_ac = os.environ.get("VEYSTRIX_REQUIRE_AC") == "1"
                 # Owner decision 2026-11-09: VEYSTRIX_MIN_BATTERY_PERCENT=0 removes the battery floor for a run (default stays 25).
@@ -163,14 +168,14 @@ class ChatGuard:
                     self.controller = MC.Controller(MC.Policy.from_environment(swap_only=waived), page_bytes=policy.page_bytes,
                                                     emit=self.tracer.event)
                 MC.install(self.controller)
-            sample["available_mb"] = row["available_mb"]
-            sample["compressor_mb"] = row["compressor_mb"]
+            sample["available_mb"] = row.get("available_mb")
+            sample["compressor_mb"] = row.get("compressor_mb")
             stop = self.watchdog.check(sample, {"swapout": 0, "swapin": 0},
                                        {"compressor_mb": self.tracer.compressor_start_mb})
             controller_stop = self.controller.observe(
-                self.clock(), pressure=sample["pressure_level"], swap_used_mb=sample["swap_used_mb"],
-                swapout_pages=row["swapout"], swapin_pages=row["swapin"], available_mb=row["available_mb"],
-                compressor_mb=row["compressor_mb"])
+                self.clock(), pressure=sample.get("pressure_level"), swap_used_mb=sample["swap_used_mb"],
+                swapout_pages=row.get("swapout"), swapin_pages=row.get("swapin"), available_mb=row.get("available_mb"),
+                compressor_mb=row.get("compressor_mb"))
             self.tracer.event("watchdog_sample", memory_state=self.controller.state, **sample)
             return stop or controller_stop
         return None

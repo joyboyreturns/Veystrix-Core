@@ -1,0 +1,22 @@
+{
+  "animate": true,
+  "approval": "ask",
+  "effort": "medium",
+  "flashnext_checkpoint": "",
+  "flashnext_gpu_keepwarm": true,
+  "max_tokens": -1,
+  "min_p": 0.0,
+  "model": "nemotron35-lightning",
+  "nemotron35_checkpoint": "/Users/vincent/models/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit-mlx-community",
+  "presence_penalty": 0.0,
+  "profile": "plain",
+  "show_thinking": false,
+  "stream_answers": true,
+  "system_prompt": "",
+  "temperature": 0.0,
+  "think_budget": -1,
+  "thinking_enabled": false,
+  "top_k": 20,
+  "top_p": 0.95,
+  "workspace": "/private/tmp/nemotron-short-baseline.rSVtmQ"
+}

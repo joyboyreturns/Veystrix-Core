@@ -1,0 +1,32 @@
+{
+  "hardware": "Apple M4, 16 GiB unified memory",
+  "condition": "F2Bnr, one fresh process per precision, absolute 3072 MiB swap stop",
+  "arms": [
+    {
+      "kv_cache": "bf16",
+      "qsa_kernel": "reference",
+      "prefilled_tokens": 4097,
+      "prefill_seconds": 90.59072025003843,
+      "prefill_tokens_per_second": 45.225382784151805,
+      "generated_tokens": 32,
+      "decode_tokens_per_second": 2.1727038374062273,
+      "output_token_digest": "6e9c86e17d959e6a",
+      "prompt_text_digest": "1ca74a60f189602d",
+      "peak_mlx_active_bytes": 5988079647,
+      "peak_swap_used_mib": 902.0
+    },
+    {
+      "kv_cache": "tiered4",
+      "qsa_kernel": "gather",
+      "prefilled_tokens": 4097,
+      "prefill_seconds": 104.86003391700797,
+      "prefill_tokens_per_second": 39.07112983810965,
+      "generated_tokens": 32,
+      "decode_tokens_per_second": 2.0402886501211706,
+      "output_token_digest": "6e9c86e17d959e6a",
+      "prompt_text_digest": "1ca74a60f189602d",
+      "peak_mlx_active_bytes": 5833793428,
+      "peak_swap_used_mib": 902.0
+    }
+  ]
+}

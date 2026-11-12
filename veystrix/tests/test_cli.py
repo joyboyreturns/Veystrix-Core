@@ -13,6 +13,16 @@ from veystrix import cli
 
 
 class LauncherTests(unittest.TestCase):
+    def test_main_probe_does_not_misparse_mode_as_model(self):
+        args = ["veystrix", "--mode", "agentic", "--model", "flashnext", "--checkpoint", "/models/test"]
+        with patch.object(cli.sys, "argv", args), patch("veystrix.cli.branch_sync_warning", return_value=""), \
+             patch("veystrix.cli._default_checkpoint_args", side_effect=lambda x: x), \
+             patch("veystrix.cli.command", return_value=(["python", "-m", "test"], {})) as command, \
+             patch("veystrix.cli.os.execvpe") as run:
+            self.assertEqual(cli.main(), 0)
+        command.assert_called_once_with(args[1:])
+        run.assert_called_once()
+
     def test_no_auto_purge_overrides_inherited_enabled_flag(self):
         with patch.dict(os.environ, {"FLASHNEXT_AUTO_PURGE": "1"}), \
                 patch("veystrix.cli._supports_python", return_value=True):

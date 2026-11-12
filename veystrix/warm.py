@@ -84,8 +84,8 @@ def load(directory=None) -> list:
     return out
 
 
-def request_body(entry: dict, effort: str) -> dict:
-    return {"model": "veystrix-flashnext", "stream": True, "reasoning_effort": effort,
+def request_body(entry: dict, effort: str, model_id: str = "veystrix-flashnext") -> dict:
+    return {"model": model_id, "stream": True, "reasoning_effort": effort,
             "messages": [entry["system"], {"role": "user", "content": WARM_USER_TEXT}], "tools": entry["tools"]}
 
 
@@ -141,9 +141,10 @@ def _get_json(url: str, timeout: float = 10.0):
         return json.loads(response.read())
 
 
-def warm_one(base: str, entry: dict, effort: str, *, key: str, timeout: float, abort=None) -> dict:
+def warm_one(base: str, entry: dict, effort: str, *, key: str, timeout: float, abort=None,
+             model_id: str = "veystrix-flashnext") -> dict:
     """One prefill-only request. Returns {'seconds', 'hit_tokens', 'prefilled_tokens', 'outcome', 'prompt_tokens'}."""
-    body = json.dumps(request_body(entry, effort)).encode()
+    body = json.dumps(request_body(entry, effort, model_id)).encode()
     req = urllib.request.Request(base + "/v1/chat/completions", body, {
         "Content-Type": "application/json", "Authorization": f"Bearer {key}", WARM_HEADER: "1",
         "User-Agent": entry.get("user_agent") or "veystrix-warm"})
@@ -257,7 +258,8 @@ def main(argv=None, directory=None, out=print) -> int:
     for entry, effort in plan:
         began = time.time()
         try:
-            result = warm_one(base, entry, effort, key=key, timeout=args.timeout)
+            result = warm_one(base, entry, effort, key=key, timeout=args.timeout,
+                              model_id=health.get("model") or "veystrix-flashnext")
         except WarmStop as exc:
             out(f"STOPPED at {entry['family']}:{effort} after {time.time() - began:.0f}s: {exc}. Nothing was retried.")
             return 5

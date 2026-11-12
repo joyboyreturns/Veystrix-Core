@@ -620,7 +620,7 @@ def summarize_arms(arms):
 
 
 ORDERS = {"layer-major": "layer-major-v1/w8192", "layer-major-4k": "layer-major-v1/w4096",
-          "layer-major-hybrid-4k": "layer-major-v1/w4096/hybrid-small-v1"}
+          "layer-major-hybrid-4k": "layer-major-v1/w4096/hybrid-small-v1/min2049"}
 
 
 def main():

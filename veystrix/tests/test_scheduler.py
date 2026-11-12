@@ -4,6 +4,7 @@ import time
 import unittest
 
 from veystrix.scheduler import Busy, ClientGone, Scheduler
+from veystrix.server import _ResponseBuffer, RESPONSE_BUFFER_BYTES
 
 
 def start(target):
@@ -58,6 +59,36 @@ class Harness:
 
 
 class SchedulerTests(unittest.TestCase):
+    def test_slow_response_writer_does_not_block_next_inference(self):
+        harness = Harness(True)
+        self.addCleanup(harness.close)
+        writing, release, second_ran = threading.Event(), threading.Event(), threading.Event()
+
+        class Destination:
+            def write(self, _frame):
+                writing.set()
+                release.wait(5)
+
+            def flush(self):
+                pass
+
+        response = _ResponseBuffer(Destination(), streaming=True)
+        first = start(lambda: harness.scheduler.run(lambda: response.write(b"first"), wait=response.drain))
+        try:
+            self.assertTrue(writing.wait(5))
+            harness.submit("second", work=second_ran.set)
+            self.assertTrue(second_ran.wait(5))
+            self.assertTrue(first.is_alive())
+        finally:
+            release.set()
+            first.join(5)
+
+    def test_response_backpressure_cancels_instead_of_waiting(self):
+        response = _ResponseBuffer(None, streaming=True)
+        response.write(b"x" * RESPONSE_BUFFER_BYTES)
+        with self.assertRaises(BrokenPipeError):
+            response.write(b"next")
+        self.assertTrue(response.failed.is_set())
     def check_modes(self, check):
         for loop in (True, False):
             with self.subTest(loop=loop):

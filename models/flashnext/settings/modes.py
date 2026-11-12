@@ -29,6 +29,8 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from veystrix.universal_cache import DEFAULT_QUOTA_GB, DEFAULT_ROOT, _app_cache_settings, quota_gb
+
 CHAT, AGENTIC = "chat", "agentic"
 MODES = (CHAT, AGENTIC)
 PROFILE = {CHAT: "plain", AGENTIC: "agent"}
@@ -36,9 +38,9 @@ PROFILE = {CHAT: "plain", AGENTIC: "agent"}
 POOL_CAP_GB = 2.0
 DEFAULT_POOL_GB = 2.0
 START_GATE_GB = 9.0               # ChatGuard refuses to start below this much available memory
-PREFIX_DIR = "~/.flashnext/prefix-cache"
+PREFIX_DIR = DEFAULT_ROOT
 PREFIX_RAM_GB = 0.75
-PREFIX_DISK_GB = 50.0             # SSD cache quota; oldest unleased entries are evicted first (LRU) once it is full
+PREFIX_DISK_GB = DEFAULT_QUOTA_GB
 QUOTA_ENV = "VEYSTRIX_CACHE_GB"    # owner override of the quota, e.g. VEYSTRIX_CACHE_GB=80 ./chat.sh --mode agentic ...
 DISK_RESERVE_GB = 50.0
 MIN_PREFIX_DISK_GB = 1.0
@@ -50,7 +52,14 @@ AGENTIC_CONTEXT_LIMIT = 262144    # native window of the checkpoint (owner decis
 # evidence exists to 16K cold prefill (4K, 8K, 16K); 32K is implemented and unit-tested but NOT validated on the real checkpoint.
 DEFAULT_MAX_COLD_PREFILL = 32768
 DEFAULT_MAX_INCREMENTAL_PREFILL = 32768
+TIERED4_MAX_COLD_PREFILL = 65536  # 65,537-token real checkpoint cold prefill completed
 LONG_CONTEXT_LIMIT = 16384        # with --enable long-context; admission may lower it (prefill_readiness.LONG_TIER)
+
+
+def default_cold_prefill(kv_cache: str | None = None) -> int:
+    if kv_cache is None:
+        kv_cache = os.environ.get("FLASHNEXT_KV_CACHE_DTYPE", "bf16")
+    return TIERED4_MAX_COLD_PREFILL if kv_cache == "tiered4" else DEFAULT_MAX_COLD_PREFILL
 
 # Flags every mode sets. ChatGuard is the safety supervisor; native MTP is rejected by recorded results;
 # eager linear-state evaluation reproduced the 1K digest and cut retained memory (0.99 to 0.24 GB per 1K tokens).
@@ -81,6 +90,9 @@ AGENTIC_PREFILL = {
     "FLASHNEXT_PREFIX_CACHE_BOUNDARIES": "all",   # message ends + every chunk edge: a cancelled or crashed prefill resumes
 }
 EXPERIMENTAL_OFF = {
+    "FLASHNEXT_QSA_KERNEL": "reference",
+    "FLASHNEXT_QSA_GATHER_TILE": "8",
+    "FLASHNEXT_KV_RECENT_TOKENS": "8192",
     "FLASHNEXT_KV_CACHE_DTYPE": "bf16",             # bf16 KV is the reference; quantized KV is an explicit opt-in below
     "FLASHNEXT_PREFILL_ADAPTIVE_CHUNKS": "0",
     "FLASHNEXT_MEMORY_MANAGER": "0",
@@ -96,6 +108,14 @@ EXPERIMENTAL_OFF = {
 }
 # Offline-tested only. Each is explicit (--enable NAME), never a default, and labelled in the banner.
 EXPERIMENTAL = {
+    "qsa-gather": ({"FLASHNEXT_QSA_KERNEL": "gather"},
+                   "bounded selected-block attention; real-checkpoint qualification pending"),
+    "kv-k16v4": ({"FLASHNEXT_KV_CACHE_DTYPE": "k16v4", "FLASHNEXT_QSA_KERNEL": "gather"},
+                 "reference-precision keys / INT4 values; experimental, coding quality unvalidated"),
+    "kv-k8v4": ({"FLASHNEXT_KV_CACHE_DTYPE": "k8v4", "FLASHNEXT_QSA_KERNEL": "gather"},
+                "INT8 keys / INT4 values; experimental, coding quality unvalidated"),
+    "kv-tiered4": ({"FLASHNEXT_KV_CACHE_DTYPE": "tiered4", "FLASHNEXT_QSA_KERNEL": "gather"},
+                  "INT4 history / INT8 recent KV; experimental 262K candidate, NOT production qualified"),
     "ngram-dedup": ({"FLASHNEXT_NGRAM_DEDUP": "1"},
                     "deduplicate repeated n-gram rows within each lookup; offline exactness tests only, real-checkpoint speed unmeasured"),
     "long-context": ({"FLASHNEXT_PREFILL_CHUNK_POLICY": "budgeted", "FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048",
@@ -109,8 +129,9 @@ EXPERIMENTAL = {
     "layer-major-4k": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096"},
                        "experimental layer-major prefill with a 4,096-token window; real-checkpoint validation pending"),
     "layer-major-hybrid-4k": ({"FLASHNEXT_PREFILL_ORDER": "layer", "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096",
-                              "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "1"},
-                             "experimental 4K layer-major windows with chunk-major execution for windows up to 2K; unmeasured"),
+                              "FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS": "1",
+                              "FLASHNEXT_LAYER_MAJOR_MIN_TOKENS": "2049"},
+                             "4K layer-major windows with chunk-major execution for windows up to 2K"),
     "layer-prefetch": ({"FLASHNEXT_PREFILL_LAYER_PREFETCH": "1"},
                        "layer-major only: read layer l+1's experts while layer l computes. With the prefill ring (the agentic "
                        "preset) the scratch ring gets a second half (+1.5 GB while prefilling) and the read goes to it with direct "
@@ -141,8 +162,15 @@ EXPERIMENTAL = {
     "short-pool-reuse": ({"FLASHNEXT_SHORT_PREFILL_POOL_REUSE": "1"},
                          "reuse resident pool experts in short prefills; replay predicts under 5% hits"),
 }
+THROUGHPUT_FEATURES = ("layer-major-hybrid-4k", "layer-prefetch", "uncached-prefill-reads", "pool-buffered-fill")
+EXPERIMENTAL["short-throughput"] = (
+    {key: value for feature in THROUGHPUT_FEATURES for key, value in EXPERIMENTAL[feature][0].items()},
+    "experimental 4K hybrid layer-major prefill and buffered decode expert pool",
+)
+LAYER_MAJOR_MODES = {"layer-major", "layer-major-4k", "layer-major-hybrid-4k", "short-throughput"}
 OWNED = frozenset({*COMMON, *PREFILL_OFF, *AGENTIC_PREFILL, *EXPERIMENTAL_OFF,
                    "FLASHNEXT_PREFILL_CHUNK_BUDGET_MB", "FLASHNEXT_PREFILL_WINDOW_TOKENS", "FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_BITS",
+                   "FLASHNEXT_KV_LAYER_MODES",
                    "FLASHNEXT_EXPERT_POOL_GB", "FLASHNEXT_EXPERT_POOL_AUTO", "FLASHNEXT_PREFIX_CACHE_DIR", "FLASHNEXT_PREFIX_CACHE_RAM_GB",
                    "FLASHNEXT_PREFIX_CACHE_DISK_GB", "FLASHNEXT_PREFIX_PROFILES_MAX_GB",
                    "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB", "FLASHNEXT_WATCHDOG",
@@ -216,12 +244,7 @@ def _positive(value, name):
 
 def cache_quota_gb(environ=None) -> float:
     """SSD cache quota in GB: PREFIX_DISK_GB unless VEYSTRIX_CACHE_GB holds a positive number."""
-    raw = (os.environ if environ is None else environ).get(QUOTA_ENV)
-    try:
-        value = float(raw) if raw not in (None, "") else PREFIX_DISK_GB
-    except ValueError:
-        return PREFIX_DISK_GB
-    return value if value > 0 else PREFIX_DISK_GB
+    return quota_gb(environ)
 
 
 def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=None, free_disk_gb=None,
@@ -233,25 +256,31 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
     for name in enable:
         if name not in EXPERIMENTAL:
             raise ModeError(f"unknown experimental feature {name!r}; choose from {', '.join(EXPERIMENTAL)}")
-    if len({"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable)) > 1:
+    if len(LAYER_MAJOR_MODES.intersection(enable)) > 1:
         raise ModeError("choose only one layer-major window size")
-    if {"uncached-reads", "uncached-prefill-reads"} <= set(enable):
+    if "uncached-reads" in enable and {"uncached-prefill-reads", "short-throughput"}.intersection(enable):
         raise ModeError("choose one of uncached-reads (all phases) and uncached-prefill-reads (prefill only)")
-    if "layer-prefetch" in enable and not {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
+    if "layer-prefetch" in enable and not LAYER_MAJOR_MODES.intersection(enable):
         raise ModeError("layer-prefetch needs a layer-major mode (layer-major, layer-major-4k or layer-major-hybrid-4k)")
     if mode == CHAT and "prefix-profiles" in enable:
         raise ModeError("prefix-profiles needs the AGENTIC prefix cache")
     if mode == CHAT and "long-context" in enable:
         raise ModeError("long-context is an AGENTIC feature (CHAT keeps one-call prefill and its reference numerics)")
-    if mode == CHAT and {"layer-major", "layer-major-4k", "layer-major-hybrid-4k"} & set(enable):
+    if mode == CHAT and LAYER_MAJOR_MODES.intersection(enable):
         raise ModeError("layer-major is an AGENTIC feature (needs watchdog supervision and agentic mode)")
-    if len({"kv-affine4", "kv-affine8"} & set(enable)) > 1:
-        raise ModeError("choose one quantized KV mode: kv-affine4 or kv-affine8")
+    kv_modes = {"kv-affine4", "kv-affine8", "kv-k16v4", "kv-k8v4", "kv-tiered4"}
+    if len(kv_modes & set(enable)) > 1:
+        raise ModeError("choose one quantized KV mode")
     gb, reason = choose_pool_gb(pool_gb, available_gb)
     auto = (pool_gb is None or str(pool_gb).lower() == "auto") and gb > 0
     warnings = []
+    from models.flashnext import memory_policy
+
+    absolute_swap_only = memory_policy.is_absolute_swap_policy()
     env = {**COMMON, **PREFILL_OFF, **EXPERIMENTAL_OFF, "FLASHNEXT_EXPERT_POOL_GB": f"{gb:g}",
            "FLASHNEXT_EXPERT_POOL_AUTO": "1" if auto else "0"}
+    if absolute_swap_only:
+        env["FLASHNEXT_MEMORY_POLICY"] = memory_policy.POLICY_ABSOLUTE_SWAP_ONLY
     directory, disk_gb = None, 0.0
     if mode == AGENTIC:
         env.update(AGENTIC_PREFILL)
@@ -270,30 +299,47 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         # positive ceiling or larger margin requested by the operator.
         ceiling = min(ceiling, 3072.0) if ceiling > 0 else 3072.0
         margin = max(margin, 256.0)
+        if absolute_swap_only:
+            try:
+                ceiling = memory_policy.absolute_swap_ceiling_mib()
+            except ValueError as exc:
+                raise ModeError(str(exc)) from exc
+            margin = 0.0
         if margin >= ceiling:
             raise ModeError("swap safety margin must be smaller than the ceiling")
         env.update({"FLASHNEXT_SWAP_CEILING_MIB": str(ceiling), "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": str(margin),
                     "FLASHNEXT_WATCHDOG_MEMORY": "1"})
-        directory = os.path.expanduser(prefix_dir or PREFIX_DIR)
+        directory = os.path.expanduser(prefix_dir or os.environ.get("VEYSTRIX_CACHE_ROOT")
+                                       or os.environ.get("FLASHNEXT_PREFIX_CACHE_DIR")
+                                       or os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_DIR")
+                                       or _app_cache_settings().get("cacheDirectory") or PREFIX_DIR)
         free = _free_disk_gb(directory) if free_disk_gb is None else float(free_disk_gb)
-        disk_gb = min(cache_quota_gb(), max(0.0, free - DISK_RESERVE_GB))
-        if disk_gb < MIN_PREFIX_DISK_GB:
-            # A zero SSD budget means "unlimited" to the cache, so the cache is switched off instead.
-            env["FLASHNEXT_PREFIX_CACHE"] = "0"
-            warnings.append(f"prefix cache OFF: only {free:.0f} GB free on the cache volume, "
-                            f"{DISK_RESERVE_GB:g} GB is kept in reserve")
-            directory, disk_gb = None, 0.0
-        else:
-            env.update({"FLASHNEXT_PREFIX_CACHE_DIR": directory,
-                        "FLASHNEXT_PREFIX_CACHE_RAM_GB": f"{PREFIX_RAM_GB:g}",
-                        "FLASHNEXT_PREFIX_CACHE_DISK_GB": f"{disk_gb:g}",
-                        "FLASHNEXT_PREFIX_PROFILES_MAX_GB": f"{disk_gb:g}",
-                        "FLASHNEXT_PREFIX_PROFILES_FREE_RESERVE_GB": f"{DISK_RESERVE_GB:g}"})
+        disk_gb = cache_quota_gb()
+        if free < DISK_RESERVE_GB:
+            warnings.append(f"prefix writes require reclaiming space above the {DISK_RESERVE_GB:g} GB SSD reserve")
+        env.update({"FLASHNEXT_PREFIX_CACHE_DIR": directory,
+                    "FLASHNEXT_PREFIX_CACHE_RAM_GB": f"{PREFIX_RAM_GB:g}",
+                    "FLASHNEXT_PREFIX_CACHE_DISK_GB": f"{disk_gb:g}"})
     labels = {}
     for name in enable:
         flags, label = EXPERIMENTAL[name]
         env.update(flags)
         labels[name] = label
+    if {"kv-k16v4", "kv-k8v4", "kv-tiered4", "qsa-gather"} & set(enable):
+        # The experimental path needs the staged headroom and pressure stops,
+        # even when the normal AGENTIC profile is configured for swap-only.
+        if not absolute_swap_only:
+            env["FLASHNEXT_MEMORY_POLICY"] = "strict-staged"
+        env["FLASHNEXT_MEMORY_WAIVER"] = "0"
+        if "FLASHNEXT_KV_LAYER_MODES" in os.environ:
+            env["FLASHNEXT_KV_LAYER_MODES"] = os.environ["FLASHNEXT_KV_LAYER_MODES"]
+        if mode == CHAT:
+            env.update({"FLASHNEXT_PREFILL_CHUNK_TOKENS": "2048", "FLASHNEXT_PREFILL_CHUNK_POLICY": "grid",
+                        "FLASHNEXT_PREFILL_CACHE_LIMIT_MB": "512"})
+    if kv_modes & set(enable) or "qsa-gather" in enable:
+        for flag in ("FLASHNEXT_KV_GROUP_SIZE", "FLASHNEXT_KV_RECENT_TOKENS", "FLASHNEXT_QSA_GATHER_TILE"):
+            if flag in os.environ:
+                env[flag] = os.environ[flag]
     if "prefix-profiles" in enable and env["FLASHNEXT_PREFIX_CACHE"] != "1":
         env["FLASHNEXT_PREFIX_PROFILES"] = "0"
         warnings.append("prefix-profiles ignored because the prefix cache is off")
@@ -301,6 +347,7 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
     cold = _positive(max_cold_prefill, "max cold prefill")
     incremental = _positive(max_incremental_prefill, "max incremental prefill")
     limit = context_limit if context_limit is not None else (default_limit if mode == AGENTIC else None)
+    default_cold = default_cold_prefill(env["FLASHNEXT_KV_CACHE_DTYPE"])
     if mode == AGENTIC:
         explicit_cold = cold or max_cold_prefill_from_environment()
         explicit_incremental = incremental or max_incremental_prefill_from_environment()
@@ -309,12 +356,13 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         if limit and explicit_incremental and explicit_incremental > limit:
             raise ModeError(f"max incremental prefill {explicit_incremental} exceeds the context limit {limit}")
         # Defaults never exceed the window (a smaller --context-limit lowers them); explicit values are honoured or refused.
-        cold = explicit_cold or min(DEFAULT_MAX_COLD_PREFILL, limit or DEFAULT_MAX_COLD_PREFILL)
+        cold = explicit_cold or min(default_cold, limit or default_cold)
         incremental = explicit_incremental or min(DEFAULT_MAX_INCREMENTAL_PREFILL, limit or DEFAULT_MAX_INCREMENTAL_PREFILL)
     if limit is not None and limit < 1:
         raise ModeError("context limit must be a positive number of tokens")
-    if mode == AGENTIC and cold and cold > VALIDATED_PREFILL_TOKENS:
-        warnings.append(f"max cold prefill {cold} is above the {VALIDATED_PREFILL_TOKENS}-token prefill that has real-checkpoint "
+    validated_cold = TIERED4_MAX_COLD_PREFILL if env["FLASHNEXT_KV_CACHE_DTYPE"] == "tiered4" else VALIDATED_PREFILL_TOKENS
+    if mode == AGENTIC and cold and cold > validated_cold:
+        warnings.append(f"max cold prefill {cold} is above the {validated_cold}-token prefill that has real-checkpoint "
                         "evidence; it is implemented and unit-tested only. Raise it step by step and watch swap growth.")
     return ModePlan(mode, PROFILE[mode], mode == AGENTIC if serve is None else bool(serve), env, gb, reason, limit,
                     enable, tuple(warnings), directory, disk_gb, labels, auto,
@@ -338,7 +386,8 @@ def apply_mode(environment: dict, plan: ModePlan) -> dict:
     else:
         environment.pop("VEYSTRIX_CONTEXT_REQUIRED", None)   # an inherited value must not turn a default into a requirement
     if plan.mode == AGENTIC:
-        environment["VEYSTRIX_MAX_COLD_PREFILL"] = str(plan.max_cold_prefill or DEFAULT_MAX_COLD_PREFILL)
+        environment["VEYSTRIX_MAX_COLD_PREFILL"] = str(
+            plan.max_cold_prefill or default_cold_prefill(plan.env.get("FLASHNEXT_KV_CACHE_DTYPE", "bf16")))
         environment["VEYSTRIX_MAX_INCREMENTAL_PREFILL"] = str(plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL)
     else:
         environment.pop("VEYSTRIX_MAX_COLD_PREFILL", None)
@@ -355,6 +404,8 @@ def plan_from_environment(environ=None):
     if mode not in MODES:
         return None
     env = {key: environ[key] for key in OWNED if key in environ}
+    if "FLASHNEXT_MEMORY_POLICY" in environ:
+        env["FLASHNEXT_MEMORY_POLICY"] = environ["FLASHNEXT_MEMORY_POLICY"]
     enabled = tuple(name for name in environ.get("VEYSTRIX_ENABLE", "").split(",") if name in EXPERIMENTAL)
     try:
         gb = float(env.get("FLASHNEXT_EXPERT_POOL_GB", "0") or 0)
@@ -426,7 +477,10 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
         rows.append("  chunk policy   one call per prompt (reference numerics)")
     from models.flashnext import memory_policy
     swap_policy = memory_policy.is_swap_growth_policy({**env, "VEYSTRIX_MODE": plan.mode})
-    if swap_policy:
+    absolute = memory_policy.is_absolute_swap_policy(env)
+    if absolute:
+        ready = "absolute-swap-only (startup headroom is telemetry)"
+    elif swap_policy:
         if available_gb is not None and available_gb >= START_GATE_GB:
             ready = (
                 f"READY ({available_gb:.1f} GB available; start gate waived under swap-growth-only policy; "
@@ -444,7 +498,10 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
         ready = f"{available_gb:.1f} GB available, start gate {START_GATE_GB:g} GB: " + (
             "READY" if available_gb >= START_GATE_GB else "BELOW GATE")
     rows.append(f"  memory         {ready}")
-    if swap_policy:
+    if absolute:
+        limit_gib = memory_policy.absolute_swap_ceiling_mib(env) / 1024
+        guard = f"ON ({limit_gib:g} GiB total swap, thermal, battery stops)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
+    elif swap_policy:
         guard = "ON (swap growth +2.5 GiB, thermal, battery stops; pressure/available are telemetry)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
     else:
         guard = "ON (memory, swap, thermal, battery stops)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
@@ -455,9 +512,10 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
     if plan.context_limit:
         rows.append(f"  context limit  {plan.context_limit} tokens (requests above it are refused, never truncated)")
     if plan.mode == AGENTIC:
-        rows.append(f"  prefill limits cold {plan.max_cold_prefill or DEFAULT_MAX_COLD_PREFILL}, uncached increment "
-                    f"{plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL} tokens per request (admission ceilings; "
-                    f"internal chunks stay 2048; current recovery verified to {VALIDATED_PREFILL_TOKENS} tokens)")
+        kv_cache = env.get("FLASHNEXT_KV_CACHE_DTYPE", "bf16")
+        rows.append(f"  prefill limits cold {plan.max_cold_prefill or default_cold_prefill(kv_cache)}, uncached increment "
+                    f"{plan.max_incremental_prefill or DEFAULT_MAX_INCREMENTAL_PREFILL} tokens per request "
+                    "(internal chunks stay at 2048 tokens)")
     for name, label in plan.labels.items():
         rows.append(f"  EXPERIMENTAL   {name}: {label}")
     for warning in plan.warnings:

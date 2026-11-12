@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
 import json
@@ -42,6 +43,7 @@ from veystrix import effort_slot
 from veystrix import usage_log
 from veystrix import warm as warm_module
 from models.flashnext import flight_recorder
+from models.flashnext.settings.modes import default_cold_prefill
 
 
 MAX_BODY = 16 * 1024 * 1024
@@ -49,6 +51,8 @@ MAX_BODY = 16 * 1024 * 1024
 MIN_OUTPUT_RESERVE = context_budget.MIN_OUTPUT_RESERVE
 GONE_CHECK_SECONDS = 1.0
 SSE_KEEPALIVE_SECONDS = float(os.environ.get("VEYSTRIX_SSE_KEEPALIVE_SECONDS", "15"))
+RESPONSE_BUFFER_BYTES = 4 * 1024 * 1024
+RESPONSE_WRITE_TIMEOUT = 5.0
 TOOL_CALL = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
 XML_FUNCTION = re.compile(
     r"\s*<function=([^>\s]+)>(.*?)(?:</function>|</>)?\s*$", re.DOTALL
@@ -638,54 +642,66 @@ def _window_from_object(candidate) -> int | None:
 def _tokenizer_windows(tokenizer):
     seen = set()
     current = tokenizer
-    while current is not None and id(current) not in seen:
+    for _ in range(4):
+        if current is None or id(current) in seen:
+            break
         seen.add(id(current))
         yield current
-        init_kwargs = getattr(current, "init_kwargs", None)
-        if isinstance(init_kwargs, dict):
-            yield init_kwargs
+        mock_children = getattr(current, "_mock_children", None)
+        is_mock = isinstance(mock_children, dict)
+        if not is_mock or "init_kwargs" in mock_children:
+            init_kwargs = getattr(current, "init_kwargs", None)
+            if isinstance(init_kwargs, dict):
+                yield init_kwargs
+        if is_mock and "_tokenizer" not in mock_children:
+            break
         current = getattr(current, "_tokenizer", None)
+
+
+def _backend_native_window(service) -> int | None:
+    backend = _service_backend(service)
+    if backend is None:
+        return None
+    found = _window_from_object(backend)
+    if found is not None:
+        return found
+    for name in _WINDOW_HOLDERS:
+        try:
+            found = _window_from_object(getattr(backend, name, None))
+        except Exception:
+            continue
+        if found is not None:
+            return found
+    try:
+        tokenizer = _model_tokenizer(backend)
+    except Exception:
+        tokenizer = getattr(backend, "tokenizer", None)
+    if tokenizer is not None:
+        for candidate in _tokenizer_windows(tokenizer):
+            if isinstance(candidate, dict):
+                for name in _TOKENIZER_ATTRS:
+                    found = _valid_window(candidate.get(name))
+                    if found is not None:
+                        return found
+                continue
+            found = _window_from_object(candidate)
+            if found is not None:
+                return found
+            for name in _TOKENIZER_ATTRS:
+                try:
+                    found = _valid_window(getattr(candidate, name, None))
+                except Exception:
+                    continue
+                if found is not None:
+                    return found
+    return None
 
 
 def _context_window_for(service) -> int:
     configured = getattr(service, "context_limit", None)
     if isinstance(configured, int) and not isinstance(configured, bool) and configured > 0:
         return configured
-    backend = _service_backend(service)
-    if backend is not None:
-        found = _window_from_object(backend)
-        if found is not None:
-            return found
-        for name in _WINDOW_HOLDERS:
-            try:
-                found = _window_from_object(getattr(backend, name, None))
-            except Exception:
-                continue
-            if found is not None:
-                return found
-        try:
-            tokenizer = _model_tokenizer(backend)
-        except Exception:
-            tokenizer = getattr(backend, "tokenizer", None)
-        if tokenizer is not None:
-            for candidate in _tokenizer_windows(tokenizer):
-                if isinstance(candidate, dict):
-                    for name in _TOKENIZER_ATTRS:
-                        found = _valid_window(candidate.get(name))
-                        if found is not None:
-                            return found
-                    continue
-                found = _window_from_object(candidate)
-                if found is not None:
-                    return found
-                for name in _TOKENIZER_ATTRS:
-                    try:
-                        found = _valid_window(getattr(candidate, name, None))
-                    except Exception:
-                        continue
-                    if found is not None:
-                        return found
-    return DEFAULT_CONTEXT_WINDOW
+    return _backend_native_window(service) or DEFAULT_CONTEXT_WINDOW
 
 
 def _display_name_for(service) -> str:
@@ -733,6 +749,7 @@ def model_card(service) -> dict:
             {"effort": "low", "description": "Low reasoning effort"},
             {"effort": "medium", "description": "Medium reasoning effort"},
             {"effort": "high", "description": "High reasoning effort"},
+            {"effort": "xhigh", "description": "Extra-high reasoning effort"},
         ],
         "shell_type": "shell_command",
         "visibility": "list",
@@ -816,6 +833,19 @@ def _context_report(service, limit, enforced) -> dict:
     native = context_budget.native_context_window(getattr(backend, "model_path", None)) if backend is not None else None
     if native is None:
         native = 262144
+    if type(backend).__name__ == "NemotronBackend":
+        from models.nemotron35.admission import MAX_CONTEXT
+        return {
+            "native_positional_capability": native,
+            "architectural_context_maximum": MAX_CONTEXT,
+            "configured_server_limit": backend.configured_context,
+            "memory_admitted_context": backend.context_limit,
+            "kv_format": backend.kv_format,
+            "million_token_validation": False,
+            "max_cold_prefill": service.max_cold_prefill,
+            "max_incremental_prefill": service.max_incremental_prefill,
+            "preferred_internal_chunk_size": backend.plan.chunk_tokens,
+        }
     cold = getattr(service, "max_cold_prefill", None) or MAX_COLD_PREFILL_DEFAULT
     incremental = getattr(service, "max_incremental_prefill", None) or MAX_INCREMENTAL_PREFILL_DEFAULT
     return {
@@ -827,14 +857,9 @@ def _context_report(service, limit, enforced) -> dict:
         "memory_admitted_max_cold_prefill": getattr(service, "max_cold_prefill", None),
         "incremental_accumulation_required": True,
         "preferred_internal_chunk_size": 2048,
-        "validated_on_this_machine": (
-            {"largest_real_cold_prefill_tokens": 0, "evidence": "none: no real Nemotron inference has been run",
-             "real_8k": "unverified", "above_validated": "unverified"}
-            if type(backend).__name__ == "NemotronBackend" else dict(context_budget.VALIDATION)),
+        "validated_on_this_machine": dict(context_budget.VALIDATION),
         "overflow": f"a prompt over the configured limit is refused with HTTP 400 context_length_exceeded; cold prefill > {cold} (or uncached increment > {incremental}) refused with oversized_prefill_rejected / recovery_required",
-        "validated_prefill_tokens_on_real_checkpoint": (
-            0 if type(backend).__name__ == "NemotronBackend"
-            else context_budget.VALIDATION["largest_real_cold_prefill_tokens"]),
+        "validated_prefill_tokens_on_real_checkpoint": context_budget.VALIDATION["largest_real_cold_prefill_tokens"],
     }
 
 
@@ -865,6 +890,11 @@ def health(service, scheduler) -> dict:
               "context_limit": getattr(service, "context_limit", None) or 262144,
               "max_cold_prefill": getattr(service, "max_cold_prefill", None) or MAX_COLD_PREFILL_DEFAULT,
               "max_incremental_prefill": getattr(service, "max_incremental_prefill", None) or MAX_INCREMENTAL_PREFILL_DEFAULT}
+    # The router must verify the exact installation, not just its family.
+    report["installed_model_id"] = getattr(service, "installed_model_id", None)
+    instance = os.environ.get("VEYSTRIX_ENGINE_INSTANCE_ID")
+    if instance:
+        report["instance_id"] = instance
     activity = getattr(service, "activity_snapshot", None)
     if callable(activity):
         report["activity"] = activity()
@@ -872,11 +902,19 @@ def health(service, scheduler) -> dict:
         report["fault"] = str(fault)
     state = getattr(service, "cache_state", None)
     if callable(state):
-        report["cache"] = state()
+        cache = state()
+        report["cache"] = cache
+        kv = cache.get("flashnext_kv") if isinstance(cache, dict) else None
+        if kv and kv.get("kv_dtype"):
+            report["flashnext_kv_cache"] = kv["kv_dtype"]
     engine = getattr(_service_backend(service), "health_snapshot", None)
     if callable(engine):
         try:
             report["engine"] = engine()
+            if report["engine"].get("kv_format"):
+                report["nemotron_context"] = {
+                    key: report["engine"][key] for key in ("admitted_context", "kv_format", "million_token_validation")
+                }
         except Exception:
             pass                                     # telemetry never fails a health probe
     mem = _memory_ledger()
@@ -908,6 +946,14 @@ STALL_SECONDS = float(os.environ.get("VEYSTRIX_STALL_SECONDS", "180"))
 RESTART_COMMAND = "./chat.sh --mode agentic --pool-gb 0 --context-limit 262144 --max-cold-prefill 32768 --max-incremental-prefill 32768"
 
 
+def _restart_command() -> str:
+    if os.environ.get("FLASHNEXT_KV_CACHE_DTYPE") == "tiered4":
+        policy = "FLASHNEXT_MEMORY_POLICY=absolute-swap-only " if os.environ.get("FLASHNEXT_MEMORY_POLICY") == "absolute-swap-only" else ""
+        return (f"{policy}./chat.sh --mode agentic --enable kv-tiered4 --pool-gb 0 --context-limit 262144 "
+                f"--max-cold-prefill {default_cold_prefill('tiered4')} --max-incremental-prefill {MAX_INCREMENTAL_PREFILL_DEFAULT}")
+    return RESTART_COMMAND
+
+
 def _memory_stopped() -> bool:
     try:
         from models.flashnext import memory_controller
@@ -928,7 +974,7 @@ def _safety_stop_error(prefix: str = "request cancelled") -> RequestError:
         pass
     return RequestError(
         f"{prefix} by the memory safety stop: {reason}. This server will exit and accepts no further work. "
-        f"Do NOT retry automatically: restart it deliberately with `{RESTART_COMMAND}` once memory pressure has eased.",
+        f"Do NOT retry automatically: restart it deliberately with `{_restart_command()}` once memory pressure has eased.",
         503, "memory_critical_stop")
 
 
@@ -1004,6 +1050,12 @@ class ModelService:
     def __init__(self, session, context_limit=None, max_cold_prefill=None, max_incremental_prefill=None):
         self.session = session
         self.model = f"veystrix-{session.preferences['model']}"
+        path = getattr(getattr(session, "backend", None), "model_path", None)
+        if isinstance(path, (str, os.PathLike)) and path:
+            from veystrix.model_registry import installation_id
+            self.installed_model_id = installation_id(session.preferences["model"], path)
+        else:
+            self.installed_model_id = None
         self.reused = 0
         self.rebuilt = 0
         self.evictions = 0                  # live states replaced by a request that did not extend them
@@ -1014,7 +1066,8 @@ class ModelService:
         self.context_limit = context_limit
         # Largest single prefill (a cold rebuild, or the new tokens of a continuation) that the admitted memory tier
         # allows. None means no tier limit. Requests above it are refused before any state changes.
-        self.max_cold_prefill = max_cold_prefill
+        self.max_cold_prefill = (default_cold_prefill() if max_cold_prefill is None and
+                                 session.preferences["model"] == "flashnext" else max_cold_prefill)
         self.max_incremental_prefill = max_incremental_prefill
         self.last_prompt_tokens = None
         self.last_cached_tokens = 0
@@ -1089,9 +1142,17 @@ class ModelService:
             pass
 
         last_prefill_tok = getattr(last_prefix, "prefilled_tokens", 0) if last_prefix else 0
-        last_prefill_sec = getattr(last_prefix, "prefill_seconds", 0.0) if last_prefix else 0.0
+        last_prefill_sec = getattr(backend, "last_prefill_seconds", None)
+        if last_prefill_sec is None:
+            last_prefill_sec = getattr(last_prefix, "prefill_seconds", 0.0) if last_prefix else 0.0
         matched_prefix_tok = getattr(last_prefix, "hit_tokens", 0) if last_prefix else 0
         last_decode_rate = getattr(backend, "last_decode_rate", None)
+        kv_details = None
+        if callable(getattr(backend, "kv_diagnostics", None)):
+            try:
+                kv_details = backend.kv_diagnostics()
+            except Exception:
+                pass  # a diagnostics read must not fail the endpoint
 
         return {
             "cache_enabled": store is not None,
@@ -1103,6 +1164,7 @@ class ModelService:
             "ssd_cache_budget_bytes": ssd_budget,
             "ssd_cache_directory": ssd_dir,
             "active_model_state_bytes": active_bytes,
+            **({"flashnext_kv": kv_details} if kv_details is not None else {}),
             "matched_prefix_tokens": matched_prefix_tok,
             "reused_tokens": st.reused_tokens if st else 0,
             "ram_hits": st.ram_hits if st else 0,
@@ -1165,7 +1227,7 @@ class ModelService:
         """Refuse a prefill larger than the allowed prefill limit. Runs before any state changes.
 
         ``incremental`` (the request extends live or restored state) is judged against ``max_incremental_prefill``; a cold or
-        rebuilt prompt against ``max_cold_prefill``. Both default to 32,768 and neither is a licence to split a rejected
+        rebuilt prompt against ``max_cold_prefill``. Neither limit is a licence to split a rejected
         cold prompt into chunks: chunking (2,048 tokens) happens only inside an admitted prefill."""
         if incremental:
             limit = self.max_incremental_prefill
@@ -1184,7 +1246,7 @@ class ModelService:
                     "less new content per turn (for example fewer or smaller tool outputs). Nothing was run and the "
                     "live state is unchanged.",
                     code="oversized_prefill_rejected")
-            if total_tokens > MAX_COLD_PREFILL_DEFAULT:
+            if total_tokens > default_cold_prefill():
                 if is_cold or matched_prefix == 0:
                     raise OversizedPrefillError(
                         f"this request needs {tokens} tokens of cold prefill (total prompt: {total_tokens}), "
@@ -1531,11 +1593,22 @@ class ModelService:
                     return True
                 return False
 
-            requested_output = max_tokens
-            server_limit = self.context_limit or 262144
-            if self.last_prompt_tokens:
-                available_for_output = max(1, server_limit - self.last_prompt_tokens)
-                max_tokens = min(max_tokens, available_for_output)
+            requested_output = (
+                -1 if max_tokens is None or int(max_tokens) < 0 else int(max_tokens)
+            )
+            native_or_configured = (
+                self.context_limit
+                if isinstance(self.context_limit, int) and not isinstance(self.context_limit, bool) and self.context_limit > 0
+                else _backend_native_window(self)
+            )
+            prompt_tokens = self.last_prompt_tokens
+            if native_or_configured is not None:
+                if prompt_tokens is None:
+                    prompt_tokens = len(getattr(backend, "tape", ())) + len(getattr(backend, "pending", ()))
+                available_for_output = max(1, native_or_configured - prompt_tokens)
+                max_tokens = available_for_output if requested_output < 0 else min(requested_output, available_for_output)
+            else:
+                max_tokens = -1 if requested_output < 0 else requested_output
             budget = context_budget.evaluate(self.context_limit, self.last_prompt_tokens or 0, requested_output)
             self.last_budget = budget.as_dict()
             gen_kwargs = {
@@ -1637,10 +1710,15 @@ class ModelService:
                     and raw_visible.rfind("<tool_call>") > raw_visible.rfind("</tool_call>")):
                 # The model began a tool call and the output limit ended it. Handing the client the raw marker as
                 # ordinary text would look like an answer; nothing was executed and no call is invented.
+                limit_desc = (
+                    "the remaining context window"
+                    if requested_output < 0
+                    else f"the output limit of {max_tokens} tokens"
+                )
                 raise ModelToolCallError(
-                    f"the model began a tool call but the output limit of {max_tokens} tokens ended it first; "
-                    "no tool was called. Raise max_tokens / max_completion_tokens (the client may be computing "
-                    "it from a context window that leaves too little room).")
+                    f"the model began a tool call but {limit_desc} ended it first; "
+                    "no tool was called. Compact the conversation or raise max_tokens / max_completion_tokens "
+                    "(the client may be computing it from a context window that leaves too little room).")
             if hold and on_text is not None and visible:
                 final_words = CompletedTextBuffer()
                 for complete in final_words.feed(visible) + final_words.finish():
@@ -1681,8 +1759,12 @@ CHAT_HONOURED = {"model", "messages", "stream", "stream_options", "max_tokens",
                  "max_completion_tokens", "tools",
                  # per-request reasoning controls, see veystrix/reasoning.py (applied to this request only)
                  "reasoning", "reasoning_effort", "chat_template_kwargs", "enable_thinking"}
-CHAT_ACCEPTED = {"store", "user", "metadata"}
-CHAT_IGNORED = {"temperature", "top_p", "presence_penalty", "frequency_penalty",
+CHAT_ACCEPTED = {"store", "user", "metadata",
+                 # OpenAI request metadata: prompt_cache_key routes the provider's own cache and
+                 # safety_identifier tags a request for provider-side accounting. This engine keeps
+                 # its own prefix cache, so neither reaches the model (Kimi Code sends the first).
+                 "prompt_cache_key", "safety_identifier"}
+CHAT_IGNORED = {"temperature", "top_p", "top_k", "presence_penalty", "frequency_penalty",
                 "seed", "parallel_tool_calls"}
 
 
@@ -1711,6 +1793,58 @@ def _check_chat_fields(payload: dict) -> list[str]:
         if extra:
             raise RequestError(f"stream_options field {extra[0]!r} is not supported")
     return sorted(ignored)
+
+
+class _ResponseBuffer:
+    """The inference worker enqueues frames. The connection handler owns socket writes."""
+
+    def __init__(self, destination, *, streaming):
+        self.destination = destination
+        self.streaming = streaming
+        self.failed = threading.Event()
+        self._ready = threading.Condition()
+        self._frames = deque()
+        self._bytes = 0
+
+    def write(self, data, *, on_sent=None):
+        with self._ready:
+            if self.failed.is_set() or (self.streaming and self._bytes + len(data) > RESPONSE_BUFFER_BYTES):
+                self.failed.set()
+                self._frames.clear()
+                self._bytes = 0
+                self._ready.notify()
+                raise BrokenPipeError("response consumer disconnected or fell behind")
+            self._frames.append((data, on_sent))
+            self._bytes += len(data)
+            self._ready.notify()
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def drain(self, done):
+        while True:
+            with self._ready:
+                while not self._frames:
+                    if done.is_set() or self.failed.is_set():
+                        return
+                    self._ready.wait(timeout=0.025)
+                frame, on_sent = self._frames.popleft()
+            try:
+                self.destination.write(frame)
+                self.destination.flush()
+            except OSError:
+                with self._ready:
+                    self.failed.set()
+                    self._frames.clear()
+                    self._bytes = 0
+                return
+            if on_sent is not None:
+                on_sent()
+            with self._ready:
+                if self.failed.is_set():
+                    return
+                self._bytes -= len(frame)
 
 
 class VeystrixHTTPServer(ThreadingHTTPServer):
@@ -1820,6 +1954,9 @@ class VeystrixHandler(BaseHTTPRequestHandler):
 
     def _client_gone(self) -> bool:
         """True when the peer has closed its end. Never consumes data."""
+        response = getattr(self, "_response_buffer", None)
+        if response is not None and response.failed.is_set():
+            return True
         try:
             sock = self.connection
             readable, _, _ = select.select([sock], [], [], 0)
@@ -1863,8 +2000,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
     def _sse(self, value, event=None):
         prefix = f"event: {event}\n" if event else ""
         with self._write_lock():
-            self.wfile.write((prefix + "data: " + json.dumps(value) + "\n\n").encode())
-            self.wfile.flush()
+            meaningful = False
             if not getattr(self, "_first_model_delta_sent", False):
                 choices = value.get("choices") or []
                 delta = choices[0].get("delta", {}) if choices else {}
@@ -1878,7 +2014,18 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                     meaningful = meaningful or bool(value.get("delta"))
                 if meaningful:
                     self._first_model_delta_sent = True
-                    flight_recorder.record("first_model_delta_forwarded", transport="sse")
+            frame = (prefix + "data: " + json.dumps(value) + "\n\n").encode()
+            if meaningful and isinstance(self.wfile, _ResponseBuffer):
+                self.wfile.write(frame, on_sent=self._record_first_model_delta)
+            else:
+                self.wfile.write(frame)
+                self.wfile.flush()
+                if meaningful:
+                    self._record_first_model_delta()
+
+    @staticmethod
+    def _record_first_model_delta():
+        flight_recorder.record("first_model_delta_forwarded", transport="sse")
 
     def _heartbeat(self):
         with self._write_lock():
@@ -1964,6 +2111,12 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             self._json(report, 200 if report["ready"] else 503)
         elif path in ("/cache/diagnostics", "/v1/cache/diagnostics"):
             self._json(service.cache_diagnostics())
+        elif path == "/v1/installed-models":
+            # Discovery is separate from /v1/models: this server cannot load another model.
+            from veystrix.model_registry import discover
+            records = [dict(record.as_dict(), loaded=(record.id == service.installed_model_id))
+                       for record in discover()]
+            self._json({"object": "list", "data": records})
         elif path == "/v1/models":
             card = model_card(service)
             self._json({"object": "list", "data": [model_entry(card, service)], "models": [card]})
@@ -2001,8 +2154,25 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             return
         except (BrokenPipeError, ConnectionResetError):
             return
+        # This server owns exactly one backend. Reject a different explicit model
+        # before queueing or touching session state; silently using the loaded
+        # model would misattribute output and can evict a coding session.
+        self._response_model = self.server.service.model
+        if "model" in payload:
+            requested = payload["model"]
+            if not isinstance(requested, str) or not requested:
+                self._error("model must be a non-empty string", 400, "invalid_model")
+                return
+            if requested not in (self.server.service.model, self.server.service.installed_model_id):
+                self._error(f"the model {requested!r} is not loaded on this server", 404, "model_not_found")
+                return
+            self._response_model = requested
+        scheduler = self.server.scheduler
         try:
-            self.server.scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
+            if scheduler.loop_running:
+                self._scheduled_post(scheduler, path, payload)
+            else:
+                scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
         except Busy as exc:
             try:
                 self._busy(exc)
@@ -2010,6 +2180,23 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 pass
         except ClientGone:
             pass
+
+    def _scheduled_post(self, scheduler, path, payload):
+        destination = self.wfile
+        response = _ResponseBuffer(destination, streaming=bool(payload.get("stream")))
+        timeout = self.connection.gettimeout()
+        self.connection.settimeout(RESPONSE_WRITE_TIMEOUT)
+        try:
+            self._response_buffer = response
+            self.wfile = response
+            scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone,
+                          path=path, wait=response.drain)
+        finally:
+            self.wfile = destination
+            self._response_buffer = None
+            self.connection.settimeout(timeout)
+            if response.failed.is_set():
+                self.close_connection = True
 
     def _handle_post(self, path, payload):
         """Runs on the inference thread, one request at a time."""
@@ -2067,15 +2254,35 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             progress.PROGRESS.request_end()
             flight_recorder.record("request_end", path=path)
 
-    DEFAULT_MAX_OUTPUT_TOKENS = int(os.environ.get("VEYSTRIX_DEFAULT_MAX_OUTPUT_TOKENS", "2048"))
+    @staticmethod
+    def _default_max_output_tokens() -> int:
+        raw = os.environ.get("VEYSTRIX_DEFAULT_MAX_OUTPUT_TOKENS")
+        if raw is None or not str(raw).strip():
+            return -1
+        text = str(raw).strip().lower()
+        if text in {"-1", "none", "unlimited"}:
+            return -1
+        try:
+            value = int(text)
+        except ValueError:
+            return -1
+        return value if value >= 1 else -1
+
+    DEFAULT_MAX_OUTPUT_TOKENS = _default_max_output_tokens.__func__()
 
     def _limit(self, payload, default=None):
-        if default is None:
-            default = self.DEFAULT_MAX_OUTPUT_TOKENS
-        value = payload.get(
-            "max_output_tokens",
-            payload.get("max_completion_tokens", payload.get("max_tokens", default)),
-        )
+        default_limit = self.DEFAULT_MAX_OUTPUT_TOKENS if default is None else default
+        explicit = False
+        value = None
+        for key in ("max_output_tokens", "max_completion_tokens", "max_tokens"):
+            if key in payload and payload[key] is not None:
+                value = payload[key]
+                explicit = True
+                break
+        if not explicit:
+            if default_limit is None or default_limit == -1:
+                return -1
+            value = default_limit
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             raise RequestError("max_tokens must be a positive integer")
         return min(value, capabilities(self.server.service)["context_window"])
@@ -2125,7 +2332,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 def chunk(delta, finish=None):
                     self._sse({
                         "id": ident, "object": "chat.completion.chunk", "created": created,
-                        "model": service.model,
+                        "model": getattr(self, "_response_model", service.model),
                         "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
                     })
 
@@ -2149,7 +2356,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 if (payload.get("stream_options") or {}).get("include_usage"):
                     self._sse({
                         "id": ident, "object": "chat.completion.chunk", "created": created,
-                        "model": service.model, "choices": [],
+                        "model": getattr(self, "_response_model", service.model), "choices": [],
                         "usage": chat_usage(service, result.stats),
                     })
                 self.wfile.write(b"data: [DONE]\n\n")
@@ -2170,7 +2377,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             } for call in result.tool_calls]
         self._json({
             "id": ident, "object": "chat.completion", "created": created,
-            "model": service.model,
+            "model": getattr(self, "_response_model", service.model),
             "choices": [{"index": 0, "message": message,
                          "finish_reason": "tool_calls" if result.tool_calls else result.stats.finish}],
             "usage": chat_usage(service, result.stats),
@@ -2187,7 +2394,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             try:
                 self._sse({"type": "message_start", "message": {
                     "id": ident, "type": "message", "role": "assistant",
-                    "model": service.model, "content": [], "stop_reason": None,
+                    "model": getattr(self, "_response_model", service.model), "content": [], "stop_reason": None,
                     "stop_sequence": None, "usage": {"input_tokens": 0, "output_tokens": 0},
                 }}, "message_start")
                 text_open = [False]
@@ -2245,7 +2452,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                             "name": call["name"], "input": arguments})
         self._json({
             "id": ident, "type": "message", "role": "assistant",
-            "model": service.model, "content": content,
+            "model": getattr(self, "_response_model", service.model), "content": content,
             "stop_reason": _anthropic_stop(result),
             "stop_sequence": None,
             "usage": anthropic_usage(service, result.stats),
@@ -2262,7 +2469,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             try:
                 base = {"id": ident, "object": "response", "created_at": int(time.time()),
                         "status": "in_progress", "error": None,
-                        "incomplete_details": None, "model": service.model, "output": []}
+                        "incomplete_details": None, "model": getattr(self, "_response_model", service.model), "output": []}
                 sequence = [0]
 
                 def event(kind, **values):
@@ -2313,9 +2520,11 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                     event("response.function_call_arguments.done", item_id=item["id"],
                           output_index=index, arguments=call["arguments"])
                     event("response.output_item.done", output_index=index, item=item)
-                completed = dict(base, status="completed", output=output,
+                response_status = "incomplete" if getattr(result.stats, "finish", None) == "length" else "completed"
+                incomplete = {"reason": "max_output_tokens"} if response_status == "incomplete" else None
+                completed = dict(base, status=response_status, incomplete_details=incomplete, output=output,
                                  usage=responses_usage(service, result.stats))
-                event("response.completed", response=completed)
+                event("response.completed" if response_status == "completed" else "response.incomplete", response=completed)
             except (BrokenPipeError, ConnectionResetError, ClientGone):
                 pass
             except Exception as exc:
@@ -2332,9 +2541,12 @@ class VeystrixHandler(BaseHTTPRequestHandler):
             output.append({"type": "function_call", "id": f"fc_{uuid.uuid4().hex}",
                            "call_id": call["id"], "name": call["name"],
                            "arguments": call["arguments"], "status": "completed"})
+        response_status = "incomplete" if getattr(result.stats, "finish", None) == "length" else "completed"
+        incomplete = {"reason": "max_output_tokens"} if response_status == "incomplete" else None
         self._json({
             "id": ident, "object": "response", "created_at": int(time.time()),
-            "status": "completed", "model": service.model, "output": output,
+            "status": response_status, "incomplete_details": incomplete,
+            "model": getattr(self, "_response_model", service.model), "output": output,
             "usage": responses_usage(service, result.stats),
         })
 
@@ -2355,7 +2567,7 @@ def serve(session, host: str, port: int, api_key: str | None = None,
     if recorder.enabled:
         print(f"flight recorder: {recorder.path}")
     flight_recorder.record("server_start", host=host, port=server.server_port, context_limit=context_limit,
-                           max_cold_prefill=max_cold_prefill or MAX_COLD_PREFILL_DEFAULT,
+                           max_cold_prefill=server.service.max_cold_prefill or MAX_COLD_PREFILL_DEFAULT,
                            max_incremental_prefill=max_incremental_prefill or MAX_INCREMENTAL_PREFILL_DEFAULT)
     try:
         from models.flashnext import memory_controller as _mc

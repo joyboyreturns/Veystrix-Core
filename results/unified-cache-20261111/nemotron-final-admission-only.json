@@ -1,0 +1,27 @@
+{
+  "configured_context": 1048576,
+  "prefill_limit": 65536,
+  "checkpoint_loaded": false,
+  "inference_run": false,
+  "machine": {
+    "total": 17179869184,
+    "available": 8593620992,
+    "swap_used": 1992420229,
+    "pressure": 1,
+    "gpu_limit": 12713115648
+  },
+  "admitted": true,
+  "plan": {
+    "context_tokens": 1048576,
+    "chunk_tokens": 2048,
+    "pool_bytes": 1006632960,
+    "dense_bytes": 1252003968,
+    "mamba_state_bytes": 49082368,
+    "kv_bytes": 3422552064,
+    "activation_bytes": 939524096,
+    "reserve_bytes": 536870912,
+    "total_bytes": 7206666368,
+    "budget_bytes": 8593620992,
+    "estimated": true
+  }
+}

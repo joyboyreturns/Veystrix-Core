@@ -57,21 +57,28 @@ def server_command(args) -> list:
     launcher = [sys.executable, "-m", "veystrix.cli"] if bundled() else [str(REPO / "chat.sh")]
     if getattr(args, "model", "flashnext") == "nemotron35-lightning":
         # Manual selection only. The CLI applies the same guard/chunking contract; --mode, the prefix cache, layer-major
-        # and the Flash-Next memory-readiness gates do not exist for this model. 32K is the admitted ceiling, and the
-        # backend tightens it further from measured free memory at startup.
+        # and the Flash-Next memory-readiness gates do not exist for this model. The backend admits the requested
+        # window only if its own memory plan fits the machine.
         command = [*launcher, "--server", "--host", args.host, "--port", str(args.port),
-                   "--pool-gb", str(args.pool_gb), "--context-limit", "32768",
+                   "--pool-gb", str(args.pool_gb),
                    "--model", "nemotron35-lightning", "--checkpoint", args.checkpoint]
+        if getattr(args, "prefix_dir", None):
+            command += ["--prefix-dir", args.prefix_dir]
         if getattr(args, "preferences_file", None):
             command += ["--preferences-file", args.preferences_file]
         return command
+    from .settings.modes import DEFAULT_MAX_INCREMENTAL_PREFILL, default_cold_prefill
+
+    enables = getattr(args, "enable", None) or ()
+    kv_cache = "tiered4" if "kv-tiered4" in enables else "bf16"
     command = [*launcher, "--mode", "agentic",
                "--pool-gb", str(args.pool_gb),
                "--host", args.host, "--port", str(args.port),
                "--context-limit", "262144",
-               "--max-cold-prefill", "32768", "--max-incremental-prefill", "32768",
+               "--max-cold-prefill", str(default_cold_prefill(kv_cache)),
+               "--max-incremental-prefill", str(DEFAULT_MAX_INCREMENTAL_PREFILL),
                "--model", "flashnext", "--checkpoint", args.checkpoint]
-    for name in getattr(args, "enable", None) or ():
+    for name in enables:
         command += ["--enable", name]          # an explicit experimental option, e.g. layer-major
     if getattr(args, "prefix_dir", None):
         command += ["--prefix-dir", args.prefix_dir]
@@ -112,7 +119,11 @@ def port_in_use(host: str, port: int) -> bool:
 def health(host: str, port: int, timeout: float = 5.0):
     """Parsed /health, or None when the server cannot be reached."""
     try:
-        with urllib.request.urlopen(f"http://{host}:{port}/health", timeout=timeout) as response:
+        request = urllib.request.Request(f"http://{host}:{port}/health")
+        key = os.environ.get("VEYSTRIX_SERVER_API_KEY")
+        if key:
+            request.add_header("Authorization", f"Bearer {key}")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read())
     except Exception:
         return None
@@ -254,7 +265,8 @@ class AutoWarmer:
         key = os.environ.get("VEYSTRIX_API_KEY", "local")
         began = self.clock()
         try:
-            result = self.w.warm_one(base, entry, effort, key=key, timeout=3600.0, abort=abort)
+            result = self.w.warm_one(base, entry, effort, key=key, timeout=3600.0, abort=abort,
+                                     model_id=f"veystrix-{getattr(self.args, 'model', 'flashnext')}")
         except self.w.WarmAborted:
             self.log("auto_warm_aborted", client=entry["family"], effort=effort)
             return

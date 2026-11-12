@@ -7,6 +7,7 @@ public struct LaunchPlan: Equatable, Sendable {
     public var environment: [String: String]
     public var workingDirectory: URL
     public var description: String
+    public var keepMacAwake = false
 
     public enum Source: Equatable, Sendable {
         /// The engine runtime bundled inside the app: Contents/Resources/engine
@@ -32,7 +33,7 @@ public struct LaunchPlan: Equatable, Sendable {
 
     /// Variables passed to the engine. Nothing else is inherited, so secrets in the user's shell
     /// (cloud API keys, tokens) never reach the engine or its tools.
-    static let inheritedKeys = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "PATH", "SHELL"]
+    static let inheritedKeys = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "PATH", "SHELL", "VEYSTRIX_MODEL_ROOT"]
 
     public static func make(settings: AppSettings,
                             checkpoint: CheckpointReport?,
@@ -64,24 +65,26 @@ public struct LaunchPlan: Equatable, Sendable {
         guard isExecutable(python.path) else { throw PlanError.runtimeMissing("Python is not executable: \(python.path)") }
         guard fileExists(cwd.path) else { throw PlanError.runtimeMissing("working directory: \(cwd.path)") }
         if case .bundled = source {
-            for file in ["models/flashnext/overnight.pyc", "veystrix/cli.pyc", "veystrix/session.pyc"] {
+            for file in ["models/flashnext/overnight.pyc", "veystrix/cli.pyc", "veystrix/session.pyc", "veystrix/model_router.pyc", "veystrix/engine_guard.pyc"] {
                 let path = cwd.appendingPathComponent(file).path
                 guard fileExists(path) else { throw PlanError.runtimeMissing(path) }
             }
         }
 
         // Nemotron's expert pool is sized from free memory when the setting is left at "none" (0 would disable it).
-        let poolArgument = settings.selectedModel == .nemotron35 && settings.decodePool == .none
-            ? "auto" : String(settings.decodePool.rawValue)
-        var args = ["-m", "models.flashnext.overnight",
+        let poolArgument = String(settings.decodePool.rawValue)
+        var args = ["-m", "veystrix.model_router",
                     "--host", "127.0.0.1",                       // loopback only, always
                     "--port", String(settings.port),
                     "--pool-gb", poolArgument,
                     "--checkpoint", settings.activeCheckpointPath]
-        if settings.selectedModel == .nemotron35 { args += ["--model", ModelFamily.nemotron35.rawValue] }
+        args += ["--model", settings.selectedModel.rawValue]
+        args += ["--flashnext-kv-cache", settings.flashNextKVCache.rawValue,
+                 "--flashnext-memory-policy", "absolute-swap-only"]
+        if settings.flashNextSpeed { args.append("--flashnext-speed") }
         if settings.supervisedRestarts { args.append("--overnight") }
-        // The prefix cache is a Flash-Next feature; the Nemotron engine has no use for the folder.
-        if settings.selectedModel == .flashnext, !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
+        // The router forwards the shared cache location when either model starts.
+        if !settings.cacheDirectory.isEmpty { args += ["--prefix-dir", settings.cacheDirectory] }
 
         var env: [String: String] = [:]
         for key in inheritedKeys { if let v = parentEnvironment[key] { env[key] = v } }
@@ -90,10 +93,12 @@ public struct LaunchPlan: Equatable, Sendable {
         env["VEYSTRIX_MIN_BATTERY_PERCENT"] = String(settings.minimumBatteryPercent)
         env["VEYSTRIX_REQUIRE_AC"] = settings.allowBattery ? "0" : "1"
         env["VEYSTRIX_ALLOW_LOW_POWER"] = settings.allowLowPowerMode ? "1" : "0"
+        env["FLASHNEXT_SWAP_CEILING_MIB"] = String(settings.swapLimitGiB * 1024)
         env["VEYSTRIX_PORT"] = String(settings.port)
         // Lifetime statistics: the engine appends one counts-only line per finished request here.
         env["VEYSTRIX_USAGE_LOG"] = UsageStore(paths: paths).requestsFile.path
         env["VEYSTRIX_CACHE_GB"] = String(settings.cacheQuotaGB)
+        env["VEYSTRIX_NEMOTRON_CONTEXT"] = String(settings.nemotronContextTokens)
         // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;
         // needs the narrow `sudo -n /usr/sbin/purge` permission, otherwise it records that and backs off).
         env["FLASHNEXT_AUTO_PURGE"] = "1"
@@ -103,14 +108,8 @@ public struct LaunchPlan: Equatable, Sendable {
         if settings.requireAPIKey, let apiKey { env["VEYSTRIX_SERVER_API_KEY"] = apiKey }
         if case .bundled(let root) = source { env["PYTHONPATH"] = root.appendingPathComponent("lib").path }
 
-        var executable = python
-        var finalArgs = args
-        if settings.keepMacAwake, fileExists("/usr/bin/caffeinate") {
-            // Same as serve.sh: no idle sleep (-i), no disk idle sleep (-m), no system sleep on AC (-s).
-            executable = URL(fileURLWithPath: "/usr/bin/caffeinate")
-            finalArgs = ["-ims", python.path] + args
-        }
-        return LaunchPlan(executable: executable, arguments: finalArgs, environment: env, workingDirectory: cwd,
-                          description: "Veystrix engine (\(note)) on 127.0.0.1:\(settings.port)")
+        return LaunchPlan(executable: python, arguments: args, environment: env, workingDirectory: cwd,
+                          description: "Veystrix engine (\(note)) on 127.0.0.1:\(settings.port)",
+                          keepMacAwake: settings.keepMacAwake && fileExists("/usr/bin/caffeinate"))
     }
 }

@@ -61,11 +61,13 @@ import os
 import time
 from collections import namedtuple
 from concurrent.futures import wait
+from itertools import groupby
 
 from .pool_ring import (
     MIN_DECODE_SLOTS, HazardError, PoolRing, RingError, fits_working_set,
     plan_ring, slots_per_half,
 )
+from .store import expert_read_batch_rows
 
 FLAG_EXPERTS = "FLASHNEXT_PREFILL_RING_EXPERTS"
 FLAG_SCRATCH = "FLASHNEXT_PREFILL_RING_SCRATCH"
@@ -229,14 +231,17 @@ def metal_working_set_limit():
 def _read_rows(lease, view, fd, base, file_start, row_bytes, rows) -> None:
     """Read rows of one part into their ring slots. Runs on a worker thread."""
     with lease.writing():
-        for slot, expert in rows:
-            dest = view[base + slot * row_bytes: base + (slot + 1) * row_bytes]
+        for _, adjacent in groupby(enumerate(rows), key=lambda entry: entry[1][1] - entry[0]):
+            run = [row for _, row in adjacent]
+            dest = [view[base + slot * row_bytes:base + (slot + 1) * row_bytes] for slot, _ in run]
             try:
-                got = os.preadv(fd, [dest], file_start + expert * row_bytes)
+                got = os.preadv(fd, dest, file_start + run[0][1] * row_bytes)
             finally:
-                dest.release()
-            if got != row_bytes:
-                raise OSError(f"short expert read: {got} of {row_bytes} bytes")
+                for part in dest:
+                    part.release()
+            expected = len(run) * row_bytes
+            if got != expected:
+                raise OSError(f"short expert read: {got} of {expected} bytes")
 
 
 class Staging:
@@ -430,13 +435,16 @@ class PrefillRing:
         return used + self._margin > self._limit
 
     def _queue_reads(self, lease, store, switch_prefix, wanted):
-        rows = list(enumerate(wanted))                  # (ring row, expert)
-        chunk = max(1, int(getattr(store, "_pread_chunk", 2)))
+        # Order by shard position so preadv can combine adjacent file rows
+        # while writing each expert to its original routing slot.
+        rows = sorted(enumerate(wanted), key=lambda item: item[1])
+        base_chunk = max(1, int(getattr(store, "_pread_chunk", 2)))
         futures = []
         for plan in self.plans:
             ref = store.refs[f"{switch_prefix}.{plan.name}"]
             fd = self.pool._fd(ref.shard)               # F_NOCACHE, read-ahead off
             base, _ = lease.row_range(plan.name, 0, 1)
+            chunk = expert_read_batch_rows(plan.row_bytes, base_chunk)
             for start in range(0, len(rows), chunk):
                 futures.append(self._submit(
                     _read_rows, lease, self._pool_view, fd, base, ref.start,
@@ -703,7 +711,9 @@ def session(language, tokens: int):
     from models.flashnext import flight_recorder
     flight_recorder.record("prefill_ring_acquire", enabled=state is not None,
                            reason=LAST_REASON[0] if state is None else None,
-                           scratch=bool(state is not None and state.owns_pool))
+                           scratch=bool(state is not None and state.owns_pool),
+                           ring_view_bytes=state.ring.ring_bytes if state is not None else 0,
+                           scratch_mapped_bytes=state._pool_bytes if state is not None and state.owns_pool else 0)
     failed = False
     try:
         yield state

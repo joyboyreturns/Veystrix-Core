@@ -178,7 +178,7 @@ class DamageAndBudgetTests(CrossSessionBase):
 
     def test_the_disk_quota_is_enforced_and_chains_stay_whole(self):
         budget = 3_000_000
-        with mock.patch.dict(os.environ, {S.FLAG_DISK_GB: str(budget / 1e9)}):
+        with mock.patch.dict(os.environ, {"VEYSTRIX_CACHE_GB": str(budget / 1e9)}):
             for index in range(8):
                 user = rand(60) + MARK
                 self.run_prompt(f"quota session {index}", self.static[:80] + [index + 6] + self.static[81:] + user + self.gen)

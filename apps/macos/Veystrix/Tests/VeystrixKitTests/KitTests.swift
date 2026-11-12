@@ -75,6 +75,7 @@ private func tempDir() -> URL {
         let paths = Paths(home: tempDir()); let store = SettingsStore(paths: paths)
         var s = AppSettings(); s.port = 9001; s.decodePool = .twoGB; s.checkpointPath = "/models/x"
         s.allowBattery = false; s.minimumBatteryPercent = 35; s.allowLowPowerMode = true
+        s.swapLimitGiB = 7
         try store.save(s)
         #expect(store.load() == s)
         let attrs = try FileManager.default.attributesOfItem(atPath: paths.settingsFile.path)
@@ -84,8 +85,9 @@ private func tempDir() -> URL {
         let paths = Paths(home: tempDir()); try paths.ensureDirectories()
         try Data(#"{"port": 9100, "futureField": true}"#.utf8).write(to: paths.settingsFile)
         let s = SettingsStore(paths: paths).load()
-        #expect(s.port == 9100); #expect(s.decodePool == .none); #expect(s.cacheQuotaGB == 50)
+        #expect(s.port == 9100); #expect(s.decodePool == .none); #expect(s.cacheQuotaGB == 80); #expect(s.nemotronContextTokens == 1_048_576)
         #expect(s.allowBattery); #expect(s.minimumBatteryPercent == 25); #expect(!s.allowLowPowerMode)
+        #expect(s.swapLimitGiB == 5)
     }
     @Test func damagedSettingsAreKeptAndDefaultsUsed() throws {
         let paths = Paths(home: tempDir()); try paths.ensureDirectories()
@@ -114,6 +116,22 @@ private func tempDir() -> URL {
     }
     private let exists: (String) -> Bool = { _ in true }
 
+    @Test func tieredCacheSelectionReachesTheRouter() throws {
+        var (settings, checkpoint) = try good(tempDir())
+        settings.flashNextKVCache = .tiered4
+        settings.swapLimitGiB = 6
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        #expect(decoded.flashNextKVCache == .tiered4)
+        let plan = try LaunchPlan.make(settings: decoded, checkpoint: checkpoint,
+                                       source: .bundled(engineRoot: URL(fileURLWithPath: "/engine")),
+                                       apiKey: nil, fileExists: exists, isExecutable: exists)
+        let cache = try #require(plan.arguments.firstIndex(of: "--flashnext-kv-cache"))
+        let policy = try #require(plan.arguments.firstIndex(of: "--flashnext-memory-policy"))
+        #expect(plan.arguments[cache + 1] == "tiered4")
+        #expect(plan.arguments[policy + 1] == "absolute-swap-only")
+        #expect(plan.environment["FLASHNEXT_SWAP_CEILING_MIB"] == "6144")
+    }
+
     @Test func tellsTheEngineWhereToWriteLifetimeStatistics() throws {
         let (s, c) = try good(tempDir())
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil,
@@ -126,7 +144,7 @@ private func tempDir() -> URL {
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: "local",
                                        parentEnvironment: ["HOME": "/Users/x", "PATH": "/usr/bin", "OPENAI_API_KEY": "sk-secret", "ANTHROPIC_API_KEY": "sk-ant-secret", "HF_TOKEN": "hf_x"],
                                        fileExists: exists, isExecutable: exists)
-        #expect(plan.arguments.contains("models.flashnext.overnight"))
+        #expect(plan.arguments.contains("veystrix.model_router"))
         let i = try #require(plan.arguments.firstIndex(of: "--host")); #expect(plan.arguments[i + 1] == "127.0.0.1")
         #expect(plan.arguments.contains("--overnight")); #expect(plan.arguments.contains("--checkpoint"))
         #expect(plan.environment["OPENAI_API_KEY"] == nil); #expect(plan.environment["ANTHROPIC_API_KEY"] == nil)
@@ -142,13 +160,16 @@ private func tempDir() -> URL {
         #expect(plan.environment["VEYSTRIX_MIN_BATTERY_PERCENT"] == "40")
         #expect(plan.environment["VEYSTRIX_ALLOW_LOW_POWER"] == "1")
     }
-    @Test func keepAwakeWrapsWithCaffeinateLikeServeSh() throws {
+    @Test func keepAwakeKeepsPythonAsTheEngineExecutable() throws {
         var (s, c) = try good(tempDir()); s.keepMacAwake = true
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
-        #expect(plan.executable.path == "/usr/bin/caffeinate"); #expect(plan.arguments.first == "-ims")
+        #expect(plan.executable.path == "/repo/.venv/bin/python")
+        #expect(plan.arguments.starts(with: ["-m", "veystrix.model_router"]))
+        #expect(plan.keepMacAwake)
         s.keepMacAwake = false
         let plain = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(plain.executable.path == "/repo/.venv/bin/python")
+        #expect(!plain.keepMacAwake)
     }
     @Test func requireKeyPassesServerKeyOnlyWhenEnabled() throws {
         var (s, c) = try good(tempDir())
@@ -189,6 +210,17 @@ private func tempDir() -> URL {
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: source, apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(plan.environment["PYTHONPATH"] == "/Applications/App With Spaces.app/Contents/Resources/engine/lib")
     }
+    @Test func qwenSpeedSelectionReachesTheRouter() throws {
+        var (settings, checkpoint) = try good(tempDir())
+        settings.flashNextSpeed = true
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        let plan = try LaunchPlan.make(settings: decoded, checkpoint: checkpoint,
+            source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil,
+            fileExists: exists, isExecutable: exists)
+        #expect(plan.arguments.contains("--flashnext-speed"))
+        #expect(plan.environment["VEYSTRIX_NEMOTRON_CONTEXT"] == "1048576")
+    }
+
     @Test func customCacheDirectoryIsPassedAsPrefixDir() throws {
         var (s, c) = try good(tempDir()); s.cacheDirectory = "/Volumes/Fast/cache"
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/r")), apiKey: nil, fileExists: exists, isExecutable: exists)
@@ -200,6 +232,23 @@ private func tempDir() -> URL {
         guard case .bundled(let root)? = src else { Issue.record("expected the bundled runtime"); return }
         #expect(root.standardizedFileURL.path == "/App/Contents/Resources/engine")
         #expect(EngineLocator.resolve(settings: AppSettings(), resourceURL: nil, environment: [:], fileExists: { _ in false }) == nil)
+    }
+}
+
+@Suite struct EngineLauncherTests {
+    @Test func keepAwakeStopSignalsTheLaunchedEngine() async throws {
+        let plan = LaunchPlan(executable: URL(fileURLWithPath: "/bin/sleep"),
+                              arguments: ["2"], environment: [:], workingDirectory: tempDir(),
+                              description: "Test engine", keepMacAwake: true)
+        let (exits, exit) = AsyncStream<Int32>.makeStream()
+        let process = try SystemEngineLauncher().launch(plan, onOutput: { _ in }, onExit: { status in
+            exit.yield(status)
+            exit.finish()
+        })
+        process.interrupt()
+        var statuses = exits.makeAsyncIterator()
+        #expect(await statuses.next() == SIGINT)
+        #expect(!process.isRunning)
     }
 }
 
@@ -495,7 +544,7 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
                                        source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         let m = try #require(plan.arguments.firstIndex(of: "--model")); #expect(plan.arguments[m + 1] == "nemotron35-lightning")
         let c = try #require(plan.arguments.firstIndex(of: "--checkpoint")); #expect(plan.arguments[c + 1] == d.path)
-        #expect(!plan.arguments.contains("--prefix-dir"))
+        #expect(plan.arguments.contains("--prefix-dir"))
         #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == "1")
         #expect(plan.arguments.contains("127.0.0.1"))
     }
@@ -504,7 +553,7 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         var s = AppSettings(); s.checkpointPath = d.path; s.cacheDirectory = "/cache"
         let plan = try LaunchPlan.make(settings: s, checkpoint: CheckpointValidator.validate(directory: d),
                                        source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
-        #expect(!plan.arguments.contains("--model")); #expect(plan.arguments.contains("--prefix-dir"))
+        #expect(plan.arguments.contains("--model")); #expect(plan.arguments.contains("--prefix-dir"))
         #expect(plan.environment["VEYSTRIX_NEMOTRON_AUTHORIZED"] == nil)
     }
 }
@@ -551,5 +600,197 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
         #expect(abs((store.loadLoadedTime()[day]?["veystrix-flashnext"] ?? 0) - 15) < 1e-6)
         try store.reset()
         #expect(store.loadRecords().isEmpty)
+    }
+}
+
+@Suite struct HarnessModelSelectionTests {
+    @Test func qwenCodeUsesSelectedModelAndEscapesJSON() throws {
+        let id = "veystrix-nemotron35-\"test"
+        let snippet = HarnessProfiles.snippet(for: .qwenCode, port: 8080, modelID: id)
+        let json = try #require(JSONSerialization.jsonObject(with: Data(snippet.content.utf8)) as? [String: Any])
+        let model = try #require(json["model"] as? [String: Any])
+        let providers = try #require(json["modelProviders"] as? [String: Any])
+        let openai = try #require(providers["openai"] as? [[String: Any]])
+        #expect(model["name"] as? String == id)
+        #expect(openai.first?["id"] as? String == id)
+        let gen = try #require(openai.first?["generationConfig"] as? [String: Any])
+        #expect(gen["timeout"] as? Int == 7_200_000)
+        #expect(gen["streamIdleTimeoutMs"] as? Int == 7_200_000)
+        #expect(gen["contextWindowSize"] as? Int == 262_144)
+        #expect(gen["maxTokens"] == nil)
+        #expect(gen["max_tokens"] == nil)
+    }
+
+    @Test func deepSeekUsesServerWindowAndOmitsLegacy1024Cap() {
+        let snippet = HarnessProfiles.snippet(
+            for: .deepSeek,
+            port: 8080,
+            modelID: "veystrix-flashnext",
+            suggestedClientContext: 266_240,
+            modelContext: 262_144
+        )
+        #expect(snippet.content.contains("contextWindow: 266240"))
+        #expect(snippet.content.contains("maxTokens: 262144"))
+        #expect(snippet.content.contains("timeoutMs: 7200000"))
+        #expect(snippet.content.contains("streamIdleTimeoutMs: 7200000"))
+        #expect(snippet.content.contains("xhigh: xhigh"))
+        #expect(snippet.content.contains("max: max"))
+        #expect(!snippet.content.contains("maxTokens: 1024"))
+
+        let fallback = HarnessProfiles.snippet(for: .deepSeek, port: 8080, modelID: "veystrix-flashnext")
+        #expect(fallback.content.contains("contextWindow: 266240"))
+        #expect(fallback.content.contains("maxTokens: 262144"))
+    }
+
+    @Test func hermesRespectsMinimumContextAndUnlimitedOutput() {
+        let small = HarnessProfiles.snippet(
+            for: .hermes,
+            port: 8080,
+            modelID: "veystrix-flashnext",
+            suggestedClientContext: 12_288,
+            modelContext: 8_192
+        )
+        #expect(small.content.contains("context_length: 65536"))
+        #expect(!small.content.contains("max_tokens"))
+
+        let native = HarnessProfiles.snippet(for: .hermes, port: 8080, modelID: "veystrix-flashnext")
+        #expect(native.content.contains("context_length: 262144"))
+    }
+
+    @Test func openCodeSnippetIsParsableJSONWithWindowAndUnlimitedOutput() throws {
+        let id = "veystrix-nemotron35-\"test"
+        let snippet = HarnessProfiles.snippet(
+            for: .openCode,
+            port: 8080,
+            modelID: id,
+            suggestedClientContext: nil,
+            modelContext: 1_048_576
+        )
+        let json = try #require(JSONSerialization.jsonObject(with: Data(snippet.content.utf8)) as? [String: Any])
+        let providers = try #require(json["providers"] as? [String: Any])
+        let veystrix = try #require(providers["veystrix"] as? [String: Any])
+        let settings = try #require(veystrix["settings"] as? [String: Any])
+        #expect(settings["baseURL"] as? String == "http://127.0.0.1:8080/v1")
+        let models = try #require(veystrix["models"] as? [String: Any])
+        let model = try #require(models[id] as? [String: Any])
+        let limit = try #require(model["limit"] as? [String: Any])
+        #expect(limit["context"] as? Int == 1_048_576)
+        #expect(limit["output"] as? Int == 1_048_576)
+
+        let fallback = HarnessProfiles.snippet(for: .openCode, port: 8080, modelID: "veystrix-flashnext")
+        #expect(fallback.content.contains("\"context\": 262144"))
+        #expect(fallback.content.contains("\"output\": 262144"))
+    }
+
+    @Test func piSnippetNamesTheInstalledExtensionAndOverrides() {
+        let snippet = HarnessProfiles.snippet(
+            for: .pi,
+            port: 8080,
+            modelID: "veystrix-flashnext",
+            suggestedClientContext: 266_240,
+            modelContext: 262_144
+        )
+        #expect(snippet.content.contains("veystrix.ts"))
+        #expect(snippet.content.contains("VEYSTRIX_BASE_URL=http://127.0.0.1:8080/v1"))
+        #expect(snippet.content.contains("VEYSTRIX_API_KEY"))
+        #expect(snippet.content.contains("contextWindow: 262144"))
+        #expect(!snippet.content.contains("4096"))
+    }
+
+    @Test func kimiCodeSnippetIsTOMLWithWindowAndNoOutputCap() {
+        let snippet = HarnessProfiles.snippet(
+            for: .kimiCode,
+            port: 8080,
+            modelID: "veystrix-nemotron35-abc",
+            suggestedClientContext: nil,
+            modelContext: 1_048_576
+        )
+        #expect(snippet.content.contains("[providers.veystrix]"))
+        #expect(snippet.content.contains("base_url = \"http://127.0.0.1:8080/v1\""))
+        #expect(snippet.content.contains("[models.\"veystrix-nemotron35-abc\"]"))
+        #expect(snippet.content.contains("max_context_size = 1048576"))
+        #expect(!snippet.content.contains("max_output_size"))
+        #expect(snippet.content.contains("capabilities = [\"tool_use\"]"))
+    }
+}
+
+@Suite struct ChatClientTests {
+    @Test func uncappedPayloadByDefaultAndExplicitLimitOnlyWhenEnabled() throws {
+        #expect(try ChatRequestBuilder.parseExplicitLimit(enabled: false, rawText: "") == nil)
+        #expect(try ChatRequestBuilder.parseExplicitLimit(enabled: false, rawText: "invalid") == nil)
+        #expect(try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: " 512 ") == 512)
+        #expect(throws: ChatRequestBuilder.ValidationError.invalidExplicitLimit("0")) {
+            _ = try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: "0")
+        }
+        #expect(throws: ChatRequestBuilder.ValidationError.invalidExplicitLimit("-5")) {
+            _ = try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: "-5")
+        }
+        #expect(throws: ChatRequestBuilder.ValidationError.invalidExplicitLimit("abc")) {
+            _ = try ChatRequestBuilder.parseExplicitLimit(enabled: true, rawText: "abc")
+        }
+
+        let uncapped = ChatRequestBuilder.payload(
+            model: "veystrix-flashnext",
+            messages: [["role": "user", "content": "hi"]],
+            reasoning: .xhigh,
+            maxOutputTokens: nil,
+            stream: true
+        )
+        #expect(uncapped["model"] as? String == "veystrix-flashnext")
+        #expect(uncapped["reasoning_effort"] as? String == "xhigh")
+        #expect(uncapped["stream"] as? Bool == true)
+        #expect((uncapped["stream_options"] as? [String: Any])?["include_usage"] as? Bool == true)
+        #expect(uncapped["max_tokens"] == nil)
+        #expect(uncapped["max_completion_tokens"] == nil)
+
+        let capped = ChatRequestBuilder.payload(
+            model: "veystrix-flashnext",
+            messages: [["role": "user", "content": "hi"]],
+            reasoning: .off,
+            maxOutputTokens: 256,
+            stream: true
+        )
+        #expect(capped["reasoning_effort"] as? String == "none")
+        #expect(capped["max_completion_tokens"] as? Int == 256)
+        #expect(capped["max_tokens"] == nil)
+    }
+
+    @Test func reasoningLevelsCoverOffThroughXHigh() {
+        #expect(ChatReasoningEffort.allCases.map(\.rawValue) == ["none", "low", "medium", "high", "xhigh"])
+        #expect(ChatReasoningEffort.allCases.map(\.label) == ["Off", "Low", "Medium", "High", "XHigh"])
+    }
+
+    @Test func wireMessagesIncludeSystemAndAssistantReasoningContent() {
+        let wire = ChatRequestBuilder.wireMessages(
+            systemPrompt: "Be concise.",
+            messages: [
+                ChatWireMessage(role: "user", content: "2+2?"),
+                ChatWireMessage(role: "assistant", content: "4", reasoningContent: "adding 2 and 2"),
+            ]
+        )
+        #expect(wire.count == 3)
+        #expect(wire[0]["role"] as? String == "system")
+        #expect(wire[1]["reasoning_content"] == nil)
+        #expect(wire[2]["reasoning_content"] as? String == "adding 2 and 2")
+    }
+
+    @Test func sseParserExtractsReasoningContentUsageFinishAndErrors() {
+        #expect(ChatSSEParser.parse(line: "event: ping").isEmpty)
+        #expect(ChatSSEParser.parse(line: "data: [DONE]") == [.done])
+        #expect(ChatSSEParser.parse(line: #"data: {"choices":[{"delta":{"reasoning_content":"step 1"}}]}"#)
+            == [.reasoning("step 1")])
+        #expect(ChatSSEParser.parse(line: #"data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"length"}]}"#)
+            == [.content("answer"), .finishReason("length")])
+        #expect(ChatSSEParser.parse(line: #"data: {"usage":{"prompt_tokens":120,"completion_tokens":45,"total_tokens":165,"prompt_tokens_details":{"cached_tokens":80}}}"#)
+            == [.usage(ChatUsage(promptTokens: 120, completionTokens: 45, totalTokens: 165, cachedTokens: 80))])
+        #expect(ChatSSEParser.parse(line: #"data: {"error":{"message":"memory_critical_stop"}}"#)
+            == [.error("memory_critical_stop")])
+    }
+
+    @Test func httpErrorParserExtractsStructuredAndPlainErrors() {
+        let jsonData = Data(#"{"error":{"code":"context_limit","message":"prompt exceeds window"}}"#.utf8)
+        #expect(ChatHTTPErrorParser.message(from: jsonData, statusCode: 400) == "HTTP 400 (context_limit): prompt exceeds window")
+        #expect(ChatHTTPErrorParser.message(from: Data("Service Busy".utf8), statusCode: 503) == "HTTP 503: Service Busy")
+        #expect(ChatHTTPErrorParser.message(from: Data(), statusCode: 500).contains("HTTP 500"))
     }
 }

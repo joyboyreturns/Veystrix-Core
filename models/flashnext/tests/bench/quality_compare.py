@@ -10,6 +10,8 @@ The relation says what the two paths are supposed to share, which decides what c
                   planner). Token identity is not required (bf16 kernels differ with shape), but is reported;
                   required: no case that passed on the reference fails on the candidate, and no category loses
                   pass rate. A first divergence is reported with its position so it can be traced.
+* ``kv-precision`` task-level comparison for KV experiments. Also requires complete results and matching initial
+                  prompt token digests. Later prompts can include different generated text from earlier turns.
 
 Evidence stays in three separate lines in the report: bit-identical, numerically close (comes from
 numeric_diagnostics, not from here), task-level.
@@ -21,7 +23,7 @@ import json
 import sys
 from pathlib import Path
 
-RELATIONS = ("same-plan", "reordered")
+RELATIONS = ("same-plan", "reordered", "kv-precision")
 
 
 def load(path) -> dict:
@@ -89,10 +91,22 @@ def compare(reference: dict, candidate: dict, relation: str = "same-plan") -> di
         reasons.append(f"cases not in both runs: {missing}")
     if not cases:
         reasons.append("no common cases")
+    if relation == "kv-precision":
+        if reference.get("partial") or candidate.get("partial"):
+            reasons.append("at least one quality run is partial")
+        for case_id in shared:
+            r, c = ref[case_id]["turns"], cand[case_id]["turns"]
+            digest = r[0].get("prompt_digest") if r else None
+            if not digest or not c or digest != c[0].get("prompt_digest"):
+                reasons.append(f"{case_id}: initial prompt token digests do not match")
+            if len(r) != len(c):
+                reasons.append(f"{case_id}: turn counts differ")
+            if "candidate" in schema.get(case_id, {}) and "reference" not in schema[case_id]:
+                reasons.append(f"{case_id}: new tool schema failures")
     if relation == "same-plan":
         if diverged:
             reasons.append("tokens differ from the same-plan reference: "
-                           + ", ".join(f"{c['case']}@turn{c['divergence']['turn']}/token{c['divergence']['token']}"
+                           + ", ".join(f"{c['case']}@turn{(c['divergence'] or {}).get('turn')}/token{(c['divergence'] or {}).get('token')}"
                                        for c in diverged))
     else:
         if regressions:

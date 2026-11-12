@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import io
+import http.client
 import json
+import threading
 from types import SimpleNamespace
 import unittest
 
 from veystrix import preferences
 from veystrix.server import (
     VeystrixHandler,
+    VeystrixHTTPServer,
     ModelService,
     RequestError,
     _anthropic_stop,
@@ -16,6 +19,7 @@ from veystrix.server import (
     model_card,
 )
 from veystrix.conversation import content_sentinel
+from veystrix.tests.test_scheduler import start, wait_until
 
 
 class FakeTokenizer:
@@ -68,8 +72,9 @@ class FakeBackend:
         self.pending = []
         # a real client echoes the reply back in the next request
         self.tape.extend(self.encode(text))
+        token_count = 3 if int(max_tokens) < 0 else min(int(max_tokens), 3)
         return text, SimpleNamespace(
-            finish="stop", tokens=min(max_tokens, 3), prompt_tokens=4
+            finish="stop", tokens=token_count, prompt_tokens=4
         )
 
 
@@ -82,6 +87,43 @@ class FakeSession:
     def reset(self):
         self.backend.reset()
         self.opened = False
+
+
+class ScheduledTransportTests(unittest.TestCase):
+    def test_stream_and_json_preserve_protocols_on_the_worker_loop(self):
+        service = ModelService(FakeSession(["One ", "answer."]))
+        with VeystrixHTTPServer(("127.0.0.1", 0), service) as server:
+            stop = threading.Event()
+            worker = start(lambda: server.scheduler.serve_jobs(stop))
+            listener = start(server.serve_forever)
+            try:
+                self.assertTrue(wait_until(lambda: server.scheduler.loop_running))
+                messages = [{"role": "user", "content": "test"}]
+                for path, payload, terminal in (
+                    ("/v1/chat/completions", {"messages": messages}, b"data: [DONE]"),
+                    ("/v1/messages", {"messages": messages, "max_tokens": 8}, b"event: message_stop"),
+                    ("/v1/responses", {"input": "test"}, b"event: response.completed"),
+                ):
+                    for stream in (True, False):
+                        with self.subTest(path=path, stream=stream):
+                            conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+                            try:
+                                conn.request("POST", path, json.dumps(dict(payload, stream=stream)))
+                                response = conn.getresponse()
+                                self.assertEqual(response.status, 200)
+                                raw = response.read()
+                                if stream:
+                                    self.assertIn(terminal, raw)
+                                    self.assertIn(b"answer.", raw)
+                                else:
+                                    self.assertIn("usage", json.loads(raw))
+                            finally:
+                                conn.close()
+            finally:
+                server.shutdown()
+                stop.set()
+                listener.join(3)
+                worker.join(3)
 
 
 class ModelServiceTests(unittest.TestCase):

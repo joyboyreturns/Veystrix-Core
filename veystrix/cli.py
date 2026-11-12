@@ -246,7 +246,7 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     parser.add_argument("--enable", action="append", default=[], choices=tuple(modes.EXPERIMENTAL))
     parser.add_argument("--context-limit", type=int)
     parser.add_argument("--max-cold-prefill", type=int,
-                        help="largest cold prefill in tokens (AGENTIC default 32768; prefill still runs in 2048-token chunks)")
+                        help="largest cold prefill in tokens (32768 default, 65536 with kv-tiered4, 2048-token internal chunks)")
     parser.add_argument("--max-incremental-prefill", type=int,
                         help="largest uncached increment per request in tokens (AGENTIC default 32768)")
     parser.add_argument("--prefix-dir")
@@ -294,6 +294,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         chat_args.append("--server")
 
     environment = dict(os.environ)
+    if known.prefix_dir:
+        environment["VEYSTRIX_CACHE_ROOT"] = known.prefix_dir
     if plan:
         modes.apply_mode(environment, plan)
         if not known.profile:
@@ -316,11 +318,13 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         # Real inference is allowed by default; VEYSTRIX_NEMOTRON_AUTHORIZED=0 is a kill switch.
         if "--server" in chat_args:
             environment.setdefault("VEYSTRIX_MODE", "agentic")
+            environment.setdefault("FLASHNEXT_WATCHDOG", "1")
+            environment.setdefault("FLASHNEXT_WATCHDOG_MEMORY", "1")
         environment.setdefault("FLASHNEXT_CHAT_GUARD", "1")
         environment.setdefault("FLASHNEXT_PREFILL_CHUNK_TOKENS", "2048")
         if known.pool_gb:
             environment["VEYSTRIX_NEMOTRON_POOL_GB"] = known.pool_gb
-        if known.context_limit:
+        if known.context_limit is not None:
             environment["VEYSTRIX_CONTEXT_LIMIT"] = str(known.context_limit)
     if not session_script.is_file():
         environment["PYTHONPATH"] = os.pathsep.join(p for p in (str(ROOT), environment.get("PYTHONPATH", "")) if p)
@@ -328,9 +332,13 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "workflow":
+        from veystrix.workflows.__main__ import main as workflow_main
+        return workflow_main(sys.argv[2:])
+
     # Keep this check before runtime discovery or setup: it must never download
     # dependencies or load the user's model.
-    probe = argparse.ArgumentParser(add_help=False)
+    probe = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     probe.add_argument("--model")
     probe.add_argument("--model-path", "--checkpoint", dest="checkpoint")
     probe.add_argument("--check", action="store_true")

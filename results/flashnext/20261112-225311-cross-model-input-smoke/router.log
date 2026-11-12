@@ -1,0 +1,80 @@
+MEMORY POLICY: swap-growth-only (approved AGENTIC policy)
+  * 9 GiB gate & available-memory admission thresholds are demoted to telemetry-only.
+  * Hard stop: swap growth > 2.5 GiB above launch baseline (high-watermark enforced; fails closed on missing/invalid probe).
+  * Safe GPU cancellation on stop; no automatic retry.
+  * Notice: The swap-growth-only policy does not guarantee protection against sudden OOM, GPU allocation failure, compressor growth, or degraded responsiveness.
+memory admission note: former gates are telemetry-only under swap-growth-only policy; stopping condition is swap growth of 2.5 GiB over session baseline.
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-42829.jsonl
+watchdog       ON  (separate process 42871; stage deadlines /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-cross-model-vklnlirw)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-cross-model-vklnlirw/prefix, RAM 0.75 GB, SSD 80 GB, free reserve 50 GB, profiles off
+  chunk policy   balanced 2048-token chunks, 512-expert scratch ring
+  memory         swap-growth-only (start gate waived; available 8.4 GB is telemetry-only; stops only at +2.5 GiB swap growth)
+  supervisor     ON (swap growth +2.5 GiB, thermal, battery stops; pressure/available are telemetry)  trace veystrix-chat-42829.jsonl
+  auto purge   off
+  context limit  262144 tokens (requests above it are refused, never truncated)
+  prefill limits cold 32768, uncached increment 32768 tokens per request (internal chunks stay at 2048 tokens)
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+[2mready in 3.3s  flashnext / agent  use /help for commands[0m
+
+flight recorder: /Users/vincent/Documents/Veystrix/results/flashnext/20261112-225311-cross-model-input-smoke/router-flight.jsonl
+server ready at http://127.0.0.1:64702
+context limit: 262144 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 32768 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+
+server stopped
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-43162.jsonl
+watchdog       ON  (separate process 43191; stage deadlines /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-cross-model-vklnlirw)
+[2mloading nemotron35-lightning...[0m
+[2mready in 1.8s  nemotron35-lightning / agent  use /help for commands[0m
+
+flight recorder: /Users/vincent/Documents/Veystrix/results/flashnext/20261112-225311-cross-model-input-smoke/router-flight.jsonl
+server ready at http://127.0.0.1:64762
+context limit: 262144 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 65536 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+
+server stopped
+MEMORY POLICY: swap-growth-only (approved AGENTIC policy)
+  * 9 GiB gate & available-memory admission thresholds are demoted to telemetry-only.
+  * Hard stop: swap growth > 2.5 GiB above launch baseline (high-watermark enforced; fails closed on missing/invalid probe).
+  * Safe GPU cancellation on stop; no automatic retry.
+  * Notice: The swap-growth-only policy does not guarantee protection against sudden OOM, GPU allocation failure, compressor growth, or degraded responsiveness.
+memory admission note: former gates are telemetry-only under swap-growth-only policy; stopping condition is swap growth of 2.5 GiB over session baseline.
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-43382.jsonl
+watchdog       ON  (separate process 43427; stage deadlines /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-cross-model-vklnlirw)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    off  (from the launch environment)
+  prefix cache   exact RAM+SSD, /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-cross-model-vklnlirw/prefix, RAM 0.75 GB, SSD 80 GB, free reserve 50 GB, profiles off
+  chunk policy   balanced 2048-token chunks, 512-expert scratch ring
+  memory         swap-growth-only (start gate waived; available 8.3 GB is telemetry-only; stops only at +2.5 GiB swap growth)
+  supervisor     ON (swap growth +2.5 GiB, thermal, battery stops; pressure/available are telemetry)  trace veystrix-chat-43382.jsonl
+  auto purge   off
+  context limit  262144 tokens (requests above it are refused, never truncated)
+  prefill limits cold 32768, uncached increment 32768 tokens per request (internal chunks stay at 2048 tokens)
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+[2mready in 3.2s  flashnext / agent  use /help for commands[0m
+
+flight recorder: /Users/vincent/Documents/Veystrix/results/flashnext/20261112-225311-cross-model-input-smoke/router-flight.jsonl
+server ready at http://127.0.0.1:64784
+context limit: 262144 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 32768 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+
+server stopped
+Traceback (most recent call last):

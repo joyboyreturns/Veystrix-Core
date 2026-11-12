@@ -156,3 +156,76 @@ The restructure completed with these checks:
 - Flash-Next benchmark mode emits one valid JSON line on standard output.
 
 The completed restructure plan remains in [`docs/archive/chat/restructure-plan.md`](../archive/chat/restructure-plan.md).
+
+## 2026-11-12 serving, cache lookup, and arm64 release
+
+The source starts at `unlimited-generation` revision
+`f97011c384a36b65f32deab3f7f69e14b0789f79`, ten commits ahead of local
+`main` at `68fc14bb53f1376096c24950e81aa89b9f085245`. The comparison
+baseline includes the tracked and untracked runtime changes present at the
+start of the work. Per-file manifests, status, and tracked patches are under
+`dist/performance-iteration`. The checkpoints file includes installation IDs,
+local Hugging Face revisions, config and index hashes, tokenizer and template
+hashes, and shard sizes. Both arms used Python 3.12.16 with MLX 0.32.2,
+MLX-LM 0.31.3 and MLX-VLM 0.6.17 on the 16 GiB M4.
+
+### Short production HTTP path
+
+We ran three fresh-process pairs per model in alternating order through
+`tests/run.sh`. Both arms used BF16 KV, greedy sampling, the same prompt and
+template, eight output tokens, and a fresh application cache for each arm.
+The OS file cache stayed intact. Flash-Next used `short-throughput` in both
+arms. Its guard declined the optional decode pool in this run. Nemotron used
+2,048-token chunks and an 8,192-token layer-major window. The short prompt
+fit inside one chunk.
+
+| Metric, median | Flash-Next baseline → candidate | Nemotron baseline → candidate |
+| --- | ---: | ---: |
+| Prompt tokens processed | 37 → 37 | 36 → 36 |
+| Time to first visible delta, s | 10.60 → 11.01 | 4.02 → 3.94 |
+| Uncached prefill, tokens/s | 3.98 → 3.88 | 9.93 → 10.18 |
+| Runtime decode, tokens/s | 1.69 → 1.63 | 3.80 → 3.83 |
+| Wire deltas after the first, deltas/s | 2.02 → 2.00 | 4.04 → 4.02 |
+| Physical process reads, GB | 24.48 → 24.55 | 12.33 → 12.31 |
+| Process footprint after request, GB | 5.23 → 5.15 | 4.88 → 4.87 |
+| System swap at request boundaries, MiB | 789.12 → 789.12 | 789.12 → 789.12 |
+
+Raw arms, request event times, resource counters, health and wire output
+digests are in
+[Flash-Next](../../results/flashnext/20261112-224130-server-short-paired/server-arms.jsonl)
+and [Nemotron](../../results/nemotron35/20261112-224330-server-short-paired/server-arms.jsonl).
+All six text digests matched within each model. We did not collect token-ID
+digests or a same-condition resolution band. Flash-Next paired decode changes
+range from −7.14% to −3.55%. Nemotron paired decode changes range from −1.30%
+to +3.95%. The results do not qualify a single-request speed promotion.
+The physical counter covers the worker process and can include the health
+probe after the request. It is distinct from logical expert bytes, MLX
+allocation, and process footprint.
+
+### Serving and cache
+
+The router can hold simultaneous same-model leases for compatible callers.
+A model change still waits for leases to drain. The connection handler
+owns socket delivery, and streaming aborts on response-buffer overflow.
+The engine still executes one generation at a time. The macOS chat keeps
+tasks, stop controls, and errors per conversation.
+
+The router can reuse a bounded, model-independent JSON encoding when an
+authenticated session resends identical input. The destination worker still
+runs its own template and tokenizer. Model state stays in its checkpoint
+and runtime namespace. Router input hits and restored tokens are separate
+counters.
+
+Nemotron hashes the queried token tape once across candidate lengths and
+opens the exact token tape only for a matching key. It leases the selected
+snapshot while validating and materializing state outside the global cache
+lock. The synthetic continuation test checks exact next-token logits and
+that reclaim respects the lease. Flash-Next packs the query's token bytes
+once for its existing snapshot keys. The disk formats stay compatible.
+
+The [synthetic 102,400-token lookup arms](../../results/nemotron35/20261112-224520-cache-lookup-paired/lookup-arms.jsonl)
+contain 32 Nemotron sidecars and 32 unrelated Flash-Next manifests. Median
+first lookup took 11.20 → 2.88 ms. Median repeated lookup took
+3.44 → 1.86 ms. The fixture loads metadata and token tapes. Real 100K+
+tensor restore, exact real-weight continuation, context sweeps, numerical
+mode qualification, and interleaved generation remain open.

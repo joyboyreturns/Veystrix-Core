@@ -1,0 +1,13 @@
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-59687.jsonl
+watchdog       ON  (separate process 59726; stage deadlines /Users/vincent/.flashnext/watchdog)
+[2mloading nemotron35-lightning...[0m
+[2mready in 1.9s  nemotron35-lightning / agent  use /help for commands[0m
+
+flight recorder: /Users/vincent/.flashnext/logs/server-59687.jsonl
+server ready at http://127.0.0.1:50848
+context limit: 1048576 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 65536 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models

@@ -18,9 +18,9 @@ from pathlib import Path
 import tempfile
 
 DEFAULT_PATH = "~/.veystrix/preferences.json"
-DEFAULT_ANSWER_TOKENS = 2048
-DEFAULT_PLAIN_ANSWER_TOKENS = 4096
-DEFAULT_THINK_TOKENS = 512
+DEFAULT_ANSWER_TOKENS = -1
+DEFAULT_PLAIN_ANSWER_TOKENS = -1
+DEFAULT_THINK_TOKENS = -1
 # read once at migration time, in this order, and then left alone
 LEGACY_PATHS = (
     "~/.cache/flashnext/preferences.json",
@@ -107,10 +107,16 @@ SCHEMA = {
 DEFAULTS = {name: default for name, (default, _) in SCHEMA.items()}
 
 
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def answer_limit(values: dict, default: int = DEFAULT_ANSWER_TOKENS) -> int:
     """Return the answer allowance; ``-1`` means no generation cap."""
     saved = values.get("max_tokens", default)
-    return saved if saved > 0 or saved == -1 else default
+    if saved is None:
+        return -1
+    return saved if _is_int(saved) and (saved > 0 or saved == -1) else default
 
 
 def think_limit(values: dict) -> int:
@@ -118,7 +124,9 @@ def think_limit(values: dict) -> int:
     if not values.get("thinking_enabled", False):
         return 0
     saved = values.get("think_budget", DEFAULT_THINK_TOKENS)
-    return saved if saved > 0 or saved == -1 else 0
+    if saved is None:
+        return -1
+    return saved if _is_int(saved) and (saved > 0 or saved == -1) else 0
 
 
 def separate_think_limit(values: dict) -> int | None:
@@ -130,7 +138,9 @@ def separate_think_limit(values: dict) -> int | None:
     if not values.get("thinking_enabled", False):
         return 0
     saved = values.get("think_budget", DEFAULT_THINK_TOKENS)
-    return saved if saved > 0 or saved == -1 else None
+    if saved is None:
+        return -1
+    return saved if _is_int(saved) and (saved > 0 or saved == -1) else None
 
 
 def generation_limit(values: dict, default: int = DEFAULT_ANSWER_TOKENS) -> int:

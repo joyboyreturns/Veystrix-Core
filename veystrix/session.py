@@ -511,10 +511,12 @@ def build_backend(name: str, args, prefs: dict):
         if not args.model_path:
             raise SystemExit("--model-path is required for model 'nemotron35-lightning'")
         from veystrix.backends.nemotron35 import NemotronBackend
+        from models.flashnext.settings.modes import context_limit_from_environment
 
         backend = NemotronBackend(
             model_path=args.model_path,
             session_dir=(args.session_dir or "~/.cache/veystrix/nemotron35/sessions"),
+            context_tokens=context_limit_from_environment(),
         )
         mirror_preferences(backend, prefs, prefs["profile"])
         return backend
@@ -535,8 +537,9 @@ def _apply_backend_limits(backend) -> None:
     current = os.environ.get("VEYSTRIX_CONTEXT_LIMIT")
     os.environ["VEYSTRIX_CONTEXT_LIMIT"] = str(min(context, int(current)) if current and current.isdigit() else context)
     for name in ("VEYSTRIX_MAX_COLD_PREFILL", "VEYSTRIX_MAX_INCREMENTAL_PREFILL"):
+        limit = min(context, getattr(backend, name.removeprefix("VEYSTRIX_").lower(), context))
         value = os.environ.get(name)
-        os.environ[name] = str(min(context, int(value)) if value and value.isdigit() else context)
+        os.environ[name] = str(min(limit, int(value)) if value and value.isdigit() and int(value) > 0 else limit)
 
 
 def _apply_seed(seed: int | None) -> None:
@@ -674,7 +677,7 @@ def _admit_agentic(prefs, benchmarking, display, verdict=None):
                 import dataclasses
                 tier = tiers[0] if memory_policy.is_swap_growth_policy() else tiers[-1]
                 verdict = dataclasses.replace(verdict, tier=tier)
-        if not verdict.admitted:
+        if not verdict.admitted and not memory_policy.is_absolute_swap_policy():
             print(f"memory admission note: former gates are telemetry-only under swap-growth-only policy; "
                   f"stopping condition is swap growth of 2.5 GiB over session baseline.",
                   file=display, flush=True)

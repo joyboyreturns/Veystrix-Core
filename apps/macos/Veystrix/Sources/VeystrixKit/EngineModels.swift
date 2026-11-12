@@ -21,15 +21,30 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     public var status: String?
     public var ready: Bool?
     public var model: String?
+    public var installedModelID: String?
     public var busy: Bool?
     public var contextLimit: Int?
     public var maxColdPrefill: Int?
+    public var flashNextKVCache: String?
     public var fault: String?
     public var memoryPolicy: MemoryPolicy?
     public var cache: CacheState?
     public var queue: Queue?
     public var activity: Activity?
     public var worker: Worker?
+    public var nemotron: Nemotron?
+
+    public struct Nemotron: Decodable, Equatable, Sendable {
+        public let admittedContext: Int
+        public let kvFormat: String
+        public let millionTokenValidation: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case admittedContext = "admitted_context"
+            case kvFormat = "kv_format"
+            case millionTokenValidation = "million_token_validation"
+        }
+    }
 
     public struct Activity: Decodable, Equatable, Sendable {
         public var active: Bool?
@@ -81,6 +96,9 @@ public struct HealthReport: Decodable, Equatable, Sendable {
     }
     enum CodingKeys: String, CodingKey {
         case status, ready, model, busy, fault, cache, queue, activity, worker
+        case nemotron = "nemotron_context"
+        case installedModelID = "installed_model_id"
+        case flashNextKVCache = "flashnext_kv_cache"
         case contextLimit = "context_limit", maxColdPrefill = "max_cold_prefill", memoryPolicy = "memory_policy"
     }
 
@@ -106,7 +124,35 @@ public struct ModelsReport: Decodable, Equatable, Sendable {
     public struct Entry: Decodable, Equatable, Sendable {
         public var id: String
         public var contextWindow: Int?
-        enum CodingKeys: String, CodingKey { case id, contextWindow = "context_window" }
+        public var suggestedClientContextWindow: Int?
+        public var contextLimitEnforced: Bool?
+        public var maxOutputTokens: Int?
+        enum CodingKeys: String, CodingKey {
+            case id
+            case contextWindow = "context_window"
+            case suggestedClientContextWindow = "suggested_client_context_window"
+            case contextLimitEnforced = "context_limit_enforced"
+            case maxOutputTokens = "max_output_tokens"
+        }
     }
     public var data: [Entry]
+}
+
+/// Metadata-only installed checkpoint inventory. `loaded` is true only for the exact active installation.
+public struct InstalledModelsReport: Decodable, Sendable {
+    public struct Entry: Decodable, Identifiable, Sendable {
+        public let id: String
+        public let family: String
+        public let displayName: String
+        public let checkpoint: String
+        public let architecture: String
+        public let loaded: Bool
+        public let verification: String
+        public let contextWindow: Int?
+        enum CodingKeys: String, CodingKey {
+            case id, family, checkpoint, architecture, loaded, verification, contextWindow = "context_window"
+            case displayName = "display_name"
+        }
+    }
+    public let data: [Entry]
 }

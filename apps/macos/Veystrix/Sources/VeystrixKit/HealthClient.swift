@@ -43,6 +43,20 @@ public struct HealthClient: Sendable {
         }
     }
 
+    public func installedModels() async -> InstalledModelsReport? {
+        // Metadata checks may inspect large checkpoint indexes; do not run them on the UI thread.
+        var r = request("v1/installed-models")
+        r.timeoutInterval = 120
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 120
+        config.connectionProxyDictionary = [:]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        guard let (data, response) = try? await session.data(for: r),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? JSONDecoder().decode(InstalledModelsReport.self, from: data)
+    }
+
     public func models() async -> ModelsReport? {
         guard let (data, response) = try? await Self.session.data(for: request("v1/models")),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }

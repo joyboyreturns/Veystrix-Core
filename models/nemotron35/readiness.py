@@ -18,7 +18,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from .admission import ACTIVATION_BYTES_PER_CHUNK_TOKEN, AdmissionRefused
+from .admission import AdmissionRefused
 
 GIB = 2 ** 30
 HEADROOM_BYTES = GIB                      # always keep this much available beyond what the request itself may grow by
@@ -57,7 +57,7 @@ class Report:
 def required_bytes(plan, resident_pool_bytes: int) -> int:
     """Room one request may need on top of what is resident: activations, pool growth (bounded) and headroom."""
     unfilled = max(0, plan.pool_bytes - resident_pool_bytes)
-    return plan.chunk_tokens * ACTIVATION_BYTES_PER_CHUNK_TOKEN + min(unfilled, MAX_POOL_GROWTH_BYTES) + HEADROOM_BYTES
+    return plan.estimate.activation_bytes + min(unfilled, MAX_POOL_GROWTH_BYTES) + HEADROOM_BYTES
 
 
 def ensure_ready(read, *, plan, resident_pool_bytes: int, reclaim=None, purge=None, sleep=time.sleep) -> Report:

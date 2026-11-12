@@ -32,8 +32,8 @@
         models:
           - id: "veystrix-flashnext"
             name: "VEYSTRIX Flash-Next 262K"
-            contextWindow: 262144
-            maxTokens: 16128
+            contextWindow: 266240
+            maxTokens: 262144
             input:
               - text
             reasoningEfforts:

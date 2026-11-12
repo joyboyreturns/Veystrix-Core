@@ -19,7 +19,7 @@ def active(environ=None) -> bool:
         raise ValueError(f"{FLAG}={value!r}: the only waiver is {SWAP_ONLY!r}")
     if value == SWAP_ONLY:
         return True
-    return memory_policy.is_swap_growth_policy(environ)
+    return memory_policy.is_swap_growth_policy(environ) or memory_policy.is_absolute_swap_policy(environ)
 
 
 def banner() -> str:

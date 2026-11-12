@@ -1,0 +1,9 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+8192 cold: request started (estimated 8192 prompt tokens, swap 2843.62 MiB)
+8192 cold: 8208 prompt, 0 cached, prefill 228.39969947407965 tok/s, decode 3.96 tok/s, TTFT 36.40s
+8192 warm: request started (estimated 8192 prompt tokens, swap 2827.62 MiB)
+8192 warm: 8208 prompt, 8180 cached, prefill 9.9361249112846 tok/s, decode 5.01 tok/s, TTFT 3.19s
+32768 cold: request started (estimated 32768 prompt tokens, swap 2827.62 MiB)
+32768 cold: 32844 prompt, 0 cached, prefill 210.43594146441478 tok/s, decode 3.79 tok/s, TTFT 156.65s
+32768 warm: request started (estimated 32768 prompt tokens, swap 3102.81 MiB)
+32768 warm: 32844 prompt, 32816 cached, prefill 9.732360097323602 tok/s, decode 4.81 tok/s, TTFT 3.38s

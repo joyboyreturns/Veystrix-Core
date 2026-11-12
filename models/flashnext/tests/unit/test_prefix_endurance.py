@@ -15,6 +15,7 @@ from __future__ import annotations
 import gc
 import os
 import random
+import re
 import shutil
 import tempfile
 import unittest
@@ -22,6 +23,8 @@ from pathlib import Path
 from unittest import mock
 
 import mlx.core as mx
+
+from veystrix.universal_cache import NAMESPACE_MARKER
 
 from models.flashnext import prefill as prefill_module
 from models.flashnext import prefix_cache as P
@@ -51,7 +54,7 @@ class EnduranceTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
         env = {S.FLAG: "1", S.FLAG_DIR: str(self.tmp / "cache"), S.FLAG_RAM_GB: RAM_GB, S.FLAG_MIN_TOKENS: "64", S.FLAG_BOUNDARIES: "chunks",
-               PP.FLAG: "1", PP.FLAG_MAX_GB: DISK_GB, PP.FLAG_RESERVE_GB: "0", PP.FLAG_PIN_AFTER: "3",
+               PP.FLAG: "1", "VEYSTRIX_CACHE_GB": DISK_GB, PP.FLAG_PIN_AFTER: "3",
                "FLASHNEXT_PREFILL_CHUNK_TOKENS": "64"}
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
@@ -94,7 +97,8 @@ class EnduranceTests(unittest.TestCase):
             self.assertTrue((store.directory / f"{key}.json").exists(), f"{where}: manifest missing")
             self.assertTrue((store.directory / f"{key}.safetensors").exists(), f"{where}: data missing")
         names = {p.name for p in store.directory.iterdir()}
-        accounted = {PP.MARKER, PP.INDEX, PP.INDEX + ".bak", PP.INDEX_LOCK, P.OWNER_LOCK}
+        accounted = {NAMESPACE_MARKER, PP.MARKER, PP.INDEX, PP.INDEX + ".bak", PP.INDEX_LOCK, P.OWNER_LOCK}
+        accounted.update(name for name in names if re.fullmatch(r"\.[0-9a-f]{64}\.lease", name))
         for key in store._disk:
             accounted |= {f"{key}.json", f"{key}.safetensors"}
         self.assertEqual(names - accounted, set(), f"{where}: unaccounted files {sorted(names - accounted)[:3]}")
@@ -249,7 +253,9 @@ class EnduranceTests(unittest.TestCase):
             model2, session2 = self.engine()
             _, _, report = self.go(model2, session2, system + [7] * 20)
             self.assertEqual(report.hit_tokens, 0)
-            self.assertGreaterEqual(session2.store().usage()["foreign_entries"], 1)
+            self.assertEqual(session2.store().usage()["foreign_entries"], 0)
+        with session2.store().manager.transaction() as tx:
+            self.assertGreaterEqual(tx.status()["models"]["flashnext"]["snapshots"], 1)
         with mock.patch.dict(os.environ, {"FLASHNEXT_PREFILL_RING_EXPERTS": "512"}):         # numerics setting: new fingerprint
             _, session3 = self.engine()
             self.assertNotEqual(session3.store().fp, session.store().fp)

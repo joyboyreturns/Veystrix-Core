@@ -188,14 +188,16 @@ class HarnessPatchTests(unittest.TestCase):
 
     def test_the_shipped_patch_leaves_the_harness_room_to_ask_for_a_real_answer(self):
         window, max_tokens = self.values()
-        self.assertIsNotNone(max_tokens, "the patch must cap the requested output with maxTokens")
-        self.assertGreaterEqual(max_tokens, 512)
-        self.assertGreaterEqual(window - self.HARNESS_RESERVE, max_tokens, "the window must leave room for maxTokens")
-        self.assertLessEqual(max_tokens, 2048 - 256)          # never more than the smallest enforced context can hold
+        self.assertEqual(window, 12288)
+        self.assertIsNotNone(max_tokens, "the patch must set maxTokens to the full server context rather than leaving it small")
+        self.assertEqual(max_tokens, 8192)
+        self.assertGreaterEqual(window - self.HARNESS_RESERVE, 512, "the 4096 safety reserve must not collapse available output")
 
     def test_the_real_harness_wire_value_is_what_the_patch_implies(self):
         window, max_tokens = self.values()
-        self.assertEqual(min(max_tokens, max(1, window - self.HARNESS_RESERVE)), max_tokens)
+        wire_tokens = min(max_tokens, max(1, window - self.HARNESS_RESERVE))
+        self.assertEqual(wire_tokens, window - self.HARNESS_RESERVE)
+        self.assertGreaterEqual(wire_tokens, 4096)
         self.assertEqual(max(1, 4096 - self.HARNESS_RESERVE), 1)      # the configuration that failed
 
 
@@ -280,9 +282,17 @@ class ChatRouteTests(unittest.TestCase):
                 self.assertEqual(handler.wfile.getvalue(), b"")
 
     def test_sampling_fields_are_listed_not_swallowed(self):
-        _, _, headers = self.run_chat(dict(self.BASE, temperature=0.7, top_p=0.9))
-        self.assertIn(("X-Veystrix-Ignored-Fields", "temperature,top_p"), headers)
+        _, _, headers = self.run_chat(dict(self.BASE, temperature=0.7, top_p=0.9, top_k=40))
+        self.assertIn(("X-Veystrix-Ignored-Fields", "temperature,top_k,top_p"), headers)
         _, _, headers = self.run_chat(dict(self.BASE))
+        self.assertFalse([name for name, _ in headers if name == "X-Veystrix-Ignored-Fields"])
+
+    def test_openai_metadata_fields_are_accepted_without_effect(self):
+        # Kimi Code sends prompt_cache_key on every request; refusing it would put the whole
+        # client in a retry loop. Like store/user/metadata, these never reach the model.
+        handler, _, headers = self.run_chat(dict(self.BASE, prompt_cache_key="kimi-session-1",
+                                                 safety_identifier="user-123", store=False, user="u"))
+        self.assertEqual(handler.status_calls, [200])
         self.assertFalse([name for name, _ in headers if name == "X-Veystrix-Ignored-Fields"])
 
     def test_unknown_stream_option_is_refused(self):

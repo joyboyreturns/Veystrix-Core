@@ -1,0 +1,10 @@
+# Shared prefix storage and Nemotron context plan
+
+1. Keep Qwen's checked delta chains and Nemotron's complete hybrid snapshots. Use a dedicated cache root, per-model fingerprint directories, a process-shared lock, and a registry derived from the committed files. Keep an 80 decimal GB quota and a separate 50 decimal GB free-space reserve. Reuse the profile cache's recency, hit frequency and recomputation-value approach across both model families. Protect leased snapshots and every ancestor needed by a surviving child.
+2. Expose status, quota enforcement and reclaim through a model-free local CLI for SwiftUI. Preview and apply will independently compute eligibility under the same lock. Inventory and remove only recognized legacy artifacts after checking for writers.
+3. Inspect the installed Nemotron-H mixer and MLX quantized operations. Account for attention scales and biases, retain FP32 recurrent state, and bound long-context attention scratch. Keep admission, cancellation and model-switch guards. Report the configured and admitted limits separately from measured retrieval lengths.
+4. Compare cold and warm behavior with one model loaded at a time. Rebuild the bundled runtime and local macOS package after regression tests.
+
+NVIDIA validates [1M on its vLLM deployment](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16) and recommends [FP8 KV for its NVFP4 deployment](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4). MLX has [packed quantization](https://ml-explore.github.io/mlx/build/html/python/_autosummary/mlx.core.quantize.html), but [MLX-LM quantized attention](https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/models/base.py) materializes scores. Adoption of an 8-bit codec therefore also needs a bounded attention path.
+
+[vLLM](https://docs.vllm.ai/en/latest/design/prefix_caching/), [SGLang](https://docs.sglang.io/docs/advanced_features/hicache_design), and [LMCache](https://docs.lmcache.ai/kv_cache/storage_backends/local_storage.html) provide reference designs for prefix identity, ownership and SSD tiers. Hybrid-state reconstruction stays with the model adapters.

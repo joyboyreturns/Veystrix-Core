@@ -22,6 +22,11 @@ class RememberTests(unittest.TestCase):
     def test_tests_never_use_the_owners_real_directory(self):
         self.assertNotIn(".flashnext/warm", str(W.WARM_DIR))
 
+    def test_warm_body_targets_requested_model(self):
+        entry = {"system": SYSTEM, "tools": TOOLS}
+        body = W.request_body(entry, "medium", "veystrix-nemotron35-lightning")
+        self.assertEqual(body["model"], "veystrix-nemotron35-lightning")
+
     def test_family_names(self):
         self.assertEqual(W.family("QwenCode/0.27.0 (darwin; arm64)"), "qwencode")
         self.assertEqual(W.family("deepseek-harness/0.2.2-rc.1 (+https://x)"), "deepseek-harness")
@@ -222,7 +227,7 @@ class ServerIntegration(unittest.TestCase):
             conn.close()
 
     def body(self, **extra):
-        return {"model": "m", "stream": True, "tools": TOOLS, "messages": [SYSTEM, {"role": "user", "content": "go"}], **extra}
+        return {"model": "veystrix-flashnext", "stream": True, "tools": TOOLS, "messages": [SYSTEM, {"role": "user", "content": "go"}], **extra}
 
     def test_a_normal_request_leaves_the_clients_prefix_behind(self):
         status, _ = self.post(self.body(max_tokens=256))

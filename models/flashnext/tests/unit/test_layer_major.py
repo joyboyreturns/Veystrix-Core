@@ -403,7 +403,7 @@ class PrefillIntegrationTests(unittest.TestCase):
         token, cache, _, trace = self.run_prefill("layer", window=256)
         self.assertEqual(token, want_token)
         self.assertEqual(cache_bits(cache), cache_bits(want_cache))
-        self.assertEqual(trace.order, f"{layer_major.PLAN_VERSION}/w256")
+        self.assertEqual(trace.order, f"{layer_major.PLAN_VERSION}/w256/min0")
         self.assertGreater(len(trace.windows), 1)
         self.assertEqual(trace.windows[0][0], 0)
         self.assertEqual(trace.windows[-1][1], len(self.ids))
@@ -582,8 +582,25 @@ class LaunchWiringTests(unittest.TestCase):
         self.assertEqual(plan.env["FLASHNEXT_PREFILL_WINDOW_TOKENS"], "4096")
         hybrid = modes.plan_mode(modes.AGENTIC, enable=("layer-major-hybrid-4k",), free_disk_gb=200)
         self.assertEqual(hybrid.env["FLASHNEXT_PREFILL_HYBRID_SMALL_WINDOWS"], "1")
+        self.assertEqual(hybrid.env["FLASHNEXT_LAYER_MAJOR_MIN_TOKENS"], "2049")
         with self.assertRaises(modes.ModeError):
             modes.plan_mode(modes.AGENTIC, enable=("layer-major", "layer-major-4k"), free_disk_gb=200)
+
+    def test_short_throughput_uses_the_combined_engine_flags(self):
+        from models.flashnext.settings import modes
+
+        plan = modes.plan_mode(modes.AGENTIC, enable=("short-throughput",), free_disk_gb=200)
+        for key, value in {
+            "FLASHNEXT_PREFILL_ORDER": "layer",
+            "FLASHNEXT_PREFILL_WINDOW_TOKENS": "4096",
+            "FLASHNEXT_LAYER_MAJOR_MIN_TOKENS": "2049",
+            "FLASHNEXT_PREFILL_LAYER_PREFETCH": "1",
+            "FLASHNEXT_UNCACHED_EXPERT_READS": "prefill",
+            "FLASHNEXT_EXPERT_POOL_BUFFERED_FILL": "1",
+        }.items():
+            self.assertEqual(plan.env[key], value)
+        with self.assertRaises(modes.ModeError):
+            modes.plan_mode(modes.CHAT, enable=("short-throughput",))
 
     def test_supervisor_forwards_enable_to_chat_sh(self):
         from types import SimpleNamespace

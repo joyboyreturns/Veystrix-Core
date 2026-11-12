@@ -294,7 +294,8 @@ class FakeWarm:
     def due_jobs(self, entries, efforts, state, now, refresh):
         return [(e, f) for e in entries for f in efforts if now - float(state.get(self.job_key(e, f), 0.0)) > refresh]
 
-    def warm_one(self, base, entry, effort, *, key, timeout, abort=None):
+    def warm_one(self, base, entry, effort, *, key, timeout, abort=None, model_id=None):
+        self.model_id = model_id
         self.calls.append((entry["family"], effort, abort))
         if self.raises:
             raise self.raises
