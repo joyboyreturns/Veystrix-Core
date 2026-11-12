@@ -103,8 +103,9 @@ def lease_range(pool, count: int) -> int:
     first = int(pool.slots) - count
     if count <= 0 or first < MIN_DECODE_SLOTS:
         raise RingError("a ring of that size would leave decode too few slots")
+    discard = getattr(pool, "discard_slot", pool._slot_of.pop)
     for key in [k for k, slot in pool._slot_of.items() if slot >= first]:
-        del pool._slot_of[key]
+        discard(key)
     pool._free[:] = [slot for slot in pool._free if slot < first]
     return first
 

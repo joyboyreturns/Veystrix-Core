@@ -111,7 +111,7 @@ def budget(machine: Machine) -> int:
 
 def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_tokens: int | None = None,
               chunk_tokens: int = 2048, pool_bytes: int | None = None, allocator_slack: int = GIB // 2,
-              shrink: bool = True, int8_kv: bool = False, lightning: bool = False) -> Plan:
+              shrink: bool = True, int8_kv: bool = False, lightning: bool = False, prefix_cache_bytes: int = 0) -> Plan:
     """Fit context, chunk and pool into the budget, shrinking pool, then chunk; refuse if the core cannot fit.
 
     ``pool_bytes=None`` sizes the expert pool automatically: as large as fits (up to AUTO_POOL_MAX) while leaving
@@ -130,7 +130,7 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
         return estimate(config=config, context_tokens=context_tokens, non_expert_bytes=dense_bytes,
                         expert_pool_bytes=pool, activation_bytes=(chunk * ACTIVATION_BYTES_PER_CHUNK_TOKEN
                             + (INT8_ATTENTION_SCRATCH_BYTES if int8_kv else 0)),
-                        reserve_bytes=allocator_slack, int8_kv=int8_kv)
+                        reserve_bytes=allocator_slack + prefix_cache_bytes, int8_kv=int8_kv)
 
     if pool_bytes is None:
         base = build(0, chunk_tokens).total_bytes

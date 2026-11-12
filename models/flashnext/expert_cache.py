@@ -1857,6 +1857,7 @@ class StreamingSwitchGLU(nn.Module):
         slots, misses = pool.assign(self.layer_id, wanted)
         self.hits += len(routed) - len(misses)
         self.misses += len(misses)
+        resident_activation = None
         if misses:
             prefix = self.gate_proj.cache.prefix.rsplit(".", 1)[0]
             chunk = int(os.environ.get("FLASHNEXT_STREAM_PACK_CHUNK", "2")) or 2
@@ -1864,7 +1865,25 @@ class StreamingSwitchGLU(nn.Module):
             futures = []
             try:
                 futures = pool.fill(prefix, misses, _submit_read, chunk)
-                if _KEEPWARM[0]:
+                if (os.environ.get("FLASHNEXT_DECODE_OVERLAP") == "1" and len(misses) < len(wanted)
+                        and flat_input.shape[0] == 1):
+                    hidden_size = flat_input.shape[-1]
+                    missed = {expert for expert, _ in misses}
+                    resident_positions = [i for i, expert in enumerate(routed) if expert not in missed]
+                    missing_positions = [i for i, expert in enumerate(routed) if expert in missed]
+                    weights = self._get_dummy_streamed_weights(hidden_size)
+                    resident_count = len(resident_positions)
+                    resident_executor = self._executor(("pool", hidden_size, resident_count),
+                                                       resident_count, hidden_size, resident_count)
+                    if resident_executor.available:
+                        resident_routes = mx.array(
+                            [[SLOT_BIT | slots[routed[i]] for i in resident_positions]], dtype=mx.uint32,
+                        )
+                        resident_activation = resident_executor.pool_activations(
+                            flat_input, resident_routes, weights, pool.buffer_mx,
+                        )
+                        mx.async_eval(resident_activation)
+                if resident_activation is None and _KEEPWARM[0]:
                     _keep_gpu_warm_until(futures)
                 timings = [] if _PROFILE else None
                 for future in futures:
@@ -1878,6 +1897,8 @@ class StreamingSwitchGLU(nn.Module):
                     except BaseException:
                         pass
                 pool.invalidate(self.layer_id, misses)
+                if resident_activation is not None:
+                    mx.eval(resident_activation)  # finish using the shared buffer before unwinding
                 raise
             if _PROFILE:
                 ended = time.perf_counter()
@@ -1892,6 +1913,19 @@ class StreamingSwitchGLU(nn.Module):
         ).reshape(tokens, width)
         weights = self._get_dummy_streamed_weights(hidden_size)
         executor = self._executor(("pool", hidden_size, width), width, hidden_size, width)
+        options = {}
+        if resident_activation is not None:
+            missing_count = len(missing_positions)
+            missing_executor = self._executor(("pool", hidden_size, missing_count),
+                                              missing_count, hidden_size, missing_count)
+            missing_routes = mx.array(
+                [[SLOT_BIT | slots[routed[i]] for i in missing_positions]], dtype=mx.uint32,
+            )
+            missing_activation = missing_executor.pool_activations(flat_input, missing_routes, weights, pool.buffer_mx)
+            positions = resident_positions + missing_positions
+            inverse = mx.array(sorted(range(width), key=positions.__getitem__), dtype=mx.int32)
+            combined = mx.concatenate((resident_activation, missing_activation), axis=1)
+            options["pool_activation"] = mx.take(combined, inverse, axis=1)
         output = executor.execute(
             flat_input, local,
             {"gate_proj": weights[0], "up_proj": weights[1], "down_proj": weights[2]},
@@ -1901,6 +1935,7 @@ class StreamingSwitchGLU(nn.Module):
             shared_y=shared_y,
             shared=shared,
             shared_gate=shared_gate,
+            **options,
         )
         if shared_y is not None or (shared is not None and shared_gate is not None):
             self._last_fused_shared = True

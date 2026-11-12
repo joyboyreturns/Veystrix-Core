@@ -1,5 +1,6 @@
 """Prefetch, parallel reads, auto pool and the persistent prefix cache, on tiny synthetic checkpoints."""
 import shutil
+import os
 import tempfile
 import unittest
 import unittest.mock
@@ -10,6 +11,7 @@ import mlx.core as mx
 from models.nemotron35 import admission
 from models.nemotron35.prefix_cache import PrefixCache
 from models.nemotron35.streamed_model import load_streamed
+from models.nemotron35.streamed_experts import StreamedSwitchMLP
 from models.nemotron35.tests.unit.test_backend import StubTokenizer, machine
 from veystrix.backends.nemotron35 import NemotronBackend
 from models.nemotron35.tiny_checkpoint import TINY_CONFIG, permissive_config_check, write_checkpoint
@@ -85,6 +87,24 @@ class PrefetchTests(unittest.TestCase):
         finally:
             s.close()
 
+    def test_decode_overlap_preserves_slot_order(self):
+        baseline = self.load(prefetch=False, pool_bytes=64 * 1024)
+        candidate = self.load(prefetch=False, pool_bytes=64 * 1024)
+        self.addCleanup(baseline.close)
+        self.addCleanup(candidate.close)
+        x = (mx.arange(TINY_CONFIG["hidden_size"], dtype=mx.float32) / 64).reshape(1, -1)
+        routes = mx.array([[2, 0, 1]])
+        group = TINY_CONFIG["quantization"]["group_size"]
+        for model in (baseline, candidate):
+            model.pool.fetch(1, [0])
+        with unittest.mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_DECODE_OVERLAP": "0"}):
+            expected = StreamedSwitchMLP(baseline.pool, 1, group)(x, routes)
+        with unittest.mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_DECODE_OVERLAP": "1"}), \
+                unittest.mock.patch.object(mx, "async_eval", wraps=mx.async_eval) as dispatch:
+            actual = StreamedSwitchMLP(candidate.pool, 1, group)(x, routes)
+            dispatch.assert_called_once()
+        self.assertTrue(mx.array_equal(actual, expected).item())
+
 
 class AutoPoolTests(unittest.TestCase):
     cfg = dict(TINY_CONFIG, max_position_embeddings=262144)
@@ -139,6 +159,26 @@ class PrefixCacheTests(unittest.TestCase):
             return b.tape[len(self.PROMPT) + len(tail):]
         finally:
             b.close()
+
+    def test_ram_restore_is_independent_and_rejects_replaced_disk_state(self):
+        with unittest.mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_PREFIX_RAM_MB": "8"}):
+            backend = self.backend()
+        self.addCleanup(backend.close)
+        cache = backend.prefix_cache
+        tokens = self.PROMPT[:12]
+        backend.core.prefill(tokens, emit_logits=False)
+        self.assertTrue(cache.save(backend.core.cache, tokens))
+        first, length = cache.restore(self.PROMPT)
+        self.assertEqual(length, len(tokens))
+        expected = first[0].state[0].tolist()
+        first[0].state[0][:] = 0
+        second, length = cache.restore(self.PROMPT)
+        self.assertEqual(length, len(tokens))
+        self.assertEqual(second[0].state[0].tolist(), expected)
+        self.assertEqual((cache.stats.ssd_hits, cache.stats.ram_hits), (1, 1))
+        cache._paths(cache._key(tokens))[0].write_bytes(b"replaced")
+        self.assertEqual(cache.restore(self.PROMPT), (None, 0))
+        self.assertEqual(cache._ram_bytes, 0)
 
     def test_restart_resumes_from_snapshot_and_matches_cold_run(self):
         a = self.backend()

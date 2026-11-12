@@ -761,6 +761,22 @@ class MetalMoEExecutor:
             return mx.einsum("tki,tkoi->tko", x, selected)
         return mx.einsum("ti,tkoi->tko", x, selected)
 
+    def pool_activations(self, x, routes, projections, slab_pack):
+        """Compute the per-route activations for a subset of a packed decode."""
+        from mlx_vlm.models.activations import swiglu
+
+        gate, up = (_as_projection(projection) for projection in projections[:2])
+        width = _shape(up.weight)[1]
+        gate_out = self._metal_projection(
+            x, routes, gate, width, False, slab_pack=slab_pack, proj_name="gate_proj",
+        )
+        if self.fused_up_swiglu:
+            return self._metal_fused_up_swiglu(x, routes, gate_out, up, width, slab_pack=slab_pack)
+        up_out = self._metal_projection(
+            x, routes, up, width, False, slab_pack=slab_pack, proj_name="up_proj",
+        )
+        return swiglu(gate_out, up_out)
+
     def execute(
         self,
         x: Any,
@@ -774,6 +790,7 @@ class MetalMoEExecutor:
         shared_y: Any = None,
         shared: Any = None,
         shared_gate: Any = None,
+        pool_activation: Any = None,
     ) -> Any:
         """Run gate, up, activation, and down for bounded flattened inputs.
 
@@ -875,19 +892,25 @@ class MetalMoEExecutor:
         # Separate gate and up projections outperform the fused variant on
         # M4. Fusion raises register pressure enough to exceed the saved
         # launch. The down-plus-router fusion remains profitable.
-        gate_out = self._metal_projection(
-            x, routes, gate, gate_width, False, slab_pack=slab_pack,
-            stream_pack=stream_pack, proj_name="gate_proj",
-        )
         # return_all exposes the raw Up projection for verification. Keep
         # that diagnostic API unchanged when the fusion flag is enabled.
-        up_out = None
-        if self.fused_up_swiglu and not return_all:
+        gate_out = up_out = None
+        if pool_activation is not None:
+            if (slab_pack is None or stream_pack is not None or return_all or
+                    _shape(pool_activation) != (*route_shape, inter_width)):
+                raise ValueError("invalid precomputed pool activation")
+            activation = pool_activation
+        else:
+            gate_out = self._metal_projection(
+                x, routes, gate, gate_width, False, slab_pack=slab_pack,
+                stream_pack=stream_pack, proj_name="gate_proj",
+            )
+        if pool_activation is None and self.fused_up_swiglu and not return_all:
             activation = self._metal_fused_up_swiglu(
                 x, routes, gate_out, up, inter_width,
                 slab_pack=slab_pack, stream_pack=stream_pack,
             )
-        else:
+        elif pool_activation is None:
             up_out = self._metal_projection(
                 x, routes, up, inter_width, False, slab_pack=slab_pack,
                 stream_pack=stream_pack, proj_name="up_proj",

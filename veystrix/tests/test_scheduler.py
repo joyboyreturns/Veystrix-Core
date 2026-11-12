@@ -36,7 +36,7 @@ class Harness:
             self.executor = start(lambda: self.scheduler.serve_jobs(self.stop))
             assert wait_until(lambda: self.scheduler.loop_running)
 
-    def submit(self, name, work=None, gone=lambda: False):
+    def submit(self, name, work=None, gone=lambda: False, priority=0):
         def job():
             self.order.append(name)
             self.threads[name] = threading.current_thread().name
@@ -46,7 +46,7 @@ class Harness:
 
         def body():
             try:
-                self.outcomes[name] = ("ok", self.scheduler.run(job, gone=gone, path="/x"))
+                self.outcomes[name] = ("ok", self.scheduler.run(job, gone=gone, path="/x", priority=priority))
             except BaseException as error:
                 self.outcomes[name] = (type(error).__name__, error)
 
@@ -59,6 +59,25 @@ class Harness:
 
 
 class SchedulerTests(unittest.TestCase):
+    def test_priority_can_pass_queued_work_until_it_has_aged(self):
+        for elapsed, expected in ((1, ["interactive", "background"]), (11, ["background", "interactive"])):
+            with self.subTest(elapsed=elapsed):
+                now = [0.0]
+                h = Harness(True, clock=lambda: now[0])
+                release = threading.Event()
+                self.addCleanup(h.close)
+                self.addCleanup(release.set)
+                h.submit("active", lambda: release.wait(5))
+                self.assertTrue(wait_until(lambda: h.scheduler.busy))
+                h.submit("background")
+                self.assertTrue(wait_until(lambda: h.scheduler.snapshot()["waiting"] == 1))
+                now[0] = elapsed
+                h.submit("interactive", priority=10)
+                self.assertTrue(wait_until(lambda: h.scheduler.snapshot()["waiting"] == 2))
+                release.set()
+                self.assertTrue(wait_until(lambda: len(h.outcomes) == 3))
+                self.assertEqual(h.order, ["active", *expected])
+
     def test_slow_response_writer_does_not_block_next_inference(self):
         harness = Harness(True)
         self.addCleanup(harness.close)

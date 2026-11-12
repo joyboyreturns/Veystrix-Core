@@ -685,6 +685,15 @@ class MLXQ4G32SmokeTests(unittest.TestCase):
         mx.eval(expected, fused)
         mismatches = int(mx.sum(fused.view(mx.uint16) != expected.view(mx.uint16)).item())
         self.assertEqual(mismatches, 0, f"slab pack shared_y epilogue diverged with {mismatches} mismatches")
+        split = MetalMoEExecutor(1, hidden_size, 1, backend="metal")
+        ordered_packs = tuple(packs[name] for name in ("gate_proj", "up_proj", "down_proj"))
+        resident = split.pool_activations(x, routes[:, 1:], ordered_packs, slab_pack)
+        mx.async_eval(resident)
+        missing = split.pool_activations(x, routes[:, :1], ordered_packs, slab_pack)
+        activation = mx.concatenate((missing, resident), axis=1)
+        overlapped = executor.execute(x, routes, packs, scores=scores, slab_pack=slab_pack,
+                                      shared_y=shared_y, pool_activation=activation)
+        self.assertTrue(mx.array_equal(overlapped.view(mx.uint16), fused.view(mx.uint16)).item())
 
     def test_fused_shared_parts_preserve_bfloat16_product_rounding(self):
         mx = self.mx

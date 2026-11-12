@@ -19,6 +19,7 @@ import time
 POLL_SECONDS = 0.25
 DEFAULT_MAX_WAIT = 20.0
 DEFAULT_MAX_WAITING = 4
+PRIORITY_AGING_SECONDS = 1.0
 
 
 class Busy(Exception):
@@ -48,7 +49,8 @@ class Scheduler:
         self.max_wait, self.max_waiting, self._clock = float(max_wait), int(max_waiting), clock
         self._lock = threading.Lock()
         self._gate = threading.Lock()              # inline mode: the single inference slot
-        self._jobs: queue.Queue = queue.Queue()
+        self._jobs: queue.PriorityQueue[tuple[float, int, _Ticket]] = queue.PriorityQueue()
+        self._sequence = 0
         self.loop_running = False
         self.active: dict | None = None
         self.waiting = 0
@@ -72,18 +74,23 @@ class Scheduler:
 
     # -- handler side -----------------------------------------------------------------------------------------------
 
-    def run(self, fn, gone=lambda: False, path: str = "", *, wait=None):
-        """Run ``fn`` once a slot is free and return its result. Raises Busy, ClientGone, or what ``fn`` raised."""
+    def run(self, fn, gone=lambda: False, path: str = "", *, wait=None, priority: int = 0):
+        """Run ``fn`` once a slot is free. Queued callers may choose an integer priority from 0 to 10."""
+        if not isinstance(priority, int) or not 0 <= priority <= 10:
+            raise ValueError("scheduler priority must be an integer from 0 to 10")
         ticket = _Ticket(fn, path)
-        deadline = self._clock() + self.max_wait
         with self._lock:
+            enqueued = self._clock()
+            deadline = enqueued + self.max_wait
             if self.waiting >= self.max_waiting:
                 self.rejected += 1
                 raise Busy(f"the server is handling another request and {self.waiting} are already waiting; retry shortly")
             self.waiting += 1
             queued = self.loop_running
             if queued:
-                self._jobs.put(ticket)
+                self._sequence += 1
+                # All waiting jobs age at the same rate, so their relative ranks are fixed.
+                self._jobs.put((enqueued - priority * PRIORITY_AGING_SECONDS, self._sequence, ticket))
         if queued:
             while not ticket.started.wait(POLL_SECONDS):
                 problem = self._expired(ticket, gone, deadline)
@@ -153,7 +160,7 @@ class Scheduler:
         try:
             while not stop.is_set():
                 try:
-                    ticket = self._jobs.get(timeout=POLL_SECONDS)
+                    _, _, ticket = self._jobs.get(timeout=POLL_SECONDS)
                 except queue.Empty:
                     continue
                 if not self._claim(ticket):
@@ -176,7 +183,7 @@ class Scheduler:
     def _fail_pending(self) -> None:
         while True:
             try:
-                ticket = self._jobs.get_nowait()
+                _, _, ticket = self._jobs.get_nowait()
             except queue.Empty:
                 return
             with self._lock:

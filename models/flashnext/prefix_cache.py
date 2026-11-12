@@ -782,6 +782,8 @@ class PrefixCache:
         self._disk: dict[str, dict] = {}              # key -> {"n", "parent", "bytes", "atime"}
         self._foreign: dict[str, dict] = {}           # key -> {"bytes", "atime", "parent"}
         self._tokens: dict[str, tuple] = {}           # key -> full prefix tokens (for exact checks)
+        self._rolling: dict[bytes, str] = {}          # token-only SHA-256 -> verified entry key
+        self._rolling_keys: dict[str, bytes] = {}
         self._plans: dict[str, tuple | None] = {}     # key -> chunk-plan provenance of the stored state
         self._lengths: set[int] = set()
         self._leases: dict[str, int] = {}             # key -> holders; a leased entry is never evicted or dropped
@@ -817,7 +819,7 @@ class PrefixCache:
             entry = self._ram.pop(key, None)
             if entry is not None:
                 self._ram_bytes -= entry.nbytes()
-            self._tokens.pop(key, None)
+            self._forget_tokens(key)
             self._plans.pop(key, None)
         self._disk = {key: {"n": entry.tokens, "parent": entry.parent,
                             "bytes": entry.size, "atime": entry.mtime}
@@ -908,7 +910,7 @@ class PrefixCache:
             entry = capture(cache_list, tokens, self.fp, parent_entry, language, plan)
             self._plans[key] = entry.plan
             entry._tokens = tokens
-            self._tokens[key] = tokens
+            self._remember_tokens(key, tokens)
             self._lengths.add(entry.n_tokens)
             self._admit(entry)
             if self.directory is not None and self.write_through:
@@ -1051,7 +1053,7 @@ class PrefixCache:
                 entry = self._ram.pop(key)
                 size = entry.nbytes()
                 self._ram_bytes -= size
-                self._tokens.pop(key, None)
+                self._forget_tokens(key)
                 self._plans.pop(key, None)
                 self._evicted_keys[key] = time.time()
                 if len(self._evicted_keys) > 2048:
@@ -1146,7 +1148,7 @@ class PrefixCache:
         resident = self._ram.pop(victim, None)
         if resident is not None:
             self._ram_bytes -= resident.nbytes()
-        self._tokens.pop(victim, None)
+        self._forget_tokens(victim)
         self._plans.pop(victim, None)
         self._evicted_keys[victim] = time.time()
         if len(self._evicted_keys) > 2048:
@@ -1179,6 +1181,19 @@ class PrefixCache:
             self._disk[key]["atime"] = time.time()
 
     # ---- lookup ----
+    def _remember_tokens(self, key, tokens):
+        self._tokens[key] = tokens
+        if key not in self._rolling_keys:
+            digest = hashlib.sha256(_token_bytes(tokens)).digest()
+            self._rolling_keys[key] = digest
+            self._rolling[digest] = key
+
+    def _forget_tokens(self, key):
+        self._tokens.pop(key, None)
+        digest = self._rolling_keys.pop(key, None)
+        if self._rolling.get(digest) == key:
+            del self._rolling[digest]
+
     def _longest_prefix_with_reason(self, tokens, strictly_shorter=False, accept=None):
         limit = len(tokens) - (1 if strictly_shorter else 0)
         saw_plan_mismatch = False
@@ -1187,8 +1202,26 @@ class PrefixCache:
         if not candidates:
             return None, "cold"
         packed = memoryview(_token_bytes(tokens[:candidates[0]]))
-        for n in candidates:
-            key = _chain_key_bytes(self.fp, n, packed[:4 * n])
+        rolling_matches, unindexed = {}, None
+        for index, n in enumerate(candidates):
+            # Common longest-prefix hits need only one legacy hash. Use the
+            # rolling index if we have to search deeper through the chain.
+            if index == 2 and self._rolling and len(candidates) >= 6:
+                digest = hashlib.sha256()
+                previous = 0
+                for length in reversed(candidates[index:]):
+                    digest.update(packed[4 * previous:4 * length])
+                    previous = length
+                    match = self._rolling.get(digest.digest())
+                    if match is not None and len(self._tokens[match]) == length:
+                        rolling_matches[length] = match
+                unindexed = {meta["n"] for key, meta in self._disk.items() if key not in self._rolling_keys}
+                unindexed.update(entry.n_tokens for key, entry in self._ram.items() if key not in self._rolling_keys)
+            key = rolling_matches.get(n)
+            if key is None:
+                if unindexed is not None and n not in unindexed and not self._evicted_keys:
+                    continue
+                key = _chain_key_bytes(self.fp, n, packed[:4 * n])
             if key in self._ram or key in self._disk:
                 stored = self._tokens.get(key)
                 if stored is None or stored == tuple(tokens[:n]):
@@ -1337,13 +1370,17 @@ class PrefixCache:
             if entry is None:
                 entry, size = self._load_entry(current)
                 loaded += size
-            if chain and for_restore and any(layer.kind == "qsa_mixed_v1" for layer in chain[0].layers):
+            if chain and for_restore:
                 # Ancestors contribute only history/index deltas. Holding their
                 # recurrent states and recent tiers throughout a long restore
                 # can dwarf the compressed live state.
                 slim = copy.copy(entry)
-                slim.layers = [Layer(layer.kind, kv={k: a for k, a in layer.kv.items()
-                                                     if not k.startswith("recent_")}) for layer in entry.layers]
+                slim.layers = [
+                    Layer("arrays") if layer.kind == "arrays" else
+                    Layer(layer.kind, kv={k: a for k, a in layer.kv.items() if not k.startswith("recent_")})
+                    if layer.kind == "qsa_mixed_v1" else layer
+                    for layer in entry.layers
+                ]
                 slim.lang = {}
                 chain.append(slim)
             else:
@@ -1367,7 +1404,7 @@ class PrefixCache:
             entry._tokens = entry.token_delta
         if chain_key(self.fp, entry._tokens) != key:
             raise CorruptEntry("token chain does not hash to the key")
-        self._tokens[key] = entry._tokens
+        self._remember_tokens(key, entry._tokens)
         self._plans[key] = entry.plan
         self._admit(entry)
         return entry, self._disk[key]["bytes"]
@@ -1400,7 +1437,7 @@ class PrefixCache:
             if entry is not None:
                 self._ram_bytes -= entry.nbytes()
             self._disk.pop(k, None)
-            self._tokens.pop(k, None)
+            self._forget_tokens(k)
             self._drop_files(k)
             self.stats.invalidated += 1
         self._lengths = {m["n"] for m in self._disk.values()} | {e.n_tokens for e in self._ram.values()}
@@ -1423,6 +1460,8 @@ class PrefixCache:
             self._ram.clear()
             self._disk.clear()
             self._tokens.clear()
+            self._rolling.clear()
+            self._rolling_keys.clear()
             self._lengths.clear()
             self._ram_bytes = 0
 
