@@ -47,19 +47,21 @@ class Feed:
 
 class StageTests(unittest.TestCase):
     def test_absolute_swap_only_has_no_growth_stop_or_margin(self):
-        policy = M.Policy.from_environment({
-            "FLASHNEXT_MEMORY_POLICY": "absolute-swap-only",
-            "FLASHNEXT_SWAP_CEILING_MIB": "1000",
-            "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "256",
-        })
-        controller = M.Controller(policy)
         telemetry = dict(pressure=4, swapout_pages=None, swapin_pages=None,
                          available_mb=100, compressor_mb=None)
-        self.assertIsNone(controller.observe(0, swap_used_mb=10, **telemetry))
-        self.assertIsNone(controller.observe(60, swap_used_mb=3071.9, **telemetry))
-        self.assertTrue(controller.can_admit())
-        self.assertIn("3072 MiB", controller.observe(61, swap_used_mb=3072, **telemetry))
-        self.assertFalse(controller.can_admit())
+        for override, ceiling in (({}, 3072), ({"FLASHNEXT_SWAP_CEILING_MIB": "1000"}, 1000)):
+            with self.subTest(ceiling=ceiling):
+                policy = M.Policy.from_environment({
+                    "FLASHNEXT_MEMORY_POLICY": "absolute-swap-only",
+                    "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "256",
+                    **override,
+                })
+                controller = M.Controller(policy)
+                self.assertIsNone(controller.observe(0, swap_used_mb=10, **telemetry))
+                self.assertIsNone(controller.observe(60, swap_used_mb=ceiling - 0.1, **telemetry))
+                self.assertTrue(controller.can_admit())
+                self.assertIn(f"limit {ceiling} MiB", controller.observe(61, swap_used_mb=ceiling, **telemetry))
+                self.assertFalse(controller.can_admit())
 
     def test_attempt_two_scenario_one_level_two_sample_is_survived(self):
         f = Feed()
