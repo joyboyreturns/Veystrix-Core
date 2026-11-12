@@ -44,7 +44,7 @@ MIB = 2 ** 20
 from . import memory_policy
 
 FLAG_SWAP_GROWTH = "FLASHNEXT_SWAP_GROWTH_STOP_GIB"
-FLAG_SWAP_CEILING = "FLASHNEXT_SWAP_CEILING_MIB"                # absolute swap in use (not growth): the owner's 3 GiB rule; 0 disables
+FLAG_SWAP_CEILING = memory_policy.FLAG_SWAP_CEILING_MIB
 FLAG_SWAP_CEILING_MARGIN = "FLASHNEXT_SWAP_CEILING_MARGIN_MIB"  # stop this far below the ceiling so a fast spike cannot cross it
 FLAG_PERSIST = "FLASHNEXT_PRESSURE_PERSIST_S"
 FLAG_CRITICAL_CONFIRM = "FLASHNEXT_CRITICAL_CONFIRM_S"
@@ -114,7 +114,7 @@ class Policy:
             swap_only=effective_swap_only or absolute,
             absolute_swap_only=absolute,
             swap_growth_stop_gib=_number(FLAG_SWAP_GROWTH, d.swap_growth_stop_gib, 0.25, 64, environ),
-            swap_ceiling_mib=(memory_policy.ABSOLUTE_SWAP_CEILING_MIB if absolute else
+            swap_ceiling_mib=(memory_policy.absolute_swap_ceiling_mib(environ) if absolute else
                               _number(FLAG_SWAP_CEILING, 3072.0 if layer_major else d.swap_ceiling_mib, 0, 1048576, environ)),
             swap_ceiling_margin_mib=(0.0 if absolute else
                                      _number(FLAG_SWAP_CEILING_MARGIN, 0.0 if layer_major else d.swap_ceiling_margin_mib, 0, 65536, environ)),

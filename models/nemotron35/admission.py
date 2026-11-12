@@ -12,6 +12,8 @@ import re
 import subprocess
 from dataclasses import dataclass
 
+from models.flashnext import memory_policy
+
 from .memory import MemoryEstimate, estimate
 
 GIB = 2 ** 30
@@ -26,6 +28,12 @@ DEFAULT_POOL_BYTES = 2 * GIB
 AUTO_POOL_MAX = 4 * GIB          # auto-sized pool never exceeds this
 INT8_ATTENTION_SCRATCH_BYTES = 384 * 2**20
 AUTO_POOL_HEADROOM = int(1.25 * GIB)   # and always leaves this much of the budget unplanned
+
+
+def swap_refuse_bytes() -> int:
+    if memory_policy.is_absolute_swap_policy():
+        return int(memory_policy.absolute_swap_ceiling_mib() * 2 ** 20)
+    return SWAP_REFUSE_BYTES
 
 
 try:  # the shared server maps this exception to HTTP 503 memory_admission_refused
@@ -110,7 +118,7 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
     AUTO_POOL_HEADROOM of the budget unplanned. A larger pool means more expert hits and fewer SSD reads."""
     if machine.pressure >= 4:
         raise AdmissionRefused('system memory pressure is critical; retry when it falls')
-    if machine.swap_used >= SWAP_REFUSE_BYTES:
+    if machine.swap_used >= swap_refuse_bytes():
         raise AdmissionRefused(f'swap in use ({machine.swap_used / GIB:.2f} GiB) is at the safety line; retry later')
     limit = budget(machine)
     maximum = DEFAULT_CONTEXT if lightning and int8_kv else min(BF16_CONTEXT, config.get('max_position_embeddings', BF16_CONTEXT))
@@ -158,7 +166,7 @@ def check_request(plan: Plan, machine: Machine, *, new_tokens: int, cached_token
             f'request needs {cached_tokens + new_tokens} context tokens; this session was admitted for {plan.context_tokens}')
     if machine.pressure >= 4:
         raise AdmissionRefused('system memory pressure is critical; retry when it falls')
-    if machine.swap_used >= SWAP_REFUSE_BYTES:
+    if machine.swap_used >= swap_refuse_bytes():
         raise AdmissionRefused('swap is at the safety line; retry when system memory pressure falls')
 
 

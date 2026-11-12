@@ -282,9 +282,17 @@ class ChatRouteTests(unittest.TestCase):
                 self.assertEqual(handler.wfile.getvalue(), b"")
 
     def test_sampling_fields_are_listed_not_swallowed(self):
-        _, _, headers = self.run_chat(dict(self.BASE, temperature=0.7, top_p=0.9))
-        self.assertIn(("X-Veystrix-Ignored-Fields", "temperature,top_p"), headers)
+        _, _, headers = self.run_chat(dict(self.BASE, temperature=0.7, top_p=0.9, top_k=40))
+        self.assertIn(("X-Veystrix-Ignored-Fields", "temperature,top_k,top_p"), headers)
         _, _, headers = self.run_chat(dict(self.BASE))
+        self.assertFalse([name for name, _ in headers if name == "X-Veystrix-Ignored-Fields"])
+
+    def test_openai_metadata_fields_are_accepted_without_effect(self):
+        # Kimi Code sends prompt_cache_key on every request; refusing it would put the whole
+        # client in a retry loop. Like store/user/metadata, these never reach the model.
+        handler, _, headers = self.run_chat(dict(self.BASE, prompt_cache_key="kimi-session-1",
+                                                 safety_identifier="user-123", store=False, user="u"))
+        self.assertEqual(handler.status_calls, [200])
         self.assertFalse([name for name, _ in headers if name == "X-Veystrix-Ignored-Fields"])
 
     def test_unknown_stream_option_is_refused(self):

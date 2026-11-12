@@ -57,6 +57,7 @@ public enum FlashNextKVCache: String, Codable, CaseIterable, Sendable, Identifia
 /// so an older settings file keeps working after an update (see `schemaVersion`).
 public struct AppSettings: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 2
+    public static let swapLimitRange = 1...1024
 
     public var schemaVersion: Int = AppSettings.currentSchemaVersion
     /// Local API port. The engine binds to 127.0.0.1 only.
@@ -68,6 +69,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The Nemotron folder. Independent of the Flash-Next folder: switching models never overwrites the other path.
     public var nemotronCheckpointPath: String = ""
     public var decodePool: DecodePool = .none
+    public var swapLimitGiB: Int = 5
     public var flashNextKVCache: FlashNextKVCache = .bf16
     public var flashNextSpeed: Bool = false
     /// Let the engine's supervisor restart the server after a crash or memory guard stop (bounded and logged).
@@ -101,7 +103,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case schemaVersion, port, checkpointPath, selectedModel, nemotronCheckpointPath, decodePool, supervisedRestarts, keepMacAwake, cacheQuotaGB,
              cacheDirectory, confirmBeforeLoading, requireAPIKey, checkForUpdatesAutomatically,
              includeLogsInDiagnostics, developerRepoPath, allowBattery, minimumBatteryPercent, allowLowPowerMode,
-             flashNextKVCache, flashNextSpeed, nemotronContextTokens
+             flashNextKVCache, flashNextSpeed, nemotronContextTokens, swapLimitGiB
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,6 +115,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.selectedModel = (try? c.decodeIfPresent(ModelFamily.self, forKey: .selectedModel)) ?? s.selectedModel
         s.nemotronCheckpointPath = try c.decodeIfPresent(String.self, forKey: .nemotronCheckpointPath) ?? s.nemotronCheckpointPath
         s.decodePool = try c.decodeIfPresent(DecodePool.self, forKey: .decodePool) ?? s.decodePool
+        if let limit = try? c.decode(Int.self, forKey: .swapLimitGiB), Self.swapLimitRange.contains(limit) {
+            s.swapLimitGiB = limit
+        }
         s.flashNextKVCache = (try? c.decodeIfPresent(FlashNextKVCache.self, forKey: .flashNextKVCache)) ?? s.flashNextKVCache
         s.flashNextSpeed = try c.decodeIfPresent(Bool.self, forKey: .flashNextSpeed) ?? s.flashNextSpeed
         s.supervisedRestarts = try c.decodeIfPresent(Bool.self, forKey: .supervisedRestarts) ?? s.supervisedRestarts
@@ -138,6 +143,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public func validationProblems() -> [String] {
         var problems: [String] = []
         if !(1024...65535).contains(port) { problems.append("The port must be between 1024 and 65535.") }
+        if !Self.swapLimitRange.contains(swapLimitGiB) { problems.append("The swap limit must be between 1 and 1024 GiB.") }
         if !(0...100).contains(minimumBatteryPercent) { problems.append("The minimum battery charge must be between 0% and 100%.") }
         if !(1...2000).contains(cacheQuotaGB) { problems.append("The cache quota must be between 1 and 2000 GB.") }
         if !(1...1_048_576).contains(nemotronContextTokens) { problems.append("Nemotron context must be between 1 and 1,048,576 tokens.") }

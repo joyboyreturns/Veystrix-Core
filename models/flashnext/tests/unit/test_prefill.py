@@ -100,6 +100,19 @@ class PrefillTests(unittest.TestCase):
         self.assertEqual(int(token.item()), 3)
         clear_cache.assert_called_once_with()
 
+    def test_short_sampled_prefill_projects_only_the_last_row(self):
+        language = _Language()
+        cache = [_Cache()]
+        ids = mx.array([[1, 2, 3]], dtype=mx.int32)
+        with patch.object(language, "speculative_logits_from_hidden",
+                          side_effect=lambda h: (mx.arange(32) == h).astype(mx.float32)) as head:
+            _, token = prefill_language(language, ids, cache, sampler=lambda row: mx.argmax(row))
+
+        self.assertEqual(language.calls, [(3, True, True, None)])
+        self.assertEqual(head.call_args.args[0].shape, (1, 1, 1))
+        self.assertEqual(int(token.item()), 3)
+        self.assertEqual(int(cache[0].state.item()), 6)
+
     def test_large_prefill_keeps_one_full_moe_call(self):
         language = _Language()
         cache = [_Cache()]

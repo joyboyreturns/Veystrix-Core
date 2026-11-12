@@ -1,9 +1,8 @@
 """Single-resident model lifecycle coordination for the local model router.
 
 The driver owns an engine process and must not report unload complete until every
-model worker has exited. The coordinator owns no process itself. It serializes a
-whole request (including its stream), validates identities before touching the
-running model, and fails closed when the driver cannot prove an unload.
+model worker has exited. The coordinator grants compatible requests shared
+leases and waits for all leases to end before changing the resident model.
 """
 from __future__ import annotations
 
@@ -58,7 +57,7 @@ class Snapshot:
 
 
 class ModelCoordinator:
-    """Own the request gate and resident model identity.
+    """Own request leases and the resident model identity.
 
     An owner is a caller-provided stable session identity. An unowned model is
     not silently evicted; a different session must explicitly authorize handoff.
@@ -70,6 +69,9 @@ class ModelCoordinator:
         self.resolve = resolve
         self.driver = driver
         self._gate = threading.Lock()
+        self._leases_changed = threading.Condition(self._gate)
+        self._leases = 0
+        self._exclusive_lease = False
         self._state_lock = threading.Lock()
         self._state = "unloaded"
         self._model: InstalledModel | None = None
@@ -95,8 +97,7 @@ class ModelCoordinator:
             return Snapshot(self._state, self._model.id if self._model else None,
                             self._owner, self._error, self._active)
 
-    def _acquire(self, timeout: float, cancelled: Callable[[], bool]) -> None:
-        deadline = time.monotonic() + max(0.0, timeout)
+    def _acquire(self, deadline: float, cancelled: Callable[[], bool]) -> None:
         while True:
             if cancelled():
                 raise ModelBusy("request was cancelled while waiting for the model")
@@ -111,13 +112,23 @@ class ModelCoordinator:
 
     @contextmanager
     def request(self, model_id: str, *, owner: str | None = None, handoff: bool = False,
-                timeout: float = 0.0, cancelled: Callable[[], bool] = lambda: False):
+                exclusive_owner: bool = False, timeout: float = 0.0,
+                cancelled: Callable[[], bool] = lambda: False):
         """Hold the model for one entire request; caller must not retry generation."""
         if not isinstance(model_id, str) or not model_id:
             raise ModelNotFound("a model installation ID is required")
-        self._acquire(timeout, cancelled)
-        self._set(active=True)
+        deadline = time.monotonic() + max(0.0, timeout)
+        self._acquire(deadline, cancelled)
         try:
+            while self._leases and (
+                self._exclusive_lease or exclusive_owner or self._model.id != model_id
+            ):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ModelBusy("another request or model handoff is in progress")
+                self._leases_changed.wait(min(0.1, remaining))
+                if cancelled():
+                    raise ModelBusy("request was cancelled while waiting for the model")
             if self._state == "fault":
                 raise LifecycleFault(self._error or "model lifecycle is faulted")
             if self._state == "cooldown":
@@ -127,6 +138,8 @@ class ModelCoordinator:
             if model is None or model.id != model_id:
                 raise ModelNotFound(f"model {model_id!r} is not installed")
             current = self._model
+            if current and exclusive_owner and self._owner not in {PRELOAD_OWNER, owner}:
+                raise HandoffRequired("another session owns the engine; start a fresh idle engine for this workflow")
             if current and current.id != model.id:
                 if not handoff and self._owner != PRELOAD_OWNER and (not owner or not self._owner or owner != self._owner):
                     raise HandoffRequired("another session owns the current model; explicit handoff is required")
@@ -144,9 +157,13 @@ class ModelCoordinator:
                 try:
                     ready = self.driver.ready(current)
                 except Exception as exc:
+                    if self._leases:
+                        raise ModelBusy("resident worker readiness could not be verified during an active request") from exc
                     self._set(state="fault", error=f"readiness verification failed: {exc}")
                     raise LifecycleFault("loaded model readiness could not be verified") from exc
                 if not ready:
+                    if self._leases:
+                        raise ModelBusy("resident worker is busy or temporarily unavailable")
                     self._set(state="fault", error="loaded model readiness or identity was lost")
                     raise LifecycleFault("loaded model is no longer verified; refusing to route")
             else:
@@ -169,7 +186,17 @@ class ModelCoordinator:
                 self._set(state="ready", model=model, owner=owner, error=None)
             if cancelled():
                 raise ModelBusy("request was cancelled before generation")
+            self._leases += 1
+            self._exclusive_lease = exclusive_owner
+            self._set(active=True)
+        finally:
+            self._gate.release()
+        try:
             yield model
         finally:
-            self._set(active=False)
-            self._gate.release()
+            with self._leases_changed:
+                self._leases -= 1
+                if not self._leases:
+                    self._exclusive_lease = False
+                    self._set(active=False)
+                    self._leases_changed.notify_all()

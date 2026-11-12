@@ -195,6 +195,76 @@ class PrefixCacheTests(unittest.TestCase):
         finally:
             b.close()
 
+    def test_corrupt_longest_snapshot_falls_back_to_shorter_exact_prefix(self):
+        backend = self.backend()
+        try:
+            cache = backend.prefix_cache
+            tokens = list(self.PROMPT)
+            backend.core.prefill(tokens[:8], emit_logits=False)
+            self.assertTrue(cache.save(backend.core.cache, tokens[:8]))
+            backend.core.prefill(tokens[8:12], emit_logits=False)
+            self.assertTrue(cache.save(backend.core.cache, tokens[:12]))
+            state_path, _ = cache._paths(cache._key(tokens[:12]))
+            state_path.write_bytes(b"corrupt")
+
+            restored, length = cache.restore(tokens)
+
+            self.assertIsNotNone(restored)
+            self.assertEqual(length, 8)
+            self.assertEqual(cache.stats.restore_failures, 1)
+            self.assertFalse(state_path.exists())
+        finally:
+            backend.close()
+
+    def test_default_cache_retains_a_short_tool_harness_prefix(self):
+        backend = make(prefix_cache=False)
+        try:
+            prefix = (self.PROMPT * 3)[:320]
+            backend.core.prefill(prefix, emit_logits=False)
+            cache = PrefixCache(Path(_dir) / "prefix", {"model": "short-tool-prefix"}, quota_bytes=2**30)
+
+            self.assertTrue(cache.save(backend.core.cache, prefix))
+            restored, length = cache.restore(prefix + [1, 2, 3])
+            self.assertIsNotNone(restored)
+            self.assertEqual(length, 320)
+        finally:
+            backend.close()
+
+    def test_managed_restore_releases_global_lock_and_protects_snapshot(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from unittest.mock import patch
+        from veystrix.universal_cache import CacheManager
+        from models.nemotron35 import state
+
+        manager = CacheManager(Path(_dir) / "prefix", quota_bytes=2**30, reserve_bytes=0)
+        backend = make(prefix_cache=False)
+        self.addCleanup(backend.close)
+        cache = PrefixCache(None, {"model": "managed"}, quota_bytes=2**30, min_tokens=8, manager=manager)
+        prefix = self.PROMPT[:32]
+        backend.core.prefill(prefix)
+        self.assertTrue(cache.save(backend.core.cache, prefix))
+        suffix = [9, 10]
+        expected = backend.core.prefill(suffix)
+        real_restore = state.restore
+
+        def clear():
+            with manager.transaction() as tx:
+                return tx.reclaim(tx.used, apply=True)["snapshots"]
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            def restore_while_clearing(*args):
+                self.assertEqual(executor.submit(clear).result(timeout=5), 0)
+                return real_restore(*args)
+
+            with patch.object(state, "restore", side_effect=restore_while_clearing):
+                restored, length = cache.restore(prefix + suffix)
+        self.assertEqual(length, len(prefix))
+        backend.core.bind_cache(restored)
+        actual = backend.core.prefill(suffix)
+        self.assertTrue(mx.array_equal(actual, expected).item())
+        with manager.transaction() as tx:
+            self.assertEqual(tx.reclaim(tx.used, apply=True)["snapshots"], 1)
+
     def test_diverging_prompt_reuses_only_a_true_prefix(self):
         a = self.backend()
         a.append_tokens(self.PROMPT)
@@ -222,6 +292,32 @@ class PrefixCacheTests(unittest.TestCase):
         a.close()
         foreign = PrefixCache(Path(_dir) / "prefix", {"model": "something-else"}, quota_bytes=2**30, min_tokens=8)
         self.assertEqual(foreign.reusable_tokens(self.PROMPT + [1]), 0)
+
+    def test_flashnext_and_nemotron_state_lookups_remain_family_scoped(self):
+        from models.flashnext import prefix_cache as flashnext
+        from veystrix.universal_cache import CacheManager
+        import json
+
+        manager = CacheManager(Path(_dir) / "prefix", quota_bytes=2**30, reserve_bytes=0)
+        backend = make(prefix_cache=False)
+        self.addCleanup(backend.close)
+        nem = PrefixCache(None, {"model": "nemotron"}, quota_bytes=2**30, min_tokens=8, manager=manager)
+        qwen = flashnext.PrefixCache(nem.directory.name, 0, manager=manager)
+        prefix = self.PROMPT[:32]
+        query = prefix + [7]
+        backend.core.prefill(prefix, emit_logits=False)
+        self.assertTrue(nem.save(backend.core.cache, prefix))
+        self.assertEqual(nem.reusable_tokens(query), len(prefix))
+        self.assertEqual(qwen.peek(query), 0)
+
+        nem.clear()
+        key = flashnext.chain_key(qwen.fp, prefix)
+        (qwen.directory / f"{key}.safetensors").write_bytes(b"fixture")
+        (qwen.directory / f"{key}.json").write_text(json.dumps({
+            "key": key, "fingerprint": qwen.fp, "n_tokens": len(prefix), "parent": None, "file_bytes": 7,
+        }))
+        self.assertEqual(qwen.peek(query), len(prefix))
+        self.assertEqual(nem.restore(query), (None, 0))
 
     def test_oversize_snapshot_never_exceeds_global_quota(self):
         a = self.backend(prefix_quota_gb=0.00005)   # ~50 KB: smaller than one snapshot

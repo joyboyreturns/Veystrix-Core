@@ -234,8 +234,9 @@ def _prefill_target(
     tensors are retained for callers that need them. The token always comes
     from the exact target path, using ``sampler`` when supplied.
 
-    Short prompts keep the normal full-logit call. Large prompts skip
-    full-sequence logits unless the caller explicitly requests them.
+    When serving with a sampler, only the final vocabulary row is needed.
+    Callers requesting logits or using the short greedy compatibility path
+    still use the full-sequence projection.
     """
     def pick(row):
         if sampler is None:
@@ -249,7 +250,7 @@ def _prefill_target(
     # ``total_tokens`` is the whole prompt when this is the last chunk of a chunked prefill, so the
     # choice between full logits and the fused head is the one the unchunked call would make.
     short_prompt = int(total_tokens if total_tokens is not None else ids.shape[1]) <= full_logits_limit
-    full_logits = want_logits or short_prompt
+    full_logits = want_logits or (short_prompt and sampler is None)
     call = {
         "cache": cache,
         "return_hidden": want_hidden or not full_logits,

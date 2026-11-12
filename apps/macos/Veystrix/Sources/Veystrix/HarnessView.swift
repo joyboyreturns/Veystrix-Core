@@ -129,6 +129,7 @@ struct HarnessView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Agents").font(.largeTitle.bold())
+                WorkflowPanel(models: inventory.entries)
                 GroupBox("Local endpoint") {
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledContent("Base URL") { Text(model.baseURL).textSelection(.enabled) }
@@ -171,12 +172,14 @@ struct HarnessView: View {
                     Text("Refresh Harness Models registers the installed models with supported harnesses. A model change rebuilds conversation state and can take time.")
                         .font(.caption).foregroundStyle(.secondary)
                     let caps = inventory.modelCapabilities[entry.id]
+                    // The loaded engine's admitted window wins; the installed-models report's
+                    // configured family window covers the engine-stopped case.
                     let s = HarnessProfiles.snippet(
                         for: picked.value,
                         port: model.settings.port,
                         modelID: entry.id,
                         suggestedClientContext: caps?.suggestedClientContextWindow,
-                        modelContext: caps?.contextWindow
+                        modelContext: caps?.contextWindow ?? entry.contextWindow
                     )
                     GroupBox("Where it goes") { Text(s.whereToPutIt).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
                     GroupBox("Configuration") {

@@ -100,6 +100,11 @@ def _profiled_preadv(fd: int, buffers, offset: int) -> int:
 FLAG_UNCACHED_EXPERT_READS = "FLASHNEXT_UNCACHED_EXPERT_READS"   # opt-in: shard reads use F_NOCACHE for the whole run
 
 
+def expert_read_batch_rows(row_bytes: int, default: int) -> int:
+    """Queue small scale/bias rows together while retaining weight read parallelism."""
+    return max(default, min(16, (1 << 20) // max(1, row_bytes)))
+
+
 class TensorRef:
     __slots__ = ("shard", "dtype", "shape", "start", "row_bytes")
 

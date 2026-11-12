@@ -223,14 +223,16 @@ class _ScriptedLanguage:
         self.position = 0
 
     def make_cache(self):
-        return [SimpleNamespace(offset=0)]
+        return [SimpleNamespace(offset=0, state=[])]
 
-    def __call__(self, _token, cache=None):
+    def __call__(self, _token, cache=None, *, skip_logits=False):
         if self.position < len(self.script):
             value = self.script[self.position]
         else:
             value = self.stop
         self.position += 1
+        if skip_logits:
+            return None
         row = [0.0] * 16
         row[value] = 1.0
         return SimpleNamespace(logits=mx.array([[row]]))
@@ -247,7 +249,7 @@ class UnlimitedGenerationTests(unittest.TestCase):
         backend.routing_profile = "exact-quality"
         backend.routing = _Routing()
         backend.language = _ScriptedLanguage(script, stop)
-        backend.cache = [SimpleNamespace(offset=0)]
+        backend.cache = backend.language.make_cache()
         backend.tokenizer = _Tokenizer()
         backend.stops = {stop}
         backend.thinking_enabled = thinking

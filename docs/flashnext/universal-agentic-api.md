@@ -5,6 +5,16 @@ Status 2026-11-08. Offline only: **no full-checkpoint AGENTIC run has completed.
 (taken from a public client's documentation, never run here) or **real** (the 113 GB checkpoint). There is no real-model
 AGENTIC evidence yet.
 
+Update 2026-11-12: the 4,096-token window and "output cap well below it" guidance below described the AGENTIC tier of
+that date. The engine now serves family-configured windows (Flash-Next 262,144 metadata-capped, Nemotron 3.5 Lightning
+1,048,576 configured) and clamps any requested output cap to the room actually left in the window, so the current
+guidance is: set the client's context window to what `/v1/models` reports and leave the output cap unset or equal to
+the window. The model router's catalog adds `context_window`, `suggested_client_context_window` and
+`max_output_tokens` per installed model, and `python -m veystrix.harness_configure` registers installed models with
+Qwen Code, DeepSeek Harness, OpenCode, pi and Kimi Code (with backups). OpenCode 1.17.15's config schema and Kimi
+Code's TOML config were verified against their published schemas before writing; OpenCode, pi and Kimi Code remain
+**documented, not exercised** — no real task has been run through any of them against this engine.
+
 ## 1. The contract (OpenAI Chat Completions, `POST /v1/chat/completions`)
 
 Start: `./chat.sh --mode agentic` (default `127.0.0.1:8080`; a non-local `--host` requires `--server-api-key`).
@@ -16,8 +26,8 @@ Start: `./chat.sh --mode agentic` (default `127.0.0.1:8080`; a non-local `--host
 | `GET /health` | Liveness. `status: ok`, `ready`, `busy`, queue state (active request, waiting, completed, rejected, dropped), `context_limit`, cache counters (reused, rebuilt, evictions, refused oversize prefills, warm tokens, the admitted `max_cold_prefill`) and the session registry (live session, switches, recent sessions with their rebuild counts). Answers while a request is generating. |
 | `GET /ready` | 200 when the model is loaded and no GPU lifecycle fault is recorded; 503 with the fault text otherwise (the process must then be restarted). |
 | Chat fields honoured | `model` (**not validated**: any id is accepted and the real one is returned), `messages`, `stream`, `stream_options.include_usage`, `max_tokens`, `max_completion_tokens`, `tools`. |
-| Accepted, no effect | `store`, `user`, `metadata`. |
-| Ignored, reported | `temperature`, `top_p`, `presence_penalty`, `frequency_penalty`, `seed`, `parallel_tool_calls`: sampling is fixed per process. Listed in the `X-Veystrix-Ignored-Fields` response header, never silently dropped. |
+| Accepted, no effect | `store`, `user`, `metadata`, `prompt_cache_key`, `safety_identifier`. |
+| Ignored, reported | `temperature`, `top_p`, `top_k`, `presence_penalty`, `frequency_penalty`, `seed`, `parallel_tool_calls`: sampling is fixed per process. Listed in the `X-Veystrix-Ignored-Fields` response header, never silently dropped. |
 | Anything else | 400 naming the field, nothing run. `tool_choice` is accepted only as `auto`; `n` only as 1. |
 | Messages | Roles system/user/assistant/tool. Assistant `content: null` with `tool_calls`, JSON-**string** arguments, `role: tool` with `tool_call_id`. Unknown message fields are refused by name. |
 | Tool calls out | `message.tool_calls[]` with `id` (`call_<uuid>`, unique per call), `type: function`, JSON-string `arguments`; `content: null` when there is no text; `finish_reason: tool_calls`. Arguments are validated against the client's own schema before they are returned. Streaming sends each call in one delta with the complete arguments (valid per the spec, not token-by-token). |
@@ -116,8 +126,22 @@ server was started with one. Set the client's context window to the value `/v1/m
   `context_length` that matches the server. Third-party guides state Hermes wants roughly **64K** of context for agent
   use. That is far above the 4096 this server enforces, so **expect Hermes to refuse or misbehave**; this is an
   unresolved incompatibility, not a configuration detail. Untested.
-* **OpenCode** (installed at `~/.opencode/bin/opencode`, not exercised): an OpenAI-compatible provider pointing at the
-  base URL with the model's limits set to the enforced window. Its exact config schema was not verified here. Untested.
+* **OpenCode** (installed at `~/.opencode/bin/opencode`, **documented** on top of OpenCode 1.17.15's published config
+  schema, not exercised): a `providers.veystrix` entry in `~/.config/opencode/opencode.json` with package
+  `@opencode/ai/providers/openai-compatible`, `settings.baseURL` at the base URL and one model per installed id whose
+  `limit` sets `context` and `output` to the served window (the engine then clamps output to the room left, so output
+  is uncapped in practice). `harness_configure` writes this provider with a backup.
+* **pi** (**documented**, not exercised): a TypeScript extension at `~/.pi/agent/extensions/veystrix.ts` registers a
+  `veystrix` provider whose models are discovered from `GET /v1/models`; `contextWindow` is the served window and
+  `maxTokens` is the server's `max_output_tokens`, which pi 1.5.2 accepts. Canonical source:
+  `veystrix/pi_extension.py`, installed by `harness_configure` (env overrides `VEYSTRIX_BASE_URL`,
+  `VEYSTRIX_API_KEY`).
+* **Kimi Code** (**documented**, not exercised): `[providers.<name>]` with `type = "openai"` in
+  `~/.kimi-code/config.toml`, plus one model table per model with `max_context_size` set to the served window and no
+  `max_output_size` (only the `anthropic` provider type reads it). `harness_configure` merges into the provider that
+  already points at the engine — the user's name, key, `default_model` and per-model flags are kept, only
+  `max_context_size` is corrected — and creates a `veystrix` provider when none exists; the file is written even
+  without an installation, with a backup.
 * **Generic OpenAI client**: any client that sends only the honoured fields works; one that sends `tool_choice` other
   than `auto`, `n` above 1, or unknown fields gets a 400 naming the field. Disable client-side title, summary and
   auto-compaction requests, which are small tool-less calls that replace the live conversation and make its
@@ -132,7 +156,9 @@ server was started with one. Set the client's context window to the value `/v1/m
 | DeepSeek Harness | S, **R** (ran against the real server) | S | S (tool call **not yet produced by the real model**) | S | R: SSD prefix hit of 643 tokens restored | Prefill and decode started, clean shutdown (preliminary, battery); the one-token output cap from the client patch ended the run before a tool call. Fixed offline, not re-run (`agentic-smoke-retry-4-2026-11-08.md`) |
 | Hermes Agent | - | - | - | - | - | **blocked by context size (needs about 64K, server enforces 4K)** |
 | OpenClaw | D | - | - | - | - | - |
-| OpenCode | - | - | - | - | - | - |
+| OpenCode | D | - | - | - | - | - |
+| pi | D | - | - | - | - | - |
+| Kimi Code | D | - | - | - | - | - |
 | Generic OpenAI SDK | S | S | S | S | - | - |
 
 Real evidence that exists for this backend: CHAT works on the real checkpoint (five turns, pool off); two AGENTIC

@@ -168,9 +168,9 @@ class TensorCorrectnessTests(RingCase):
         self.assertRestored()
 
     def test_staged_views_hold_the_checkpoint_rows_in_first_seen_order(self):
-        routed = [7, 2, 7, 11, 2, 5]
+        routed = [7, 2, 8, 11, 2, 5]
         wanted = list(dict.fromkeys(routed))
-        self.assertEqual(wanted, [7, 2, 11, 5])
+        self.assertEqual(wanted, [7, 2, 8, 11, 5])
         with prefill_ring.session(self.language, 1024) as ring:
             prefix = prefix_of(1)
             weights = ring.stage(self.store, prefix, wanted)

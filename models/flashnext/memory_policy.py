@@ -25,6 +25,7 @@ POLICY_SWAP_GROWTH_ONLY = "swap-growth-only"
 POLICY_STRICT_STAGED = "strict-staged"
 POLICY_ABSOLUTE_SWAP_ONLY = "absolute-swap-only"
 ABSOLUTE_SWAP_CEILING_MIB = 3072
+FLAG_SWAP_CEILING_MIB = "FLASHNEXT_SWAP_CEILING_MIB"
 FLAG_POLICY = "FLASHNEXT_MEMORY_POLICY"
 DEFAULT_SWAP_GROWTH_THRESHOLD_GIB = 2.5
 
@@ -65,6 +66,20 @@ def is_absolute_swap_policy(environ: dict[str, str] | None = None) -> bool:
     return env.get(FLAG_POLICY, "").strip().lower() == POLICY_ABSOLUTE_SWAP_ONLY
 
 
+def absolute_swap_ceiling_mib(environ: dict[str, str] | None = None) -> float:
+    env = os.environ if environ is None else environ
+    raw = env.get(FLAG_SWAP_CEILING_MIB, "")
+    if not raw:
+        return ABSOLUTE_SWAP_CEILING_MIB
+    try:
+        ceiling = float(raw)
+    except ValueError:
+        raise ValueError(f"{FLAG_SWAP_CEILING_MIB} must be a number") from None
+    if not 1 <= ceiling <= 1048576:
+        raise ValueError(f"{FLAG_SWAP_CEILING_MIB} must be between 1 and 1048576")
+    return ceiling
+
+
 def policy_identifier(environ: dict[str, str] | None = None) -> str:
     if is_absolute_swap_policy(environ):
         return POLICY_ABSOLUTE_SWAP_ONLY
@@ -80,7 +95,7 @@ def telemetry_only_checks(environ: dict[str, str] | None = None) -> list[str]:
 def policy_summary(environ: dict[str, str] | None = None) -> dict[str, Any]:
     absolute = is_absolute_swap_policy(environ)
     active = is_swap_growth_policy(environ) or absolute
-    limit = ABSOLUTE_SWAP_CEILING_MIB if absolute else DEFAULT_SWAP_GROWTH_THRESHOLD_GIB * 1024
+    limit = absolute_swap_ceiling_mib(environ) if absolute else DEFAULT_SWAP_GROWTH_THRESHOLD_GIB * 1024
     return {
         "policy_identifier": policy_identifier(environ),
         "swap_baseline_mb": None,
@@ -99,7 +114,8 @@ def policy_summary(environ: dict[str, str] | None = None) -> dict[str, Any]:
 def banner(environ: dict[str, str] | None = None) -> str:
     """Human-readable startup banner describing the memory policy."""
     if is_absolute_swap_policy(environ):
-        return f"MEMORY POLICY: {POLICY_ABSOLUTE_SWAP_ONLY} (stop at 3 GiB total system swap)"
+        limit_gib = absolute_swap_ceiling_mib(environ) / 1024
+        return f"MEMORY POLICY: {POLICY_ABSOLUTE_SWAP_ONLY} (stop at {limit_gib:g} GiB total system swap)"
     if is_swap_growth_policy(environ):
         return (
             f"MEMORY POLICY: {POLICY_SWAP_GROWTH_ONLY} (approved AGENTIC policy)\n"

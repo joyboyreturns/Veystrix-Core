@@ -1,0 +1,7 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+8192 cold: request started (estimated 8192 prompt tokens, swap 3094.81 MiB)
+8192 cold: 8192 prompt, 0 cached, prefill 95.86892919836161 tok/s, decode 2.6 tok/s, TTFT 86.23s
+8192 warm: request started (estimated 8192 prompt tokens, swap 3952.50 MiB)
+8192 warm: 8192 prompt, 8185 cached, prefill 3.4448818897637796 tok/s, decode 2.6 tok/s, TTFT 2.59s
+32768 cold: request started (estimated 32768 prompt tokens, swap 3864.50 MiB)
+32768 cold failed: {'message': 'Veystrix stopped its inference worker for memory safety: swap 5327.1 MiB reached safety stop 5120.0 MiB. Retry only after memory pressure falls.', 'type': 'server_error', 'code': 'memory_safety_stop'}

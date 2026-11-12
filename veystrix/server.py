@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
 import json
@@ -50,6 +51,8 @@ MAX_BODY = 16 * 1024 * 1024
 MIN_OUTPUT_RESERVE = context_budget.MIN_OUTPUT_RESERVE
 GONE_CHECK_SECONDS = 1.0
 SSE_KEEPALIVE_SECONDS = float(os.environ.get("VEYSTRIX_SSE_KEEPALIVE_SECONDS", "15"))
+RESPONSE_BUFFER_BYTES = 4 * 1024 * 1024
+RESPONSE_WRITE_TIMEOUT = 5.0
 TOOL_CALL = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
 XML_FUNCTION = re.compile(
     r"\s*<function=([^>\s]+)>(.*?)(?:</function>|</>)?\s*$", re.DOTALL
@@ -1756,8 +1759,12 @@ CHAT_HONOURED = {"model", "messages", "stream", "stream_options", "max_tokens",
                  "max_completion_tokens", "tools",
                  # per-request reasoning controls, see veystrix/reasoning.py (applied to this request only)
                  "reasoning", "reasoning_effort", "chat_template_kwargs", "enable_thinking"}
-CHAT_ACCEPTED = {"store", "user", "metadata"}
-CHAT_IGNORED = {"temperature", "top_p", "presence_penalty", "frequency_penalty",
+CHAT_ACCEPTED = {"store", "user", "metadata",
+                 # OpenAI request metadata: prompt_cache_key routes the provider's own cache and
+                 # safety_identifier tags a request for provider-side accounting. This engine keeps
+                 # its own prefix cache, so neither reaches the model (Kimi Code sends the first).
+                 "prompt_cache_key", "safety_identifier"}
+CHAT_IGNORED = {"temperature", "top_p", "top_k", "presence_penalty", "frequency_penalty",
                 "seed", "parallel_tool_calls"}
 
 
@@ -1786,6 +1793,58 @@ def _check_chat_fields(payload: dict) -> list[str]:
         if extra:
             raise RequestError(f"stream_options field {extra[0]!r} is not supported")
     return sorted(ignored)
+
+
+class _ResponseBuffer:
+    """The inference worker enqueues frames. The connection handler owns socket writes."""
+
+    def __init__(self, destination, *, streaming):
+        self.destination = destination
+        self.streaming = streaming
+        self.failed = threading.Event()
+        self._ready = threading.Condition()
+        self._frames = deque()
+        self._bytes = 0
+
+    def write(self, data, *, on_sent=None):
+        with self._ready:
+            if self.failed.is_set() or (self.streaming and self._bytes + len(data) > RESPONSE_BUFFER_BYTES):
+                self.failed.set()
+                self._frames.clear()
+                self._bytes = 0
+                self._ready.notify()
+                raise BrokenPipeError("response consumer disconnected or fell behind")
+            self._frames.append((data, on_sent))
+            self._bytes += len(data)
+            self._ready.notify()
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def drain(self, done):
+        while True:
+            with self._ready:
+                while not self._frames:
+                    if done.is_set() or self.failed.is_set():
+                        return
+                    self._ready.wait(timeout=0.025)
+                frame, on_sent = self._frames.popleft()
+            try:
+                self.destination.write(frame)
+                self.destination.flush()
+            except OSError:
+                with self._ready:
+                    self.failed.set()
+                    self._frames.clear()
+                    self._bytes = 0
+                return
+            if on_sent is not None:
+                on_sent()
+            with self._ready:
+                if self.failed.is_set():
+                    return
+                self._bytes -= len(frame)
 
 
 class VeystrixHTTPServer(ThreadingHTTPServer):
@@ -1895,6 +1954,9 @@ class VeystrixHandler(BaseHTTPRequestHandler):
 
     def _client_gone(self) -> bool:
         """True when the peer has closed its end. Never consumes data."""
+        response = getattr(self, "_response_buffer", None)
+        if response is not None and response.failed.is_set():
+            return True
         try:
             sock = self.connection
             readable, _, _ = select.select([sock], [], [], 0)
@@ -1938,8 +2000,7 @@ class VeystrixHandler(BaseHTTPRequestHandler):
     def _sse(self, value, event=None):
         prefix = f"event: {event}\n" if event else ""
         with self._write_lock():
-            self.wfile.write((prefix + "data: " + json.dumps(value) + "\n\n").encode())
-            self.wfile.flush()
+            meaningful = False
             if not getattr(self, "_first_model_delta_sent", False):
                 choices = value.get("choices") or []
                 delta = choices[0].get("delta", {}) if choices else {}
@@ -1953,7 +2014,18 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                     meaningful = meaningful or bool(value.get("delta"))
                 if meaningful:
                     self._first_model_delta_sent = True
-                    flight_recorder.record("first_model_delta_forwarded", transport="sse")
+            frame = (prefix + "data: " + json.dumps(value) + "\n\n").encode()
+            if meaningful and isinstance(self.wfile, _ResponseBuffer):
+                self.wfile.write(frame, on_sent=self._record_first_model_delta)
+            else:
+                self.wfile.write(frame)
+                self.wfile.flush()
+                if meaningful:
+                    self._record_first_model_delta()
+
+    @staticmethod
+    def _record_first_model_delta():
+        flight_recorder.record("first_model_delta_forwarded", transport="sse")
 
     def _heartbeat(self):
         with self._write_lock():
@@ -2095,8 +2167,12 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 self._error(f"the model {requested!r} is not loaded on this server", 404, "model_not_found")
                 return
             self._response_model = requested
+        scheduler = self.server.scheduler
         try:
-            self.server.scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
+            if scheduler.loop_running:
+                self._scheduled_post(scheduler, path, payload)
+            else:
+                scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone, path=path)
         except Busy as exc:
             try:
                 self._busy(exc)
@@ -2104,6 +2180,23 @@ class VeystrixHandler(BaseHTTPRequestHandler):
                 pass
         except ClientGone:
             pass
+
+    def _scheduled_post(self, scheduler, path, payload):
+        destination = self.wfile
+        response = _ResponseBuffer(destination, streaming=bool(payload.get("stream")))
+        timeout = self.connection.gettimeout()
+        self.connection.settimeout(RESPONSE_WRITE_TIMEOUT)
+        try:
+            self._response_buffer = response
+            self.wfile = response
+            scheduler.run(lambda: self._handle_post(path, payload), gone=self._client_gone,
+                          path=path, wait=response.drain)
+        finally:
+            self.wfile = destination
+            self._response_buffer = None
+            self.connection.settimeout(timeout)
+            if response.failed.is_set():
+                self.close_connection = True
 
     def _handle_post(self, path, payload):
         """Runs on the inference thread, one request at a time."""

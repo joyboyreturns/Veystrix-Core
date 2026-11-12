@@ -41,7 +41,7 @@ from .slab_pack import (
     UP_SCALES_OFFSET,
     UP_WEIGHT_OFFSET,
 )
-from .store import SafeTensorStore, begin_read_profile, finish_read_profile
+from .store import SafeTensorStore, begin_read_profile, expert_read_batch_rows, finish_read_profile
 from .physical_miss import (
     allocate_physical_miss_hybrid_slots,
     last_hybrid_summary,
@@ -599,10 +599,11 @@ class ExpertLRU:
 
     def _submit_shared(self, experts: List[int], mode: str):
         """One destination per part; each chunk writes its own slice."""
-        chunk = self.store._pread_chunk if mode in _PREAD_MODES else _CHUNK
+        base_chunk = self.store._pread_chunk if mode in _PREAD_MODES else _CHUNK
         pending = []
         for part in _PARTS:
             name = f"{self.prefix}.{part}"
+            chunk = expert_read_batch_rows(self.store.refs[name].row_bytes, base_chunk) if mode in _PREAD_MODES else base_chunk
             buffer = self.store.empty_rows(name, len(experts))
             futures = [
                 _submit_read(
@@ -1522,8 +1523,9 @@ class StreamingSwitchGLU(nn.Module):
                 ))
         for projection, part, offset in parts:
             name = f"{switch_prefix}.{projection}.{part}"
-            for start in range(0, len(wanted), chunk):
-                piece = wanted[start : start + chunk]
+            batch = expert_read_batch_rows(store.refs[name].row_bytes, chunk) if mode in _PREAD_MODES else chunk
+            for start in range(0, len(wanted), batch):
+                piece = wanted[start : start + batch]
                 destination = store.expert_record_view(
                     name,
                     buffer,

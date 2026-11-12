@@ -207,11 +207,18 @@ The profile uses more memory than the standard path. See the
   validation, GPU ownership and the resource guards intact. Never prune experts; routing, quantization and weights
   stay unchanged by cache and scheduling work.
 
+## Native agent workflows
+
+`veystrix workflow` runs single-agent, swarm, and detached overnight goals with
+isolated agent contexts, a persistent task graph, and one inference slot. The
+[native workflows guide](docs/engineering/native-workflows.md) includes an
+offline mock example, CLI commands, and recovery behavior.
+
 ## The Veystrix app and releases
 
 * `apps/macos/Veystrix`: native SwiftUI app (dashboard, explicit Start/Stop/Restart, model-folder validation without
-  reading weights, harness settings for Hermes / Qwen Code / DeepSeek Harness / OpenAI-compatible clients, logs and
-  sanitized diagnostics). It never loads a model on launch.
+  reading weights, harness settings for Hermes / Qwen Code / DeepSeek Harness / OpenCode / pi / Kimi Code /
+  OpenAI-compatible clients, logs and sanitized diagnostics). It never loads a model on launch.
 * Build: `packaging/engine/build_engine_bundle.sh` then `packaging/macos/make_release.sh --engine dist/engine`.
   Produces `Veystrix-<ver>-arm64.dmg` and `.zip`, `SHA256SUMS.txt` and `BUILD-INFO.txt`.
 * **Free channel (default, no Apple membership):** ad-hoc signed, not notarized; macOS Gatekeeper warns on first open.
@@ -316,7 +323,7 @@ documents. Release, packaging, security and
 launch guides: [release process](docs/release/RELEASE_PROCESS.md), [free channel](docs/release/FREE_CHANNEL.md),
 [validation status](docs/release/VALIDATION.md), [packaging](docs/packaging/PACKAGING.md),
 [security audit](docs/security/SECURITY_AUDIT_2026-11-10.md), [manual launch](docs/MANUAL_LAUNCH.md),
-[Hermes integration](integrations/hermes/README.md), [AGENTIC validation](docs/flashnext/agentic-validation.md). Each active runtime follows the same structure:
+[Hermes integration](integrations/hermes/README.md), [pi integration](integrations/pi/README.md), [AGENTIC validation](docs/flashnext/agentic-validation.md). Each active runtime follows the same structure:
 
 - `brief.md`: purpose, scope, status, and main results;
 - `research.md`: dated measurements, decisions, and rejected approaches;
@@ -329,6 +336,7 @@ provenance and may contain obsolete commands.
 apps/macos/Veystrix/        Native SwiftUI app (VeystrixKit logic + UI + Sparkle)
 packaging/                  engine bundle, macOS app/DMG/ZIP/appcast scripts, legal generators
 integrations/hermes/        Hermes Agent profile configurator and offline mock server
+integrations/pi/            pi agent extension pointer (canonical source: veystrix/pi_extension.py)
 legal/, LICENSES/           freeware license draft, provenance, SBOM, third-party notices
 scripts/security/           secret scan and public-exposure audit
 veystrix/                    Shared chat, commands, settings, tools, and test engine

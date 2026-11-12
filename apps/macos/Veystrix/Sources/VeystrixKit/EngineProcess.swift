@@ -51,6 +51,21 @@ public struct SystemEngineLauncher: EngineProcessLauncher {
             onExit(proc.terminationStatus)
         }
         try p.run()
+        if plan.keepMacAwake, p.isRunning {
+            // Keep the router as our direct child so stop and restart wait on the port owner.
+            // The assertion process exits on its own when the router exits.
+            let assertion = Process()
+            assertion.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
+            assertion.arguments = ["-ims", "-w", String(p.processIdentifier)]
+            assertion.standardInput = FileHandle.nullDevice
+            assertion.standardOutput = FileHandle.nullDevice
+            assertion.standardError = FileHandle.nullDevice
+            do {
+                try assertion.run()
+            } catch {
+                onOutput("Could not keep the Mac awake: \(error.localizedDescription)\n")
+            }
+        }
         return SystemEngineProcess(p)
     }
 }

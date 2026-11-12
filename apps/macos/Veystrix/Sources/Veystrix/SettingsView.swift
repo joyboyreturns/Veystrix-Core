@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var updates: UpdateController
     @StateObject private var port = LocalState("")
+    @StateObject private var swapLimit = LocalState("")
 
     var body: some View {
         Form {
@@ -23,7 +24,13 @@ struct SettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Toggle("Restart automatically after a crash or guard stop (bounded, logged)", isOn: $model.settings.supervisedRestarts)
                 Toggle("Keep the Mac awake while the engine runs", isOn: $model.settings.keepMacAwake)
-                Text("Flash-Next stops at 3 GiB of total system swap. Power and thermal checks follow the engine settings.")
+                HStack {
+                    TextField("Total system swap limit (GiB)", text: $swapLimit.value)
+                        .onSubmit(applySwapLimit)
+                    Button("Apply Swap Limit", action: applySwapLimit)
+                        .disabled(validSwapLimit == nil || validSwapLimit == model.settings.swapLimitGiB)
+                }
+                Text("Saved limit: \(model.settings.swapLimitGiB) GiB for both models. Restart the engine to apply changes.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("Power") {
@@ -80,11 +87,24 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
-        .onAppear { port.value = String(model.settings.port) }
+        .onAppear {
+            port.value = String(model.settings.port)
+            swapLimit.value = String(model.settings.swapLimitGiB)
+        }
     }
 
     private func applyPort() {
         if let p = Int(port.value), (1024...65535).contains(p), p != model.settings.port { model.settings.port = p }
+    }
+    private var validSwapLimit: Int? {
+        guard let limit = Int(swapLimit.value.trimmingCharacters(in: .whitespaces)),
+              AppSettings.swapLimitRange.contains(limit) else { return nil }
+        return limit
+    }
+    private func applySwapLimit() {
+        guard let limit = validSwapLimit else { return }
+        model.settings.swapLimitGiB = limit
+        swapLimit.value = String(limit)
     }
     private func chooseRepo() {
         let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false

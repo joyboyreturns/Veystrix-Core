@@ -148,8 +148,9 @@ public struct InstalledModelsReport: Decodable, Sendable {
         public let architecture: String
         public let loaded: Bool
         public let verification: String
+        public let contextWindow: Int?
         enum CodingKeys: String, CodingKey {
-            case id, family, checkpoint, architecture, loaded, verification
+            case id, family, checkpoint, architecture, loaded, verification, contextWindow = "context_window"
             case displayName = "display_name"
         }
     }

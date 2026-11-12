@@ -1,0 +1,2 @@
+{"ts":1794506185.432,"model":"veystrix-flashnext","prompt":8192,"cached":0,"uncached":8192,"completion":32,"total":8224,"wall_s":97.818,"prefill_s":85.45,"decode_s":12.31,"finish":"length","warm":false}
+{"ts":1794506199.925,"model":"veystrix-flashnext","prompt":8192,"cached":8185,"uncached":7,"completion":32,"total":8224,"wall_s":14.406,"prefill_s":2.032,"decode_s":12.307,"finish":"length","warm":false}

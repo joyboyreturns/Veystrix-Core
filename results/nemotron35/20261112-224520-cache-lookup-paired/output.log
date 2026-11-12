@@ -1,0 +1,6 @@
+1-baseline cold 11.25 ms warm 3.40 ms
+1-candidate cold 2.85 ms warm 1.86 ms
+2-candidate cold 3.03 ms warm 1.87 ms
+2-baseline cold 11.20 ms warm 3.48 ms
+3-baseline cold 11.17 ms warm 3.44 ms
+3-candidate cold 2.88 ms warm 1.85 ms

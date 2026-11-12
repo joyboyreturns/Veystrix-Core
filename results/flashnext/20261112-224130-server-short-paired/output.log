@@ -1,0 +1,6 @@
+1-baseline TTFT 10.60s, runtime decode 1.69 tok/s
+1-candidate TTFT 11.01s, runtime decode 1.63 tok/s
+2-candidate TTFT 11.46s, runtime decode 1.56 tok/s
+2-baseline TTFT 10.49s, runtime decode 1.68 tok/s
+3-baseline TTFT 10.94s, runtime decode 1.72 tok/s
+3-candidate TTFT 10.30s, runtime decode 1.64 tok/s

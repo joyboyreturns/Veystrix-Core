@@ -34,6 +34,30 @@ def installation_id(family: str, path: str | Path) -> str:
     return f"veystrix-{family}-{digest}"
 
 
+# The window each family's supported launch requests (owner decision 2026-11-12). Flash-Next's
+# attention is positionally bounded by its checkpoint, so a catalog honours smaller metadata.
+# Nemotron 3.5 Lightning has no rotary or learned positional cap on this axis, so its runtime
+# window is configured, not derived from max_position_embeddings (the installed checkpoint
+# reports 262,144 there). Neither number claims that a 262K or 1M prompt has run on real
+# hardware; admission may still admit less at load, and the loaded server reports the admitted
+# value on /v1/models and /health.
+FLASHNEXT_CONFIGURED_CONTEXT = 262_144
+NEMOTRON_CONFIGURED_CONTEXT = 1_048_576
+UNKNOWN_FAMILY_CONTEXT = 32_768
+
+
+def catalog_context(model: InstalledModel) -> int:
+    """The context window a harness catalog should advertise for one installation.
+
+    Flash-Next is bounded by the checkpoint's metadata with a safe fallback; Nemotron is not.
+    The loaded server's actual (memory-admitted) window always wins over this estimate."""
+    if model.family == "nemotron35-lightning":
+        return NEMOTRON_CONFIGURED_CONTEXT
+    native = model.native_context
+    return (min(native, FLASHNEXT_CONFIGURED_CONTEXT)
+            if isinstance(native, int) and native > 0 else UNKNOWN_FAMILY_CONTEXT)
+
+
 def discover(root: Path | None = None) -> list[InstalledModel]:
     """Return structurally discovered installations without reading tensor payloads."""
     records = []
@@ -72,7 +96,8 @@ def resolve(model_id: str, root: Path | None = None) -> InstalledModel | None:
 def main() -> int:
     """Print metadata for the native application; never load model weights."""
     import json
-    print(json.dumps({"object": "list", "data": [dict(m.as_dict(), loaded=False) for m in discover()]}))
+    print(json.dumps({"object": "list", "data": [dict(m.as_dict(), loaded=False, context_window=catalog_context(m))
+                                                 for m in discover()]}))
     return 0
 
 

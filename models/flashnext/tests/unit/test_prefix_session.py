@@ -108,7 +108,7 @@ class WorkflowTests(Base):
                 mock.patch.object(layer_major, "window_tokens", return_value=128):
             model, session = self.engine()
             _, _, report = self.go(model, session, self.system + self.suffix_a)
-        self.assertEqual(report.execution_order, "layer-major-v1/w128")
+        self.assertEqual(report.execution_order, "layer-major-v1/w128/min0")
         self.assertTrue(report.execution_windows)
         self.assertTrue(all(segment["execution"] == "layer" for segment in report.execution_segments))
         self.assertEqual(report.execution_windows[0][0], 0)

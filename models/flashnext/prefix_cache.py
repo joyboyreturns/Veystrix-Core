@@ -37,6 +37,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import tempfile
 import threading
 import time
@@ -145,14 +146,24 @@ def fingerprint(**parts) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def chain_key(fp: str, tokens) -> str:
+def _chain_key_bytes(fp: str, length: int, token_bytes) -> str:
     digest = hashlib.sha256(fp.encode())
-    digest.update(len(tokens).to_bytes(8, "little"))
-    digest.update(_token_bytes(tokens))
+    digest.update(length.to_bytes(8, "little"))
+    digest.update(token_bytes)
     return digest.hexdigest()
 
 
+def chain_key(fp: str, tokens) -> str:
+    return _chain_key_bytes(fp, len(tokens), _token_bytes(tokens))
+
+
 def _token_bytes(tokens) -> bytes:
+    if hasattr(tokens, "__len__"):
+        try:
+            # Keep existing cache keys and pack ordinary token sequences in one call.
+            return struct.pack(f"<{len(tokens)}i", *tokens)
+        except struct.error:
+            pass
     return b"".join(int(t).to_bytes(4, "little", signed=True) for t in tokens)
 
 
@@ -1173,10 +1184,14 @@ class PrefixCache:
         saw_plan_mismatch = False
         saw_evicted = False
         candidates = sorted((n for n in self._lengths if n <= limit), reverse=True)
+        if not candidates:
+            return None, "cold"
+        packed = memoryview(_token_bytes(tokens[:candidates[0]]))
         for n in candidates:
-            key = chain_key(self.fp, tokens[:n])
+            key = _chain_key_bytes(self.fp, n, packed[:4 * n])
             if key in self._ram or key in self._disk:
-                if self._tokens.get(key, tokens[:n]) == tuple(tokens[:n]):
+                stored = self._tokens.get(key)
+                if stored is None or stored == tuple(tokens[:n]):
                     if accept is not None:
                         plan = self._plans.get(key)
                         if plan is None and key in self._ram:

@@ -104,58 +104,57 @@ class StackedExpertReader:
             raise ExpertReadError('invalid layer or expert id')
         began = time.perf_counter()
         out, total = {}, 0
-        for name, shard, offset, length, dtype, shape in self._slices[layer]:
-            fd, size = self._fd(shard)
-            start = offset + expert * length
-            if start + length > size:
-                raise ExpertReadError('shard truncated')
-            data = os.pread(fd, length, start)
-            if len(data) != length:
-                raise ExpertReadError('short expert read')
-            total += length
-            out[name] = np.frombuffer(data, dtype=_NP[dtype]).reshape(shape)
+        for desc in self._slices[layer]:
+            name, array = self._pread_slice(desc, expert)
+            total += array.nbytes
+            out[name] = array
         with self._lock:
             self.bytes_read += total
             self.reads += 1
             self.read_seconds += time.perf_counter() - began
         return out
 
-    def _read_slice(self, layer: int, expert: int, i: int):
-        name, shard, offset, length, dtype, shape = self._slices[layer][i]
-        began = time.perf_counter()
+    def _pread_slice(self, desc, expert: int):
+        name, shard, offset, length, dtype, shape = desc
         fd, size = self._fd(shard)
         start = offset + expert * length
         if start + length > size:
             raise ExpertReadError('shard truncated')
-        data = os.pread(fd, length, start)
-        if len(data) != length:
-            raise ExpertReadError('short expert read')
-        array = np.frombuffer(data, dtype=_NP[dtype]).reshape(shape)
-        # Convert here, on the reader thread: the numpy->MLX copy (~2.5 ms per expert) must not stall the GPU thread.
-        # Plain data arrays carry no stream and may cross threads; the bfloat16 view op does, so it is applied later
-        # on the thread that evaluates (see ExpertPool._admit).
-        value = mx.array(array)
+        if hasattr(os, 'preadv'):
+            array = np.empty(shape, dtype=_NP[dtype])
+            if os.preadv(fd, [memoryview(array).cast('B')], start) != length:
+                raise ExpertReadError('short expert read')
+        else:
+            data = os.pread(fd, length, start)
+            if len(data) != length:
+                raise ExpertReadError('short expert read')
+            array = np.frombuffer(data, dtype=_NP[dtype]).reshape(shape)
+        return name, array
+
+    def _read_projection(self, descriptors, expert: int):
+        began = time.perf_counter()
+        parts = dict(self._pread_slice(desc, expert) for desc in descriptors)
+        # The MLX copy runs on the reader thread. The bfloat16 view runs
+        # later on the thread that evaluates the arrays.
+        values = {name: mx.array(array) for name, array in parts.items()}
         with self._lock:
-            self.bytes_read += length
+            self.bytes_read += sum(array.nbytes for array in parts.values())
             self.read_seconds += time.perf_counter() - began
-        return name, value
+        return values
 
     def submit_expert(self, executor, layer: int, expert: int) -> cf.Future:
-        """Read the six slices of one expert **in parallel** on ``executor``; the future yields the MLX array dict.
-
-        One expert is ~5.6 MB in six separate regions; reading them one after another costs ~3 ms of latency even
-        when the SSD has spare bandwidth, so every slice is its own task."""
+        """Queue both projections independently, batching each weight and its small metadata."""
         if layer not in self._slices or type(expert) is not int or not 0 <= expert < self.expert_count:
             raise ExpertReadError('invalid layer or expert id')
         parent = cf.Future()
         parent.set_running_or_notify_cancel()
-        n = len(self._slices[layer])
-        results, errors, remaining, gate = {}, [], [n], threading.Lock()
+        descriptors = self._slices[layer]
+        projections = (descriptors[:len(_PARTS)], descriptors[len(_PARTS):])
+        results, errors, remaining, gate = {}, [], [len(projections)], threading.Lock()
 
         def done(future):
             try:
-                name, array = future.result()
-                results[name] = array
+                results.update(future.result())
             except BaseException as error:
                 errors.append(error)
             with gate:
@@ -169,9 +168,9 @@ class StackedExpertReader:
                 else:
                     parent.set_result(results)
 
-        for i in range(n):
+        for projection in projections:
             try:
-                executor.submit(self._read_slice, layer, expert, i).add_done_callback(done)
+                executor.submit(self._read_projection, projection, expert).add_done_callback(done)
             except RuntimeError as error:        # executor shut down
                 errors.append(error)
                 with gate:

@@ -84,6 +84,34 @@ class CoordinatorTests(unittest.TestCase):
         finally:
             done.set(); thread.join(2)
 
+    def test_same_model_leases_hold_worker_until_last_request_finishes(self):
+        with self.c.request("a", owner="coding"):
+            with self.c.request("a", owner="chat"):
+                self.assertTrue(self.c.snapshot().active)
+                self.assertEqual(self.c.snapshot().owner, "coding")
+                with self.assertRaises(ModelBusy):
+                    with self.c.request("b", owner="coding", handoff=True): pass
+            self.assertTrue(self.c.snapshot().active)
+        self.assertFalse(self.c.snapshot().active)
+        with self.c.request("b", owner="coding"):
+            self.assertEqual(self.driver.loaded, "b")
+
+    def test_exclusive_workflow_lease_still_blocks_other_requests(self):
+        with self.c.request("a", owner="workflow:one", exclusive_owner=True):
+            with self.assertRaises(ModelBusy):
+                with self.c.request("a", owner="chat"): pass
+
+    def test_failed_readiness_probe_during_active_request_is_retryable(self):
+        ready = self.driver.ready
+        with self.c.request("a"):
+            self.driver.ready = lambda _model: False
+            with self.assertRaises(ModelBusy):
+                with self.c.request("a"): pass
+            self.assertEqual(self.c.snapshot().state, "ready")
+        self.driver.ready = ready
+        with self.c.request("a"):
+            self.assertEqual(self.driver.events, [("load", "a")])
+
     def test_cancel_before_load_and_explicit_handoff(self):
         with self.assertRaises(ModelBusy):
             with self.c.request("a", cancelled=lambda: True): pass

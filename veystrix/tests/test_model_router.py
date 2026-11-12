@@ -1,12 +1,45 @@
+import errno
 import http.client
 import json
+import socket
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import patch
 
 from veystrix.model_coordinator import ModelCoordinator
 from veystrix.model_registry import InstalledModel
-from veystrix.model_router import RouterServer, session_owner
+from veystrix.model_router import PORT_IN_USE_EXIT, RouterServer, _InputCache, main, session_owner
+
+
+class RouterListenerTests(unittest.TestCase):
+    def test_active_listener_excludes_duplicate_and_allows_immediate_restart(self):
+        with RouterServer(("127.0.0.1", 0), None, None) as server:
+            address = server.server_address
+            with self.assertRaises(OSError) as occupied:
+                RouterServer(address, None, None)
+            self.assertEqual(occupied.exception.errno, errno.EADDRINUSE)
+
+            # The server closes first, leaving its address in TCP TIME_WAIT.
+            with socket.create_connection(address, timeout=2) as client:
+                connection, _ = server.get_request()
+                connection.close()
+                self.assertEqual(client.recv(1), b"")
+        with RouterServer(address, None, None) as restarted:
+            self.assertEqual(restarted.server_address, address)
+
+    def test_occupied_port_reports_conflict_without_loading_model(self):
+        with RouterServer(("127.0.0.1", 0), None, None) as server:
+            with (patch("veystrix.model_router.model_registry.resolve", return_value=model("a")),
+                  patch("veystrix.model_router.ProcessDriver") as driver,
+                  patch("sys.stderr") as stderr):
+                status = main(["--checkpoint", "/models/a", "--port", str(server.server_port)])
+        self.assertEqual(status, PORT_IN_USE_EXIT)
+        driver.return_value.load.assert_not_called()
+        stderr.write.assert_any_call(
+            f"Cannot start Veystrix: 127.0.0.1:{server.server_port} is already in use. "
+            "Stop the listener or choose another port."
+        )
 
 
 def model(name):
@@ -18,6 +51,8 @@ class Backend(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.calls.append(body["model"])
+        self.server.sessions.append(self.headers.get("X-Veystrix-Session"))
+        self.server.inputs.append(body)
         response = (b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n' if body.get("stream") else json.dumps({"model": body["model"], "choices": []}).encode())
         self.send_response(200)
         self.send_header("Content-Length", str(len(response)))
@@ -45,6 +80,8 @@ class RouterTests(unittest.TestCase):
     def setUp(self):
         self.backend = ThreadingHTTPServer(("127.0.0.1", 0), Backend)
         self.backend.calls = []
+        self.backend.sessions = []
+        self.backend.inputs = []
         self.bthread = threading.Thread(target=self.backend.serve_forever, daemon=True)
         self.bthread.start()
         self.models = {x: model(x) for x in ("a", "b")}
@@ -78,6 +115,55 @@ class RouterTests(unittest.TestCase):
         status, response = self.call("/v1/chat/completions", {"model": "b", "messages": [{"role": "user", "content": "background"}]})
         self.assertEqual((status, response["error"]["code"]), (409, "model_handoff_required"))
         self.assertEqual(self.driver.current, "a")
+
+    def test_authenticated_session_reuses_input_in_both_model_directions(self):
+        self.models["nem"] = InstalledModel("nem", "nemotron35-lightning", "nem", "/models/nem",
+                                            "nemotron_h", {}, None, "test")
+        input_fields = {
+            "messages": [{"role": "user", "content": "Compare this document with the policy."}],
+            "tools": [{"type": "function", "function": {"name": "lookup", "parameters": {}}}],
+            "metadata": {"session_id": "same-session"},
+        }
+        for model_id, hits in (("a", 0), ("nem", 1), ("a", 2)):
+            status, response = self.call("/v1/chat/completions", dict(input_fields, model=model_id))
+            self.assertEqual((status, response["model"]), (200, model_id))
+            self.assertEqual(self.backend.inputs[-1], dict(input_fields, model=model_id))
+            self.assertEqual(self.call("/health")[1]["input_reuse"]["cross_model_hits"], hits)
+        self.assertEqual(self.driver.events, [("load", "a"), ("unload", "a"), ("load", "nem"),
+                                             ("unload", "nem"), ("load", "a")])
+
+    def test_input_reuse_preserves_json_types_and_session_scope(self):
+        cache = _InputCache()
+        route, scope = "/v1/responses", (None, "first")
+        cache.encode(route, scope, {"model": "a", "input": {"number": 1}})
+        payload = {"model": "b", "input": {"number": True}}
+        self.assertIs(json.loads(cache.encode(route, scope, payload))["input"]["number"], True)
+        self.assertEqual(cache.snapshot()["cross_model_hits"], 0)
+        cache.encode(route, (None, "second"), dict(payload, model="a"))
+        self.assertEqual(cache.snapshot()["cross_model_hits"], 0)
+
+    def test_workflow_handoffs_preserve_agent_session_headers(self):
+        owner = "a" * 32
+
+        def request(model_id, agent, workflow):
+            conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+            try:
+                conn.request("POST", "/v1/chat/completions",
+                             json.dumps({"model": model_id, "messages": [{"role": "user", "content": "work"}]}),
+                             {"Authorization": "Bearer secret", "Content-Type": "application/json",
+                              "X-Veystrix-Session": agent, "X-Veystrix-Workflow": workflow})
+                response = conn.getresponse()
+                return response.status, json.loads(response.read())
+            finally:
+                conn.close()
+
+        self.assertEqual(request("a", "architect", owner)[0], 200)
+        self.assertEqual(request("a", "unrelated", "b" * 32)[0], 409)
+        self.assertEqual(request("b", "executor", owner)[0], 200)
+        self.assertEqual(request("a", "reviewer", owner)[0], 200)
+        self.assertEqual(self.backend.sessions, ["architect", "executor", "reviewer"])
+        self.assertEqual(self.driver.events, [("load", "a"), ("unload", "a"), ("load", "b"),
+                                             ("unload", "b"), ("load", "a")])
     def test_stream_sends_loading_heartbeat_without_splitting_sse(self):
         import time
         from unittest.mock import patch
@@ -99,6 +185,32 @@ class RouterTests(unittest.TestCase):
         status, body = self.call("/v1/chat/completions", {"model": "macqwen-flashnext", "messages": []})
         self.assertEqual((status, body["error"]["code"]), (404, "model_not_found"))
         self.assertEqual(self.driver.events, [])
+
+    def test_catalog_and_installed_reports_advertise_windows(self):
+        from veystrix.context_budget import suggested_client_window
+        self.models["nem"] = InstalledModel("nem", "nemotron35-lightning", "nem", "/models/nem",
+                                            "nemotron_h", {}, 262144, "test")
+        status, result = self.call("/v1/models")
+        self.assertEqual(status, 200)
+        entries = {x["id"]: x for x in result["data"]}
+        self.assertEqual(entries["a"]["context_window"], 32768)              # no metadata -> safe fallback
+        self.assertEqual(entries["a"]["suggested_client_context_window"], suggested_client_window(32768))
+        self.assertEqual(entries["a"]["max_output_tokens"], 32768 - 256)
+        self.assertEqual(entries["nem"]["context_window"], 1_048_576)        # configured, not the 262144 metadata
+        self.assertEqual(entries["nem"]["max_output_tokens"], 1_048_576 - 256)
+        status, result = self.call("/v1/installed-models")
+        self.assertEqual(status, 200)
+        self.assertEqual({x["id"]: x for x in result["data"]}["nem"]["context_window"], 1_048_576)
+        # The loaded backend's admitted window wins over the estimate while its process is alive.
+        self.call("/v1/chat/completions", {"model": "a", "messages": [{"role": "user", "content": "load"}]})
+        old_health, old_process = self.driver.health, getattr(self.driver, "process", None)
+        self.driver.health = lambda: {**old_health(), "context_limit": 8192}
+        self.driver.process = object()
+        try:
+            _, result = self.call("/v1/models")
+            self.assertEqual({x["id"]: x for x in result["data"]}["a"]["context_window"], 8192)
+        finally:
+            self.driver.health, self.driver.process = old_health, old_process
 
     def test_bad_model_and_key_do_not_load(self):
         self.assertEqual(self.call("/v1/models", key="wrong")[0], 401)

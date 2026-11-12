@@ -27,6 +27,9 @@ import numpy as np
 from . import state
 
 MAX_TOKENS = 1_048_576
+# A coding harness with one tool can have a useful system prefix below 512
+# tokens. Keep that boundary so canonicalized tool history can reuse it.
+MIN_TOKENS = 256
 _MAGIC = b'VXT1'
 
 
@@ -53,16 +56,7 @@ def _managed(method):
         with self._lock:
             context = self.manager.transaction() if self.manager else nullcontext(None)
             with context as tx:
-                if tx is not None:
-                    self.disk_budget = tx.quota
-                    local = {entry.key: entry for entry in tx.entries.values()
-                             if entry.directory == self.directory}
-                    for key in self._tokens.keys() - local.keys():
-                        self._tokens.pop(key)
-                        self._disk.pop(key)
-                    for key, entry in local.items():
-                        if key not in self._tokens:
-                            self._index(key, entry.size, entry.mtime)
+                self._sync_disk(tx)
                 return method(self, *args, _tx=tx, **kwargs)
     return operation
 
@@ -70,7 +64,7 @@ def _managed(method):
 class PrefixCache:
     """Doubles as the ``store()`` object the shared server reads for /health (``_disk``, ``stats`` ...)."""
 
-    def __init__(self, directory, identity: dict, *, quota_bytes: int, min_tokens: int = 512, manager=None, compatible_positions=None):
+    def __init__(self, directory, identity: dict, *, quota_bytes: int, min_tokens: int = MIN_TOKENS, manager=None, compatible_positions=None):
         digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         self.identity = identity
         self.manager = manager
@@ -83,7 +77,6 @@ class PrefixCache:
         self.stats = Stats()
         self._lock = threading.RLock()
         self._recovery_lease = None
-        self._tokens: dict[str, np.ndarray] = {}
         self._disk: dict[str, dict] = {}
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         if manager is None:
@@ -113,11 +106,12 @@ class PrefixCache:
         tokens = np.frombuffer(raw, dtype='<u4', offset=4)
         return tokens if 0 < len(tokens) <= MAX_TOKENS else None
 
-    def _index(self, key, size, mtime):
-        tokens = self._read_tokens(self._paths(key)[1])
-        if tokens is not None and self._key(tokens) == key:
-            self._tokens[key] = tokens
-            self._disk[key] = {"bytes": size, "tokens": len(tokens), "mtime": mtime}
+    def _sync_disk(self, tx):
+        if tx is not None:
+            self.disk_budget = tx.quota
+            self._disk = {entry.key: {"bytes": entry.size, "tokens": entry.tokens, "mtime": entry.mtime}
+                          for entry in tx.entries.values()
+                          if entry.directory == self.directory and entry.tokens > 0}
 
     def _scan(self) -> None:
         for tokens_path in self.directory.glob('*.tokens'):
@@ -128,54 +122,91 @@ class PrefixCache:
                 for stale in (tokens_path, state_path):
                     stale.unlink(missing_ok=True)
                 continue
-            self._tokens[key] = tokens
             self._disk[key] = {'bytes': state_path.stat().st_size, 'tokens': len(tokens), 'mtime': state_path.stat().st_mtime}
         for orphan in self.directory.glob('*.safetensors'):
-            if orphan.stem not in self._tokens:
+            if orphan.stem not in self._disk:
                 orphan.unlink(missing_ok=True)
 
     # -- lookup ------------------------------------------------------------------------------------------------
-    def _best_key(self, ids: np.ndarray):
-        best, best_len = None, 0
+    def _best_key(self, ids: np.ndarray, excluded=()):
         accepts = self.compatible_positions(ids) if self.compatible_positions else lambda n: True
-        with self._lock:
-            for key, tokens in self._tokens.items():
-                n = len(tokens)
-                if best_len < n < len(ids) and n >= self.min_tokens and accepts(n) and np.array_equal(tokens, ids[:n]):
-                    best, best_len = key, n
-        return best, best_len
+        lengths = sorted({entry["tokens"] for entry in self._disk.values()
+                          if self.min_tokens <= entry["tokens"] < len(ids)})
+        if not lengths:
+            return None, 0
+        digest = hashlib.sha256()
+        packed = memoryview(np.ascontiguousarray(ids[:lengths[-1]])).cast("B")
+        candidates, previous = [], 0
+        for n in lengths:
+            digest.update(packed[4 * previous:4 * n])
+            previous = n
+            key = digest.hexdigest()[:24]
+            if key in self._disk and key not in excluded:
+                candidates.append((key, n))
+        for key, n in reversed(candidates):
+            if accepts(n):
+                tokens = self._read_tokens(self._paths(key)[1])
+                if tokens is not None and np.array_equal(tokens, ids[:n]):
+                    return key, n
+        return None, 0
 
-    @_managed
-    def reusable_tokens(self, ids, *, _tx) -> int:
+    def _lookup_transaction(self):
+        return self.manager.transaction(namespace=self.directory) if self.manager else nullcontext(None)
+
+    def reusable_tokens(self, ids) -> int:
         """How many leading tokens of ``ids`` a stored snapshot could provide (0 when none)."""
-        return self._best_key(np.asarray(ids, dtype='<u4'))[1]
+        with self._lock, self._lookup_transaction() as tx:
+            self._sync_disk(tx)
+            return self._best_key(np.asarray(ids, dtype='<u4'))[1]
 
-    @_managed
-    def restore(self, ids, *, _tx):
+    def restore(self, ids):
         """(cache objects, token count) for the longest usable snapshot, or (None, 0)."""
         ids = np.asarray(ids, dtype='<u4')
-        key, n = self._best_key(ids)
-        if key is None:
-            self.stats.cold_lookups += 1
-            if _tx is not None:
-                _tx.record("nemotron35", self.directory)
-            return None, 0
-        state_path, tokens_path = self._paths(key)
-        try:
-            cache = state.restore(state_path, self.identity, [int(t) for t in ids[:n]])
-        except state.SnapshotError:
-            self.stats.restore_failures += 1
-            self._forget(key)
-            return None, 0
-        if _tx is not None:
-            _tx.record("nemotron35", self.directory, key, n)
+        with self._lock:
+            return self._restore(ids)
+
+    def _restore(self, ids):
+        excluded = set()
+        while True:
+            with self._lookup_transaction() as tx:
+                self._sync_disk(tx)
+                key, n = self._best_key(ids, excluded)
+                if key is None:
+                    self.stats.cold_lookups += 1
+                    if tx is not None:
+                        tx.record("nemotron35", self.directory)
+                    return None, 0
+                lease = tx.lease(self.directory, key) if tx is not None else None
+            state_path, _ = self._paths(key)
+            try:
+                cache = state.restore(state_path, self.identity, ids[:n].tolist())
+                if lease is not None:
+                    with self._lookup_transaction() as tx:
+                        tx.record("nemotron35", self.directory, key, n)
+                break
+            except state.SnapshotError:
+                self.stats.restore_failures += 1
+                excluded.add(key)
+                if lease is None:
+                    self._forget(key)
+                else:
+                    with self._lookup_transaction() as tx:
+                        os.close(lease)
+                        lease = None
+                        entry = tx.entries.get(f"nemotron35/{self.directory.name}/{key}")
+                        if entry is not None and tx.remove(entry):
+                            self._disk.pop(key, None)
+            finally:
+                if lease is not None:
+                    os.close(lease)
         self.stats.ssd_hits += 1
         self.stats.reused_tokens += n
         self.stats.ssd_bytes_read += self._disk[key]['bytes']
-        try:
-            os.utime(state_path)
-        except OSError:
-            pass
+        if self.manager is None:
+            try:
+                os.utime(state_path)
+            except OSError:
+                pass
         self._disk[key]['mtime'] = time.time()
         return cache, n
 
@@ -187,16 +218,22 @@ class PrefixCache:
         if not self.min_tokens <= len(tokens) <= MAX_TOKENS:
             return False
         key = self._key(tokens)
-        with self._lock:
-            if key in self._tokens:
-                if hold and _tx is not None:
-                    self._hold(_tx, key)
-                return False
         state_path, tokens_path = self._paths(key)
         if _tx is not None:
+            entry = _tx.entries.get(f"nemotron35/{self.directory.name}/{key}")
+            if entry is not None:
+                stored = self._read_tokens(tokens_path) if entry.tokens == len(tokens) else None
+                if stored is not None and np.array_equal(stored, tokens):
+                    if hold:
+                        self._hold(_tx, key)
+                    return False
+                if not _tx.remove(entry):
+                    return False
             estimate = sum(a.nbytes for entry in cache for a in entry.state if a is not None)
             if not _tx.make_room(estimate + tokens.nbytes + 1024 * 1024):
                 return False
+        elif key in self._disk:
+            return False
         tmp = tokens_path.with_suffix('.tokens.tmp')
         try:
             state.save(state_path, cache, self.identity, tokens.tolist())
@@ -215,9 +252,7 @@ class PrefixCache:
             _sync_directory(self.directory)
         finally:
             tmp.unlink(missing_ok=True)
-        with self._lock:
-            self._tokens[key] = tokens
-            self._disk[key] = {'bytes': size, 'tokens': len(tokens), 'mtime': time.time()}
+        self._disk[key] = {'bytes': size, 'tokens': len(tokens), 'mtime': time.time()}
         if hold and _tx is not None:
             self._hold(_tx, key)
         self.stats.ssd_writes += 1
@@ -251,7 +286,6 @@ class PrefixCache:
 
     def _forget(self, key: str) -> None:
         with self._lock:
-            self._tokens.pop(key, None)
             self._disk.pop(key, None)
         for path in self._paths(key):
             path.unlink(missing_ok=True)
@@ -270,5 +304,10 @@ class PrefixCache:
 
     @_managed
     def clear(self, *, _tx) -> None:
-        for key in list(self._tokens):
-            self._forget(key)
+        if _tx is None:
+            for key in list(self._disk):
+                self._forget(key)
+        else:
+            for entry in list(_tx.entries.values()):
+                if entry.directory == self.directory and _tx.remove(entry):
+                    self._disk.pop(entry.key, None)

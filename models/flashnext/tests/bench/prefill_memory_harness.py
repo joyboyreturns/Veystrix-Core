@@ -544,14 +544,15 @@ class SafetyPolicy:
     thermal_samples: int = 2
     final: bool = False
     swap_ceiling_only: bool = False
+    swap_ceiling_mib: float = ABSOLUTE_SWAP_CEILING_MIB
 
 
-def absolute_swap_stop(reading: dict) -> str | None:
+def absolute_swap_stop(reading: dict, ceiling_mib: float = ABSOLUTE_SWAP_CEILING_MIB) -> str | None:
     used = reading.get("swap_used_mb")
     if not isinstance(used, (float, int)) or not math.isfinite(used) or used < 0:
         return "swap usage is unreadable"
-    if used >= ABSOLUTE_SWAP_CEILING_MIB:
-        return f"total swap used reached {used:.0f} MiB (limit {ABSOLUTE_SWAP_CEILING_MIB} MiB)"
+    if used >= ceiling_mib:
+        return f"total swap used reached {used:.0f} MiB (limit {ceiling_mib:g} MiB)"
     return None
 
 
@@ -605,7 +606,7 @@ class Watchdog:
             if sample.get("low_power") is None:
                 return "Low Power Mode state is unreadable in a final run"
         if policy.swap_ceiling_only:
-            reason = absolute_swap_stop(sample)
+            reason = absolute_swap_stop(sample, policy.swap_ceiling_mib)
             if reason:
                 return reason
         elif reason := self._staged_memory_stop(sample, vm, grown, growth):

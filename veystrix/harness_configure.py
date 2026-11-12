@@ -9,8 +9,9 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from veystrix.harness_models import qwen_config, deepseek_config, model_context
+from veystrix.harness_models import qwen_config, deepseek_config, opencode_config, kimi_config, model_context
 from veystrix.model_registry import discover
+from veystrix.pi_extension import EXTENSION_SOURCE
 
 
 def load_yaml12(text):
@@ -79,6 +80,59 @@ def run(*, home=None, port=8080, apply=False):
             reports[label] = _write(path, output) if apply else "ready to update"
         except (OSError, ValueError, yaml.YAMLError) as exc:
             reports[label] = "failed: " + str(exc)
+    # OpenCode: the Veystrix provider inside ~/.config/opencode/opencode.json (or a JSONC file
+    # the user already keeps; comments in it are preserved only by not rewriting it). The file
+    # is created even without an installation, so it already applies when OpenCode is
+    # installed or first run later.
+    opencode_dir = home / ".config" / "opencode"
+    opencode_json = opencode_dir / "opencode.json"
+    opencode_jsonc = opencode_dir / "opencode.jsonc"
+    if opencode_jsonc.exists() and not opencode_json.exists():
+        try:
+            data = json.loads(opencode_jsonc.read_text())
+        except (OSError, ValueError):
+            reports["OpenCode"] = "opencode.jsonc holds comments or invalid JSON; merge the Veystrix provider manually"
+        else:
+            try:
+                output = json.dumps(opencode_config(data, models, port), indent=2, ensure_ascii=False) + "\n"
+                reports["OpenCode"] = _write(opencode_jsonc, output) if apply else "ready to update"
+            except (OSError, ValueError) as exc:
+                reports["OpenCode"] = "failed: " + str(exc)
+    else:
+        try:
+            data = json.loads(opencode_json.read_text()) if opencode_json.exists() else {}
+            output = json.dumps(opencode_config(data, models, port), indent=2, ensure_ascii=False) + "\n"
+            reports["OpenCode"] = _write(opencode_json, output) if apply else "ready to update"
+        except (OSError, ValueError) as exc:
+            reports["OpenCode"] = "failed: " + str(exc)
+    # Kimi Code: the Veystrix provider and models in ~/.kimi-code/config.toml. The file is
+    # created even without an installation, so it already applies when Kimi Code is installed
+    # later; re-run this to restore it if a Kimi Code login rewrites the file.
+    kimi_path = home / ".kimi-code" / "config.toml"
+    try:
+        import tomllib
+        import tomlkit
+    except ImportError as exc:
+        reports["Kimi Code"] = "failed: " + str(exc)
+    else:
+        try:
+            text = kimi_path.read_text() if kimi_path.exists() else ""
+            document = tomlkit.parse(text) if text else {}
+            output = tomlkit.dumps(kimi_config(document, models, port))
+            if not output.endswith("\n"): output += "\n"
+            reports["Kimi Code"] = _write(kimi_path, output) if apply else "ready to update"
+        except (OSError, ValueError, tomlkit.exceptions.TOMLKitError) as exc:
+            reports["Kimi Code"] = "failed: " + str(exc)
+    # pi: one extension that discovers the Veystrix models from the running engine.
+    pi_dir = home / ".pi" / "agent"
+    if pi_dir.is_dir():
+        try:
+            output = EXTENSION_SOURCE if EXTENSION_SOURCE.endswith("\n") else EXTENSION_SOURCE + "\n"
+            reports["pi"] = _write(pi_dir / "extensions" / "veystrix.ts", output) if apply else "ready to update"
+        except (OSError, ValueError) as exc:
+            reports["pi"] = "failed: " + str(exc)
+    else:
+        reports["pi"] = "not installed"
     # Configure only the dedicated profile, preserving the user's main Hermes config.
     hermes_dir = home / ".hermes"
     if not hermes_dir.is_dir():

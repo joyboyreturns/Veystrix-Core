@@ -72,21 +72,25 @@ class Scheduler:
 
     # -- handler side -----------------------------------------------------------------------------------------------
 
-    def run(self, fn, gone=lambda: False, path: str = ""):
+    def run(self, fn, gone=lambda: False, path: str = "", *, wait=None):
         """Run ``fn`` once a slot is free and return its result. Raises Busy, ClientGone, or what ``fn`` raised."""
+        ticket = _Ticket(fn, path)
+        deadline = self._clock() + self.max_wait
         with self._lock:
             if self.waiting >= self.max_waiting:
                 self.rejected += 1
                 raise Busy(f"the server is handling another request and {self.waiting} are already waiting; retry shortly")
             self.waiting += 1
-        ticket = _Ticket(fn, path)
-        deadline = self._clock() + self.max_wait
-        if self.loop_running:
-            self._jobs.put(ticket)
+            queued = self.loop_running
+            if queued:
+                self._jobs.put(ticket)
+        if queued:
             while not ticket.started.wait(POLL_SECONDS):
                 problem = self._expired(ticket, gone, deadline)
                 if problem is not None:
                     raise problem
+            if wait is not None:
+                wait(ticket.done)
             ticket.done.wait()
             if ticket.error is not None:
                 raise ticket.error
@@ -104,6 +108,10 @@ class Scheduler:
                 self._finish()
         finally:
             self._gate.release()
+            if wait is not None:
+                done = threading.Event()
+                done.set()
+                wait(done)
 
     def _expired(self, ticket, gone, deadline):
         """Called while waiting. Returns the exception to raise if the wait must end, else None."""
@@ -140,7 +148,8 @@ class Scheduler:
 
     def serve_jobs(self, stop: threading.Event) -> None:
         """Run queued jobs on the calling thread until ``stop`` is set. Exceptions of a job go back to its handler."""
-        self.loop_running = True
+        with self._lock:
+            self.loop_running = True
         try:
             while not stop.is_set():
                 try:
@@ -160,7 +169,8 @@ class Scheduler:
                     self._finish()
                     ticket.done.set()
         finally:
-            self.loop_running = False
+            with self._lock:
+                self.loop_running = False
             self._fail_pending()
 
     def _fail_pending(self) -> None:

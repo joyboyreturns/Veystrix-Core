@@ -332,6 +332,10 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "workflow":
+        from veystrix.workflows.__main__ import main as workflow_main
+        return workflow_main(sys.argv[2:])
+
     # Keep this check before runtime discovery or setup: it must never download
     # dependencies or load the user's model.
     probe = argparse.ArgumentParser(add_help=False, allow_abbrev=False)

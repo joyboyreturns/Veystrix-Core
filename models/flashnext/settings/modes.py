@@ -300,7 +300,11 @@ def plan_mode(mode, *, pool_gb=None, enable=(), available_gb=None, prefix_dir=No
         ceiling = min(ceiling, 3072.0) if ceiling > 0 else 3072.0
         margin = max(margin, 256.0)
         if absolute_swap_only:
-            ceiling, margin = memory_policy.ABSOLUTE_SWAP_CEILING_MIB, 0.0
+            try:
+                ceiling = memory_policy.absolute_swap_ceiling_mib()
+            except ValueError as exc:
+                raise ModeError(str(exc)) from exc
+            margin = 0.0
         if margin >= ceiling:
             raise ModeError("swap safety margin must be smaller than the ceiling")
         env.update({"FLASHNEXT_SWAP_CEILING_MIB": str(ceiling), "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": str(margin),
@@ -495,7 +499,8 @@ def banner(plan: ModePlan, *, checkpoint=None, available_gb=None, guard_trace=No
             "READY" if available_gb >= START_GATE_GB else "BELOW GATE")
     rows.append(f"  memory         {ready}")
     if absolute:
-        guard = "ON (3 GiB total swap, thermal, battery stops)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
+        limit_gib = memory_policy.absolute_swap_ceiling_mib(env) / 1024
+        guard = f"ON ({limit_gib:g} GiB total swap, thermal, battery stops)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
     elif swap_policy:
         guard = "ON (swap growth +2.5 GiB, thermal, battery stops; pressure/available are telemetry)" if env.get("FLASHNEXT_CHAT_GUARD") == "1" else "OFF"
     else:

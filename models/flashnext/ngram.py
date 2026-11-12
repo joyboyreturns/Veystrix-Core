@@ -180,15 +180,10 @@ class StreamingShardedEmbedding(nn.Module):
             base = 0
             unique_groups = {}
             for shard_index, (positions, rows) in groups.items():
-                indices = {}
-                unique_rows = []
+                unique_rows = sorted(set(rows))
+                indices = {row: index for index, row in enumerate(unique_rows)}
                 for position, row in zip(positions, rows):
-                    index = indices.get(row)
-                    if index is None:
-                        index = len(unique_rows)
-                        indices[row] = index
-                        unique_rows.append(row)
-                    dedup_inverse[position] = base + index
+                    dedup_inverse[position] = base + indices[row]
                 unique_groups[shard_index] = (positions, unique_rows)
                 base += len(unique_rows)
             groups = unique_groups

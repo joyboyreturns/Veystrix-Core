@@ -188,6 +188,17 @@ class ChatGuardTests(unittest.TestCase):
         self.assertEqual(self.exits, [75])
         self.assertIn("swap grew 2.50 GiB", self.guard.path.read_text())
 
+    def test_configured_absolute_ceiling_controls_live_guard(self):
+        with mock.patch.dict("os.environ", {"FLASHNEXT_MEMORY_POLICY": "absolute-swap-only",
+                                            "FLASHNEXT_SWAP_CEILING_MIB": "5120"}):
+            self.sampler.swap_used = 4096
+            self.start()
+            self.assertEqual(self.exits, [])
+            self.sampler.swap_used = 5120
+            self.tick()
+            self.assertEqual(self.exits, [75])
+            self.assertIn("limit 5120 MiB", self.guard.path.read_text())
+
     def test_owner_waiver_ignores_pressure_and_availability_but_not_the_swap_limit(self):
         """FLASHNEXT_MEMORY_WAIVER=swap-only: 'launch anyway, only stop if it hits 2.5 GB swap'."""
         self.sampler.swap_used = 700

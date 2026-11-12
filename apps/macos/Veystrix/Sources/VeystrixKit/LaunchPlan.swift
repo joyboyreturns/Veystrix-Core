@@ -7,6 +7,7 @@ public struct LaunchPlan: Equatable, Sendable {
     public var environment: [String: String]
     public var workingDirectory: URL
     public var description: String
+    public var keepMacAwake = false
 
     public enum Source: Equatable, Sendable {
         /// The engine runtime bundled inside the app: Contents/Resources/engine
@@ -92,6 +93,7 @@ public struct LaunchPlan: Equatable, Sendable {
         env["VEYSTRIX_MIN_BATTERY_PERCENT"] = String(settings.minimumBatteryPercent)
         env["VEYSTRIX_REQUIRE_AC"] = settings.allowBattery ? "0" : "1"
         env["VEYSTRIX_ALLOW_LOW_POWER"] = settings.allowLowPowerMode ? "1" : "0"
+        env["FLASHNEXT_SWAP_CEILING_MIB"] = String(settings.swapLimitGiB * 1024)
         env["VEYSTRIX_PORT"] = String(settings.port)
         // Lifetime statistics: the engine appends one counts-only line per finished request here.
         env["VEYSTRIX_USAGE_LOG"] = UsageStore(paths: paths).requestsFile.path
@@ -106,14 +108,8 @@ public struct LaunchPlan: Equatable, Sendable {
         if settings.requireAPIKey, let apiKey { env["VEYSTRIX_SERVER_API_KEY"] = apiKey }
         if case .bundled(let root) = source { env["PYTHONPATH"] = root.appendingPathComponent("lib").path }
 
-        var executable = python
-        var finalArgs = args
-        if settings.keepMacAwake, fileExists("/usr/bin/caffeinate") {
-            // Same as serve.sh: no idle sleep (-i), no disk idle sleep (-m), no system sleep on AC (-s).
-            executable = URL(fileURLWithPath: "/usr/bin/caffeinate")
-            finalArgs = ["-ims", python.path] + args
-        }
-        return LaunchPlan(executable: executable, arguments: finalArgs, environment: env, workingDirectory: cwd,
-                          description: "Veystrix engine (\(note)) on 127.0.0.1:\(settings.port)")
+        return LaunchPlan(executable: python, arguments: args, environment: env, workingDirectory: cwd,
+                          description: "Veystrix engine (\(note)) on 127.0.0.1:\(settings.port)",
+                          keepMacAwake: settings.keepMacAwake && fileExists("/usr/bin/caffeinate"))
     }
 }

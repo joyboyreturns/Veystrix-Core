@@ -1077,6 +1077,12 @@ class FlashNextBackend(Conversation):
                 if budget_state is not None:
                     budget_state["forced_close"] = force_close
                 yield value
+                if _index + 1 == generation_horizon:
+                    # Commit the final token to the live cache without
+                    # projecting or sampling a token the caller cannot use.
+                    self.language(token[None], cache=self.cache, skip_logits=True)
+                    mx.eval([entry.state for entry in self.cache])
+                    return
                 sampler.observe(value)
                 step = self.language(token[None], cache=self.cache)
                 token = sampler(step.logits[:, -1, :])

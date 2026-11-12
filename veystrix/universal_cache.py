@@ -149,9 +149,10 @@ class CacheManager:
             os.close(fd)
 
     @contextmanager
-    def transaction(self):
+    def transaction(self, *, namespace=None):
+        """A namespace transaction can read, lease and remove entries in that namespace."""
         with self._locked():
-            tx = Transaction(self)
+            tx = Transaction(self, namespace=namespace)
             if "quota_bytes" not in tx.metadata:
                 tx.metadata["quota_bytes"] = self.default_quota
                 tx._save()
@@ -172,7 +173,7 @@ class CacheManager:
 
 
 class Transaction:
-    def __init__(self, manager):
+    def __init__(self, manager, *, namespace=None):
         self.manager = manager
         self.root = manager.root
         self.registry = self.root / "registry.json"
@@ -182,6 +183,7 @@ class Transaction:
         for temp in self.root.glob(".registry-*"):
             if _regular(temp):
                 temp.unlink()
+        self.namespace = namespace
         self.entries = self._scan()
 
     @property
@@ -198,9 +200,12 @@ class Transaction:
         entries = {}
         for model, (digits, suffix) in FORMATS.items():
             family = self.root / model
+            if self.namespace is not None and self.namespace.parent != family:
+                continue
             if not family.is_dir() or family.is_symlink():
                 continue
-            for directory in family.iterdir():
+            directories = family.iterdir() if self.namespace is None else (self.namespace,)
+            for directory in directories:
                 if not FINGERPRINT.fullmatch(directory.name) or not directory.is_dir() or directory.is_symlink():
                     continue
                 if _read_json(directory / NAMESPACE_MARKER, None) != {"model": model, "fingerprint": directory.name}:
@@ -287,6 +292,17 @@ class Transaction:
             raise
         return fd
 
+    def remove(self, entry):
+        """Remove a committed leaf when no reader holds its lease."""
+        if (self.entries.get(entry.identity) != entry or self._leased(entry)
+                or any(self._parent(other) == entry.identity for other in self.entries.values())):
+            return False
+        for path in entry.files:
+            path.unlink(missing_ok=True)
+        self.entries.pop(entry.identity)
+        self.metadata.get("reuse", {}).pop(entry.identity, None)
+        return True
+
     def set_pin(self, directory, key, pinned):
         identity = f"flashnext/{directory.name}/{key}"
         pins = self.metadata.setdefault("pins", [])
@@ -320,6 +336,8 @@ class Transaction:
         return cost * (1 + math.log1p(hits)) / (max(entry.size, 1) * (1 + age_hours / 72))
 
     def reclaim(self, amount, *, apply=False, protect=(), clear=False, older_than=None):
+        if self.namespace is not None:
+            raise ValueError("cache reclamation requires a global transaction")
         requested = max(0, amount)
         pending = self.entries.copy()
         now = time.time()
@@ -366,6 +384,8 @@ class Transaction:
         return result
 
     def make_room(self, size, *, protect=()):
+        if self.namespace is not None:
+            raise ValueError("cache quota enforcement requires a global transaction")
         if size > self.quota:
             return False
         free = shutil.disk_usage(self.root).free

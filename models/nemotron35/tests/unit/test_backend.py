@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import mlx.core as mx
 
@@ -141,6 +142,15 @@ class BackendTests(unittest.TestCase):
         with self.assertRaises(admission.AdmissionRefused):
             self.b.generate(2)
         self.assertEqual(self.b.cache_tokens, 0)
+
+    def test_request_admission_respects_configured_absolute_swap_limit(self):
+        with patch.dict("os.environ", {"FLASHNEXT_MEMORY_POLICY": "absolute-swap-only",
+                                       "FLASHNEXT_SWAP_CEILING_MIB": "5120"}):
+            admission.check_request(self.b.plan, machine(swap_used=4 * admission.GIB),
+                                    new_tokens=1, cached_tokens=0)
+            with self.assertRaises(admission.AdmissionRefused):
+                admission.check_request(self.b.plan, machine(swap_used=5 * admission.GIB),
+                                        new_tokens=1, cached_tokens=0)
 
     def test_context_limit_enforced(self):
         self.b.append_tokens([5] * (self.b.context_limit + 1))

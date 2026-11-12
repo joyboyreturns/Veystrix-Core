@@ -73,12 +73,12 @@ class MTPDecoderLifecycleTests(unittest.TestCase):
             model=SimpleNamespace(layers=[]),
             _position_ids=None,
             _rope_deltas=None,
-            make_cache=lambda: [SimpleNamespace(offset=0)],
+            make_cache=lambda: [SimpleNamespace(offset=0, state=[])],
         )
         if mtp:
             language.mtp = SimpleNamespace()
         backend.language = language
-        backend.cache = [SimpleNamespace(offset=0)]
+        backend.cache = language.make_cache()
         backend.tokenizer = _Tokenizer()
         backend.stops = set()
         backend.thinking_enabled = False
@@ -148,7 +148,7 @@ class MTPDecoderLifecycleTests(unittest.TestCase):
 
     def test_non_greedy_turn_drops_decoder_and_blocks(self):
         backend = self.backend(greedy=False)
-        live_cache = [SimpleNamespace(offset=5)]
+        live_cache = [SimpleNamespace(offset=5, state=[])]
         live = FakeMTPDecoder(live_cache)
         backend._decoder = live
         backend.pending = [10]
@@ -166,9 +166,11 @@ class MTPDecoderLifecycleTests(unittest.TestCase):
                 self.mtp = SimpleNamespace()
 
             def make_cache(self):
-                return [SimpleNamespace(offset=0)]
+                return [SimpleNamespace(offset=0, state=[])]
 
-            def __call__(self, _token, cache=None):
+            def __call__(self, _token, cache=None, *, skip_logits=False):
+                if skip_logits:
+                    return None
                 return SimpleNamespace(logits=mx.zeros((1, 1, 16)))
 
         backend.language = FakeLanguage()
@@ -203,9 +205,11 @@ class MTPDecoderLifecycleTests(unittest.TestCase):
                 self.mtp = SimpleNamespace()
 
             def make_cache(self):
-                return [SimpleNamespace(offset=0)]
+                return [SimpleNamespace(offset=0, state=[])]
 
-            def __call__(self, _token, cache=None):
+            def __call__(self, _token, cache=None, *, skip_logits=False):
+                if skip_logits:
+                    return None
                 return SimpleNamespace(logits=mx.zeros((1, 1, 16)))
 
         backend.language = FakeLanguage()
@@ -284,9 +288,11 @@ class FakeLanguage:
             self.mtp = SimpleNamespace()
 
     def make_cache(self):
-        return [SimpleNamespace(offset=0)]
+        return [SimpleNamespace(offset=0, state=[])]
 
-    def __call__(self, _token, cache=None):
+    def __call__(self, _token, cache=None, *, skip_logits=False):
+        if skip_logits:
+            return None
         return SimpleNamespace(logits=mx.zeros((1, 1, 16)))
 
 

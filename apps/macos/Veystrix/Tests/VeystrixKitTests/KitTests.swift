@@ -75,6 +75,7 @@ private func tempDir() -> URL {
         let paths = Paths(home: tempDir()); let store = SettingsStore(paths: paths)
         var s = AppSettings(); s.port = 9001; s.decodePool = .twoGB; s.checkpointPath = "/models/x"
         s.allowBattery = false; s.minimumBatteryPercent = 35; s.allowLowPowerMode = true
+        s.swapLimitGiB = 7
         try store.save(s)
         #expect(store.load() == s)
         let attrs = try FileManager.default.attributesOfItem(atPath: paths.settingsFile.path)
@@ -86,6 +87,7 @@ private func tempDir() -> URL {
         let s = SettingsStore(paths: paths).load()
         #expect(s.port == 9100); #expect(s.decodePool == .none); #expect(s.cacheQuotaGB == 80); #expect(s.nemotronContextTokens == 1_048_576)
         #expect(s.allowBattery); #expect(s.minimumBatteryPercent == 25); #expect(!s.allowLowPowerMode)
+        #expect(s.swapLimitGiB == 5)
     }
     @Test func damagedSettingsAreKeptAndDefaultsUsed() throws {
         let paths = Paths(home: tempDir()); try paths.ensureDirectories()
@@ -117,6 +119,7 @@ private func tempDir() -> URL {
     @Test func tieredCacheSelectionReachesTheRouter() throws {
         var (settings, checkpoint) = try good(tempDir())
         settings.flashNextKVCache = .tiered4
+        settings.swapLimitGiB = 6
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
         #expect(decoded.flashNextKVCache == .tiered4)
         let plan = try LaunchPlan.make(settings: decoded, checkpoint: checkpoint,
@@ -126,6 +129,7 @@ private func tempDir() -> URL {
         let policy = try #require(plan.arguments.firstIndex(of: "--flashnext-memory-policy"))
         #expect(plan.arguments[cache + 1] == "tiered4")
         #expect(plan.arguments[policy + 1] == "absolute-swap-only")
+        #expect(plan.environment["FLASHNEXT_SWAP_CEILING_MIB"] == "6144")
     }
 
     @Test func tellsTheEngineWhereToWriteLifetimeStatistics() throws {
@@ -156,13 +160,16 @@ private func tempDir() -> URL {
         #expect(plan.environment["VEYSTRIX_MIN_BATTERY_PERCENT"] == "40")
         #expect(plan.environment["VEYSTRIX_ALLOW_LOW_POWER"] == "1")
     }
-    @Test func keepAwakeWrapsWithCaffeinateLikeServeSh() throws {
+    @Test func keepAwakeKeepsPythonAsTheEngineExecutable() throws {
         var (s, c) = try good(tempDir()); s.keepMacAwake = true
         let plan = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
-        #expect(plan.executable.path == "/usr/bin/caffeinate"); #expect(plan.arguments.first == "-ims")
+        #expect(plan.executable.path == "/repo/.venv/bin/python")
+        #expect(plan.arguments.starts(with: ["-m", "veystrix.model_router"]))
+        #expect(plan.keepMacAwake)
         s.keepMacAwake = false
         let plain = try LaunchPlan.make(settings: s, checkpoint: c, source: .developer(repoRoot: URL(fileURLWithPath: "/repo")), apiKey: nil, fileExists: exists, isExecutable: exists)
         #expect(plain.executable.path == "/repo/.venv/bin/python")
+        #expect(!plain.keepMacAwake)
     }
     @Test func requireKeyPassesServerKeyOnlyWhenEnabled() throws {
         var (s, c) = try good(tempDir())
@@ -225,6 +232,23 @@ private func tempDir() -> URL {
         guard case .bundled(let root)? = src else { Issue.record("expected the bundled runtime"); return }
         #expect(root.standardizedFileURL.path == "/App/Contents/Resources/engine")
         #expect(EngineLocator.resolve(settings: AppSettings(), resourceURL: nil, environment: [:], fileExists: { _ in false }) == nil)
+    }
+}
+
+@Suite struct EngineLauncherTests {
+    @Test func keepAwakeStopSignalsTheLaunchedEngine() async throws {
+        let plan = LaunchPlan(executable: URL(fileURLWithPath: "/bin/sleep"),
+                              arguments: ["2"], environment: [:], workingDirectory: tempDir(),
+                              description: "Test engine", keepMacAwake: true)
+        let (exits, exit) = AsyncStream<Int32>.makeStream()
+        let process = try SystemEngineLauncher().launch(plan, onOutput: { _ in }, onExit: { status in
+            exit.yield(status)
+            exit.finish()
+        })
+        process.interrupt()
+        var statuses = exits.makeAsyncIterator()
+        #expect(await statuses.next() == SIGINT)
+        #expect(!process.isRunning)
     }
 }
 
@@ -631,6 +655,62 @@ let testACSnapshot = MemorySnapshot(physicalBytes: 16 << 30, availableBytes: 8 <
 
         let native = HarnessProfiles.snippet(for: .hermes, port: 8080, modelID: "veystrix-flashnext")
         #expect(native.content.contains("context_length: 262144"))
+    }
+
+    @Test func openCodeSnippetIsParsableJSONWithWindowAndUnlimitedOutput() throws {
+        let id = "veystrix-nemotron35-\"test"
+        let snippet = HarnessProfiles.snippet(
+            for: .openCode,
+            port: 8080,
+            modelID: id,
+            suggestedClientContext: nil,
+            modelContext: 1_048_576
+        )
+        let json = try #require(JSONSerialization.jsonObject(with: Data(snippet.content.utf8)) as? [String: Any])
+        let providers = try #require(json["providers"] as? [String: Any])
+        let veystrix = try #require(providers["veystrix"] as? [String: Any])
+        let settings = try #require(veystrix["settings"] as? [String: Any])
+        #expect(settings["baseURL"] as? String == "http://127.0.0.1:8080/v1")
+        let models = try #require(veystrix["models"] as? [String: Any])
+        let model = try #require(models[id] as? [String: Any])
+        let limit = try #require(model["limit"] as? [String: Any])
+        #expect(limit["context"] as? Int == 1_048_576)
+        #expect(limit["output"] as? Int == 1_048_576)
+
+        let fallback = HarnessProfiles.snippet(for: .openCode, port: 8080, modelID: "veystrix-flashnext")
+        #expect(fallback.content.contains("\"context\": 262144"))
+        #expect(fallback.content.contains("\"output\": 262144"))
+    }
+
+    @Test func piSnippetNamesTheInstalledExtensionAndOverrides() {
+        let snippet = HarnessProfiles.snippet(
+            for: .pi,
+            port: 8080,
+            modelID: "veystrix-flashnext",
+            suggestedClientContext: 266_240,
+            modelContext: 262_144
+        )
+        #expect(snippet.content.contains("veystrix.ts"))
+        #expect(snippet.content.contains("VEYSTRIX_BASE_URL=http://127.0.0.1:8080/v1"))
+        #expect(snippet.content.contains("VEYSTRIX_API_KEY"))
+        #expect(snippet.content.contains("contextWindow: 262144"))
+        #expect(!snippet.content.contains("4096"))
+    }
+
+    @Test func kimiCodeSnippetIsTOMLWithWindowAndNoOutputCap() {
+        let snippet = HarnessProfiles.snippet(
+            for: .kimiCode,
+            port: 8080,
+            modelID: "veystrix-nemotron35-abc",
+            suggestedClientContext: nil,
+            modelContext: 1_048_576
+        )
+        #expect(snippet.content.contains("[providers.veystrix]"))
+        #expect(snippet.content.contains("base_url = \"http://127.0.0.1:8080/v1\""))
+        #expect(snippet.content.contains("[models.\"veystrix-nemotron35-abc\"]"))
+        #expect(snippet.content.contains("max_context_size = 1048576"))
+        #expect(!snippet.content.contains("max_output_size"))
+        #expect(snippet.content.contains("capabilities = [\"tool_use\"]"))
     }
 }
 

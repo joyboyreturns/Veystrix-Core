@@ -150,7 +150,9 @@ class ChatGuard:
                 # the watchdog's immediate pressure-2 stop, its 64 MB swap-growth stop and its "any swap-out" stop are
                 # switched off here and replaced by: level 4 held, level >= 2 persisting, +2.5 GiB swap, active swap rate.
                 policy = H.SafetyPolicy(pressure_stop_level=99, swap_growth_mb=float("inf"),
-                                        swapin_limit_mib=float("inf"), swap_ceiling_only=absolute)
+                                        swapin_limit_mib=float("inf"), swap_ceiling_only=absolute,
+                                        swap_ceiling_mib=(memory_policy.absolute_swap_ceiling_mib() if absolute
+                                                          else H.ABSOLUTE_SWAP_CEILING_MIB))
                 policy.allow_low_power = os.environ.get("VEYSTRIX_ALLOW_LOW_POWER") == "1"
                 policy.require_ac = os.environ.get("VEYSTRIX_REQUIRE_AC") == "1"
                 # Owner decision 2026-11-09: VEYSTRIX_MIN_BATTERY_PERCENT=0 removes the battery floor for a run (default stays 25).

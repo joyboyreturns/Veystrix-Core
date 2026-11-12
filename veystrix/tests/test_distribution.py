@@ -37,6 +37,7 @@ class DistributionTests(unittest.TestCase):
                 "numpy==2.5.2",
                 "requests==2.34.2",
                 "huggingface-hub==1.29.0",
+                "tomlkit==0.15.2",
             },
         )
 

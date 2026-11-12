@@ -232,6 +232,13 @@ class JudgeTests(unittest.TestCase):
 
 
 class MemoryWatchTests(unittest.TestCase):
+    def test_configured_absolute_ceiling_controls_external_watchdog(self):
+        config = W.Config.from_environment({"FLASHNEXT_MEMORY_POLICY": "absolute-swap-only",
+                                            "FLASHNEXT_SWAP_CEILING_MIB": "5120",
+                                            "FLASHNEXT_WATCHDOG_MEMORY": "1"})
+        self.assertTrue(config.memory_watch)
+        self.assertEqual(config.memory_stop_mib, 5120)
+
     def test_layer_major_defaults_and_explicit_rollback(self):
         config = W.Config.from_environment({"FLASHNEXT_PREFILL_ORDER": "layer"})
         self.assertTrue(config.memory_watch)

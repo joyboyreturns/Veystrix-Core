@@ -185,9 +185,21 @@ class ExpertPool:
         fd = self._fill_fd(ref.shard)
         view = self._view
         size = ref.row_bytes
-        for expert, base in targets:
-            if os.preadv(fd, [view[base:base + size]], ref.start + expert * size) != size:
-                raise OSError(f"short expert pool read for {name} row {expert}")
+        start = 0
+        while start < len(targets):
+            expert = targets[start][0]
+            end = start + 1
+            # Sixteen vectors fit the POSIX minimum IOV_MAX.
+            while end < min(len(targets), start + 16) and targets[end][0] == expert + end - start:
+                end += 1
+            buffers = [view[base:base + size] for _, base in targets[start:end]]
+            try:
+                if os.preadv(fd, buffers, ref.start + expert * size) != size * len(buffers):
+                    raise OSError(f"short expert pool read for {name} row {expert}")
+            finally:
+                for buffer in buffers:
+                    buffer.release()
+            start = end
 
     def invalidate(self, layer: int, misses) -> None:
         """Discard failed fills after all their outstanding writes have drained.
@@ -203,6 +215,7 @@ class ExpertPool:
 
     def fill(self, prefix: str, misses, submit, chunk: int = 2):
         """Queue the nine row reads of every miss; returns the futures."""
+        misses = sorted(misses, key=lambda target: target[0])
         futures = []
         try:
             for projection, part in _PARTS:

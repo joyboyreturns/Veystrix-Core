@@ -82,7 +82,7 @@ class ProcessDriver:
         env = dict(os.environ)
         env.update(VEYSTRIX_SERVER_API_KEY=self.api_key, VEYSTRIX_ENGINE_INSTANCE_ID=self.instance,
                    VEYSTRIX_PYTHON=sys.executable)
-        if model.family == "flashnext" and self.flashnext_memory_policy:
+        if self.flashnext_memory_policy:
             env["FLASHNEXT_MEMORY_POLICY"] = self.flashnext_memory_policy
         env.setdefault("VEYSTRIX_NEMOTRON_AUTHORIZED", "1")
         read_fd, write_fd = os.pipe()

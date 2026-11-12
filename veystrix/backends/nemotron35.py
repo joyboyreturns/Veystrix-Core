@@ -507,9 +507,8 @@ class NemotronBackend(Conversation):
         finish = "length"
         timer = DecodeTimer()
         try:
+            token = sampler(logits) if horizon > 0 else None
             while len(produced) < horizon:
-                token = sampler(logits)
-                mx.eval(token)
                 value = int(token.item())
                 forced = (budgets is not None and phase == "thinking" and think_budget and close_token is not None
                           and counts["thinking"] == think_budget - 1)
@@ -546,7 +545,9 @@ class NemotronBackend(Conversation):
                         with timer.emitting():
                             out(piece)
                 try:
-                    logits = self.core.decode(value)   # one step is ~0.1 s: cancel is checked between tokens so state stays valid
+                    # Commit the last emitted token to the cache too. Only sample
+                    # when another iteration can consume the result.
+                    token = self.core.decode(value, sampler=sampler, emit_logits=len(produced) < horizon)
                 except Cancelled as exc:
                     raise GenerationCancelled() from exc
         except GenerationCancelled:

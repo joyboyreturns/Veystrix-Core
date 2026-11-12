@@ -21,10 +21,22 @@ private struct ChatConversation: Codable, Identifiable {
 @MainActor private final class ChatStore: ObservableObject {
     @Published var conversations: [ChatConversation] = []
     @Published var selection: UUID?
-    @Published var error: String?
-    @Published var streaming = false
-    private var task: Task<Void, Never>?
+    @Published private var errors: [UUID: String] = [:]
+    @Published private var draftError: String?
+    @Published private var tasks: [UUID: Task<Void, Never>] = [:]
     private let file = Paths().applicationSupport.appendingPathComponent("chat-history.json")
+
+    var error: String? {
+        get { selection.map { errors[$0] } ?? draftError }
+        set {
+            if let id = selection { errors[id] = newValue }
+            else { draftError = newValue }
+        }
+    }
+
+    var streaming: Bool { selection.map(isStreaming) ?? false }
+
+    func isStreaming(_ id: UUID) -> Bool { tasks[id] != nil }
 
     private static let streamSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -42,26 +54,33 @@ private struct ChatConversation: Codable, Identifiable {
         }
     }
 
-    func save() {
+    func save(for id: UUID) {
         do {
             try Paths().ensureDirectories()
             let data = try JSONEncoder().encode(conversations)
             try data.write(to: file, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-        } catch { self.error = "Could not save chat history: \(error.localizedDescription)" }
+        } catch { errors[id] = "Could not save chat history: \(error.localizedDescription)" }
     }
 
     func new(model: String) {
         let c = ChatConversation(model: model)
-        conversations.insert(c, at: 0); selection = c.id; save()
+        conversations.insert(c, at: 0); selection = c.id
+        draftError = nil
+        save(for: c.id)
     }
 
     func delete() {
         guard !streaming, let id = selection else { return }
-        conversations.removeAll { $0.id == id }; selection = conversations.first?.id; save()
+        conversations.removeAll { $0.id == id }; selection = conversations.first?.id
+        errors[id] = nil
+        save(for: selection ?? id)
+        if selection == nil { draftError = errors.removeValue(forKey: id) }
     }
 
-    func stop() { task?.cancel() }
+    func stop() {
+        if let id = selection { tasks[id]?.cancel() }
+    }
 
     func send(_ text: String,
               model: String,
@@ -81,12 +100,12 @@ private struct ChatConversation: Codable, Identifiable {
         let priorMessages = conversations[index].messages.map {
             ChatWireMessage(role: $0.role, content: $0.content, reasoningContent: $0.reasoningContent)
         }
-        conversations[index].messages.append(ChatMessage(role: "assistant", content: ""))
-        save()
-        streaming = true
-        error = nil
-        task = Task {
-            defer { streaming = false; save(); task = nil }
+        let reply = ChatMessage(role: "assistant", content: "")
+        conversations[index].messages.append(reply)
+        errors[id] = nil
+        save(for: id)
+        tasks[id] = Task {
+            defer { tasks[id] = nil; save(for: id) }
             do {
                 let wire = ChatRequestBuilder.wireMessages(systemPrompt: system, messages: priorMessages)
                 let bodyObj = ChatRequestBuilder.payload(
@@ -115,8 +134,7 @@ private struct ChatConversation: Codable, Identifiable {
                     let events = ChatSSEParser.parse(line: line)
                     guard !events.isEmpty,
                           let convIdx = conversations.firstIndex(where: { $0.id == id }),
-                          !conversations[convIdx].messages.isEmpty else { continue }
-                    let msgIdx = conversations[convIdx].messages.count - 1
+                          let msgIdx = conversations[convIdx].messages.firstIndex(where: { $0.id == reply.id }) else { continue }
                     for event in events {
                         switch event {
                         case .reasoning(let chunk):
@@ -129,16 +147,14 @@ private struct ChatConversation: Codable, Identifiable {
                         case .usage(let usage):
                             conversations[convIdx].messages[msgIdx].usage = usage
                         case .error(let msg):
-                            self.error = msg
+                            errors[id] = msg
                         case .done:
                             break
                         }
                     }
                 }
-            } catch is CancellationError {
-                error = "Generation stopped by user."
             } catch {
-                self.error = error.localizedDescription
+                errors[id] = Task.isCancelled ? "Generation stopped by user." : error.localizedDescription
             }
         }
     }
@@ -175,18 +191,24 @@ struct ChatView: View {
             VStack(alignment: .leading) {
                 HStack {
                     Button("New") { if let active = activeModelID { chat.new(model: active) } }
-                        .disabled(chat.streaming || activeModelID == nil)
+                        .disabled(activeModelID == nil)
                     Button("Delete") { chat.delete() }
                         .disabled(chat.streaming || chat.selection == nil)
                 }.padding(.horizontal)
                 List(selection: $chat.selection) {
                     ForEach(chat.conversations) { c in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(c.title).lineLimit(1)
+                            HStack {
+                                Text(c.title).lineLimit(1)
+                                if chat.isStreaming(c.id) {
+                                    ProgressView().controlSize(.mini)
+                                        .accessibilityLabel("Generating")
+                                }
+                            }
                             Text(c.model).font(.caption2).foregroundStyle(.secondary)
                         }.tag(Optional(c.id))
                     }
-                }.disabled(chat.streaming)
+                }
             }.frame(minWidth: 180, idealWidth: 220, maxWidth: 270)
 
             VStack(alignment: .leading, spacing: 10) {

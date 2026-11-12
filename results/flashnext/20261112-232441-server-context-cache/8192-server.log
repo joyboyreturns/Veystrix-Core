@@ -1,0 +1,30 @@
+MEMORY POLICY: absolute-swap-only (stop at 5 GiB total system swap)
+prefill readiness: 9.64 GiB available, needs 12.12 GiB (predicted lowest gate figure 6.01 GiB after load and -0.18 GiB through a 32768-token cold prefill (fall 9.82); it must stay above the 2.0 GiB runtime floor + 0.30 margin)
+FlashNext safety trace: /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-chat-54464.jsonl
+watchdog       ON  (separate process 54503; stage deadlines /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-context-cache-5w_nksw9)
+Veystrix AGENTIC  (profile agent, one shared Flash-Next runtime)
+  checkpoint     /Users/vincent/models/Qwen3.8-Flash-Next-MLX-4bit-MTP
+  decode pool    2 GB  (from the launch environment)
+  prefix cache   exact RAM+SSD, /var/folders/37/fn6fxqyd2rgfmvc4954dggbm0000gn/T/veystrix-context-cache-5w_nksw9/prefix, RAM 0.75 GB, SSD 80 GB, free reserve 50 GB, profiles off
+  chunk policy   balanced 2048-token chunks, 512-expert scratch ring
+  memory         absolute-swap-only (startup headroom is telemetry)
+  supervisor     ON (5 GiB total swap, thermal, battery stops)  trace veystrix-chat-54464.jsonl
+  auto purge   off
+  context limit  65536 tokens (requests above it are refused, never truncated)
+  prefill limits cold 32768, uncached increment 32768 tokens per request (internal chunks stay at 2048 tokens)
+  EXPERIMENTAL   short-throughput: experimental 4K hybrid layer-major prefill and buffered decode expert pool
+  status         exact system-prompt cache and 2K chunked prefill: real-model evidence; DeepSeek Harness: protocol verified offline, no full-model run has passed yet (the first stopped in cold prefill); 10K: NOT verified
+[2mloading flashnext...[0m
+[2mready in 3.3s  flashnext / agent  use /help for commands[0m
+
+flight recorder: /Users/vincent/Documents/Veystrix/results/flashnext/20261112-232441-server-context-cache/8192-flight.jsonl
+server ready at http://127.0.0.1:65441
+context limit: 65536 tokens (longer prompts are refused, never truncated)
+memory tier: single prefills up to 32768 tokens (larger ones are refused, never truncated)
+one request runs at a time; up to 4 wait at most 20s, then get 503 server_busy
+OpenAI: /v1/chat/completions and /v1/responses
+Anthropic: /v1/messages
+Status: /health, /ready, /v1/models
+FlashNext expert pool: 1999880192 bytes (651 slots; requested 2 GB)
+
+server stopped

@@ -89,14 +89,15 @@ class EngineCore:
                     else:
                         mask = None
                     hidden[j] = layer(h, mask=mask, cache=cache)
-                    mx.eval(hidden[j])
+                    if cache is not None and j == len(hidden) - 1:
+                        mx.eval(hidden[j], *[a for a in cache.state if a is not None])
+                    else:
+                        mx.eval(hidden[j])
                     if j == 0 and cache is not None and anchor_cache is not None:
                         snapshot = copy(cache)
                         snapshot.state = [mx.array(a) for a in cache.state]
                         mx.eval(*snapshot.state)
                         anchor_cache.append(snapshot)
-                if cache is not None:
-                    mx.eval(*[a for a in cache.state if a is not None])
                 if layer.block_type == 'E':
                     pool.end_layer()
             if not last:
@@ -174,12 +175,17 @@ class EngineCore:
         finally:
             self.streamed.pool.cancel_check = lambda: False
 
-    def decode(self, token: int, *, cancelled=lambda: False):
+    def decode(self, token: int, *, cancelled=lambda: False, sampler=None, emit_logits=True):
         self.streamed.pool.cancel_check = cancelled
         try:
+            if not emit_logits:
+                hidden = self.model.backbone(mx.array([[token]], dtype=mx.int32), cache=self.cache)
+                mx.eval(hidden, *self.state_arrays())
+                return None
             logits = self._step([int(token)])
-            mx.eval(logits, *self.state_arrays())
-            return logits
+            result = logits if sampler is None else sampler(logits)
+            mx.eval(result, *self.state_arrays())
+            return result
         except BaseException:
             self.reset()
             raise

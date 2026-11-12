@@ -23,18 +23,21 @@ HELP = """  /help                         show commands
   /quit                         leave the test terminal"""
 
 
+def _case_runtime(model: str) -> str:
+    return "nemotron35" if model.replace("_", "-") == "nemotron35-lightning" else model.replace("-", "_")
+
+
 def choose_model(model: str | None, checkpoint: str | None) -> tuple[str, Path]:
     choices = installed_checkpoints()
     if model:
-        wanted = model.replace("-", "_")
-        choices = [item for item in choices if item[0].replace("-", "_") == wanted]
+        choices = [item for item in choices if _case_runtime(item[0]) == _case_runtime(model)]
     if checkpoint:
         requested = Path(checkpoint).expanduser().resolve()
-        choices = [item for item in choices if item[0] == model and item[1].resolve() == requested]
+        if not model:
+            raise SystemExit("--checkpoint requires --model for the test terminal")
+        choices = [item for item in choices if item[1].resolve() == requested]
         if not choices:
-            if not model:
-                raise SystemExit("--checkpoint requires --model for the test terminal")
-            return model, requested
+            return ("nemotron35-lightning" if _case_runtime(model) == "nemotron35" else model), requested
     if not choices:
         raise SystemExit("no compatible installed checkpoint is available")
     if len(choices) == 1:
@@ -59,7 +62,7 @@ class TestTerminal:
         from veystrix.cli import _interpreter
 
         self.python = str(_interpreter(self.model))
-        runtime = self.model.replace("-", "_")
+        runtime = _case_runtime(self.model)
         self.context = TestContext(runtime, str(self.checkpoint), self.python)
         self.catalog = build_catalog(runtime)
         self.runner = Runner(self.context, self.output)
@@ -138,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
     model_choices = sorted({name for name in runtime_directories()} | {
         name.replace("_", "-") for name in runtime_directories()
     })
+    if "nemotron35" in model_choices:
+        model_choices.append("nemotron35-lightning")
     parser.add_argument("--model", choices=model_choices)
     parser.add_argument("--checkpoint", "--model-path")
     args = parser.parse_args(argv)
