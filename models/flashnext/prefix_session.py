@@ -141,10 +141,11 @@ class PrefixSession:
                 # pool was off. Do not mix their states with the new path.
                 plan["scratch_ring_with_pool_off"] = 1
             kv_part = quantized_kv.fingerprint_parts()      # bf16: empty (unchanged); else dtype, bits, group size
+            fma_part = {"metal_affine_fma": True} if os.environ.get("FLASHNEXT_METAL_FMA_DEQUANT") == "1" else {}
             fp = P.fingerprint(
                 **self._compatibility(), prefix_cache=P.FORMAT_VERSION,
                 snapshot_chain_semantics=2,
-                chunk=prefill_module.chunk_tokens(), **plan, **kv_part, **qsa_chunk.fingerprint_parts(),
+                chunk=prefill_module.chunk_tokens(), **plan, **kv_part, **fma_part, **qsa_chunk.fingerprint_parts(),
                 # Prefill settings that change numerics are part of the key: a prefix computed one way
                 # is not the same state as one computed another way.
                 ring=os.environ.get("FLASHNEXT_PREFILL_RING_EXPERTS", "0"),
@@ -309,8 +310,12 @@ class PrefixSession:
                 code="recovery_required",
             )
         boundaries = self.boundaries(prompt, offset)
+        # Profiled caches commit pin and profile metadata alongside the snapshot.
+        async_write = os.environ.get(P.ASYNC_WRITE_FLAG) == "1" and not isinstance(store, prefix_profiles.ProfiledPrefixCache)
+        deferred_boundary = boundaries[-1] if boundaries and async_write else None
 
         last = []
+        deferred = []
         held = contextlib.ExitStack()
         trace = prefill_module.PlanTrace()
 
@@ -338,9 +343,13 @@ class PrefixSession:
             stored = time.perf_counter()
             flight_recorder.record("prefix_snapshot_begin", position=position)
             snapshot_plan = history(position)
+            defer = position == deferred_boundary
+            options = {"defer_write": True} if defer else {}
             entry = store.put(prompt[:position], cache if frozen is None else frozen, parent=last[-1] if last else hit, language=language,
                               plan=snapshot_plan,
-                              kind="system" if position == system else None, auto_parent=False)
+                              kind="system" if position == system else None, auto_parent=False, **options)
+            if defer:
+                deferred[:] = [entry]
             flight_recorder.record("prefix_snapshot_end", position=position, seconds=round(time.perf_counter() - stored, 3))
             report.snapshot_seconds += time.perf_counter() - stored
             if entry.plan != snapshot_plan:
@@ -364,13 +373,18 @@ class PrefixSession:
             report.outcome, report.hit_tokens, report.hit_tokens, report.prefilled_tokens, report.lookup_seconds, report.restore_seconds, report.bytes_restored,
         )
         began = time.perf_counter()
-        with held:                                       # leases end however the prefill ends (error, cancellation)
-            if hit is not None:
-                held.enter_context(store.lease(hit.chain))
-            _, _, token = prefill_module.prefill_target(
-                language, suffix, cache, sampler=sampler, boundaries=boundaries,
-                on_boundary=snapshot, offset=offset, anchors=self.anchors(prompt), trace=trace,
-                required=tuple(x for x in (system,) if x is not None))
+        try:
+            with held:                                   # leases end however the prefill ends
+                if hit is not None:
+                    held.enter_context(store.lease(hit.chain))
+                _, _, token = prefill_module.prefill_target(
+                    language, suffix, cache, sampler=sampler, boundaries=boundaries,
+                    on_boundary=snapshot, offset=offset, anchors=self.anchors(prompt), trace=trace,
+                    required=tuple(x for x in (system,) if x is not None))
+        except BaseException:
+            if deferred:
+                store.persist_background(deferred[0])
+            raise
         report.executed_edges, report.chunk_trace = list(trace.edges), list(trace.chunks)
         report.execution_order, report.execution_windows = trace.order, list(trace.windows)
         report.execution_segments = list(trace.layers)
@@ -378,4 +392,6 @@ class PrefixSession:
         report.prefill_seconds = time.perf_counter() - began
         if restore:
             store.record_prefill(report.prefilled_tokens, report.prefill_seconds)
+        if deferred:
+            store.persist_background(deferred[0])
         return token, cache, report

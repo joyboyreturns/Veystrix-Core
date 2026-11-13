@@ -25,6 +25,30 @@ from veystrix.model_registry import discover, installation_id
 MESSAGES = [{"role": "system", "content": "Give a clear, concise factual answer."},
             {"role": "user", "content": "Explain why the sky appears blue during a clear day."}]
 OUTPUT_TOKENS = 8
+PERFORMANCE_MESSAGES = [
+    {"role": "system", "content": "Copy code exactly. Output only the requested code, with no markdown or explanation."},
+    {"role": "user", "content": "Copy the following lines exactly, starting with the first line.\n\n"
+     + "cache_key = build_cache_key(request, namespace)\ncache_value = load_cache_value(cache_key)\n" * 28},
+]
+PERFORMANCE_FLAGS = {
+    "flashnext": ("FLASHNEXT_PROMPT_LOOKUP", "FLASHNEXT_PREFILL_SEED_DECODE", "FLASHNEXT_PREFIX_ASYNC_WRITE",
+                  "FLASHNEXT_METAL_FMA_DEQUANT", "VEYSTRIX_MLX_AUTO_BUFFER_CAPS"),
+    "nemotron35": ("VEYSTRIX_NEMOTRON_PROMPT_LOOKUP", "VEYSTRIX_NEMOTRON_PREFILL_SEED_DECODE",
+                   "VEYSTRIX_NEMOTRON_PREFIX_ASYNC_WRITE", "VEYSTRIX_NEMOTRON_METAL_FMA_DEQUANT",
+                   "VEYSTRIX_MLX_AUTO_BUFFER_CAPS"),
+}
+
+
+def large_coding_workload():
+    # Real project code and a concrete maintenance request, not repeated filler.
+    files = ("veystrix/scheduler.py", "models/nemotron35/backend_core.py", "models/flashnext/request_admission.py")
+    context = "\n\n".join(f"### {name}\n```python\n{(ROOT / name).read_text()}\n```" for name in files)
+    return [
+        {"role": "system", "content": "You are reviewing a real Python inference server. Give concrete findings with file and function names."},
+        {"role": "user", "content": context + "\n\nReview the cancellation paths under queued and running requests. "
+         "Find one failure mode that can leave partial model state or a waiting client behind. "
+         "Explain the trigger, then propose a focused patch and a regression test. Start with the highest-impact issue."},
+    ]
 
 
 def counters(pid):
@@ -104,7 +128,8 @@ def request(port, model_id, key=None, *, messages=MESSAGES, max_tokens=OUTPUT_TO
             "usage": usage, "output_text_sha256": hashlib.sha256("".join(chunks).encode()).hexdigest()}
 
 
-def execute(source, runtime, checkpoint, model_id, arm, result, *, interpreter=sys.executable):
+def execute(source, runtime, checkpoint, model_id, arm, result, *, interpreter=sys.executable,
+            messages=MESSAGES, max_tokens=OUTPUT_TOKENS, settings=None, pool_gb=None):
     family = "flashnext" if runtime == "flashnext" else "nemotron35-lightning"
     port = listen_port()
     log_path = result.parent / f"{arm}-server.log"
@@ -121,13 +146,17 @@ def execute(source, runtime, checkpoint, model_id, arm, result, *, interpreter=s
             "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1",
             "VEYSTRIX_NEMOTRON_KV": "bf16", "VEYSTRIX_NEMOTRON_AUTHORIZED": "1",
             "VEYSTRIX_SERVER_API_KEY": "",
-        }
+        } | (settings or {})
         command = [interpreter, "-m", "veystrix.cli", "--model", family, "--checkpoint", checkpoint,
                    "--server", "--host", "127.0.0.1", "--port", str(port), "--no-auto-purge",
                    "--preferences-file", str(prefs), "--api-keys-file", str(private / "keys.json"),
                    "--prefix-dir", str(private / "prefix")]
         if runtime == "flashnext":
             command.extend(("--enable", "short-throughput"))
+            if settings and settings.get("FLASHNEXT_NATIVE_MTP") == "on":
+                command.extend(("--native-mtp", "on", "--mtp-depth", settings.get("FLASHNEXT_MTP_DEPTH", "3")))
+        if pool_gb is not None:
+            command.extend(("--pool-gb", str(pool_gb)))
         process = subprocess.Popen(command, cwd=source, env=env, stdout=log, stderr=subprocess.STDOUT,
                                    start_new_session=True)
         try:
@@ -135,17 +164,21 @@ def execute(source, runtime, checkpoint, model_id, arm, result, *, interpreter=s
             events = [json.loads(line) for line in flight_path.read_text().splitlines()]
             worker_pid = events[-1]["pid"]
             before, vm_before, swap_before = counters(worker_pid), vm_counters(), swap_used_mb()
-            metrics = request(port, model_id)
+            metrics = request(port, model_id, messages=messages, max_tokens=max_tokens,
+                              timeout=720 if max_tokens > 24 else 180)
             after = counters(worker_pid)
             _, health = get(port, "/health")
             diagnostics_status, diagnostics = get(port, "/v1/cache/diagnostics")
             usage = json.loads(usage_path.read_text().splitlines()[-1])
             events = [json.loads(line) for line in flight_path.read_text().splitlines()]
             decode = next((event for event in events if event["event"] == "generate_end"), {})
+            decode_mode = next((event for event in events if event["event"] == "flashnext_decode_mode"), {})
             read = after.get("physical_read_bytes", -1) - before.get("physical_read_bytes", -1)
             metrics.update({"ready": ready, "final_health": health, "runtime_usage": usage,
                             "diagnostics_http_status": diagnostics_status, "cache_diagnostics": diagnostics,
                             "runtime_decode_tokens_per_second": decode.get("decode_tokens_per_second"),
+                            "token_sha256": decode.get("token_sha256"),
+                            "decoder_mode": decode_mode,
                             "uncached_prefill_tokens_per_second": usage["uncached"] / usage["prefill_s"] if usage["prefill_s"] else None,
                             "physical_read_bytes": read if before and after else None,
                             "process_footprint_bytes": after.get("footprint_bytes"),
@@ -171,10 +204,22 @@ def main():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--packaged", action="store_true")
     parser.add_argument("--cross-model", action="store_true")
+    parser.add_argument("--performance-v2", action="store_true")
+    parser.add_argument("--rounds", type=int, choices=(1, 3), default=3)
+    parser.add_argument("--without-fma", action="store_true")
+    parser.add_argument("--nemotron-chunk", type=int)
+    parser.add_argument("--large-workload", action="store_true",
+                        help="Real project code review, fixed 2 GB pool, 5 GiB swap-only policy and Flash-Next native MTP")
     args = parser.parse_args()
-    provenance = Path(os.environ["VEYSTRIX_BENCH_PROVENANCE"]).resolve()
+    if args.nemotron_chunk is not None and (args.runtime != "nemotron35" or args.nemotron_chunk < 1):
+        parser.error("--nemotron-chunk needs a positive Nemotron chunk size")
+    if args.large_workload and not args.performance_v2:
+        parser.error("--large-workload requires --performance-v2")
     family = "flashnext" if args.runtime == "flashnext" else "nemotron35-lightning"
     model_id = installation_id(family, args.checkpoint)
+    if args.performance_v2:
+        return performance_v2(args, model_id)
+    provenance = Path(os.environ["VEYSTRIX_BENCH_PROVENANCE"]).resolve()
     if args.cross_model:
         return cross_model_smoke(args, provenance, model_id)
     if args.packaged:
@@ -212,6 +257,85 @@ def main():
                for name, rows in metrics.items()}
     run.finish("diagnostic" if len(digests) == 1 else "failed", text_parity=len(digests) == 1, medians=summary)
     return int(len(digests) != 1)
+
+
+def performance_v2(args, model_id):
+    flags = PERFORMANCE_FLAGS[args.runtime]
+    settings = {
+        name: {flag: "1" if name == "candidate" and not (args.without_fma and "FMA" in flag) else "0"
+               for flag in flags}
+        for name in ("baseline", "candidate")
+    }
+    for env in settings.values():
+        env["VEYSTRIX_BENCH_TOKEN_DIGEST"] = "1"
+        env["VEYSTRIX_NEMOTRON_KV"] = "int8"
+        if args.runtime == "nemotron35":
+            env["VEYSTRIX_NEMOTRON_CONTEXT"] = "8192"
+            if args.nemotron_chunk is not None:
+                env["FLASHNEXT_PREFILL_CHUNK_TOKENS"] = str(args.nemotron_chunk)
+        if args.large_workload:
+            env.update({"FLASHNEXT_MEMORY_POLICY": "absolute-swap-only", "FLASHNEXT_SWAP_CEILING_MIB": "5120",
+                        "FLASHNEXT_SWAP_CEILING_MARGIN_MIB": "0", "FLASHNEXT_WATCHDOG_MEMORY": "1",
+                        "VEYSTRIX_NEMOTRON_BENCH_SWAP_ONLY": "1"})
+            if args.runtime == "flashnext":
+                env["FLASHNEXT_NATIVE_MTP"] = "on"
+                env["FLASHNEXT_MTP_DEPTH"] = "3"
+                env["FLASHNEXT_PROMPT_LOOKUP"] = "0"  # these are alternative decoders
+            else:
+                env["VEYSTRIX_NEMOTRON_CONTEXT"] = "16384"
+    messages = large_coding_workload() if args.large_workload else PERFORMANCE_MESSAGES
+    max_tokens = 96 if args.large_workload else 24
+    experiment = "performance-v2-code-review" if args.large_workload else "performance-v2"
+    result = output_path(args.runtime, experiment, "performance-arms.jsonl")
+    code = sorted(path for directory in ("models", "veystrix") for path in (ROOT / directory).rglob("*.py"))
+    digest = hashlib.sha256()
+    for path in code:
+        digest.update(str(path.relative_to(ROOT)).encode() + b"\0" + path.read_bytes())
+    run = MeasurementRun(result, runtime=args.runtime, experiment=experiment, metadata={
+        "diagnostic": True, "checkpoint": args.checkpoint, "installed_model_id": model_id, "settings": settings,
+        "source_sha256": digest.hexdigest(), "messages": messages, "temperature": 0,
+        "reasoning": "none", "max_tokens": max_tokens, "rounds": args.rounds,
+        "pool_gb": 2 if args.large_workload else None,
+        "cache": "fresh server and private prefix directory each arm; OS file cache retained",
+    })
+    run.start()
+    rows = {name: [] for name in settings}
+    for index in range(args.rounds):
+        for name in (tuple(settings) if index % 2 == 0 else tuple(reversed(settings))):
+            arm = f"{index+1}-{name}"
+            try:
+                command, metrics = execute(ROOT, args.runtime, args.checkpoint, model_id, arm, result,
+                                           messages=messages, max_tokens=max_tokens, settings=settings[name],
+                                           pool_gb=2 if args.large_workload else None)
+            except Exception as exc:
+                run.arm(arm_id=arm, condition=name, round_index=index+1, command=[], status="failed")
+                run.failure(str(exc), arm_id=arm)
+                print(f"{arm}: {exc}", flush=True)
+                return 1
+            run.arm(arm_id=arm, condition=name, round_index=index+1, command=command, metrics=metrics)
+            rows[name].append(metrics)
+            print(f"{arm}: {metrics['runtime_decode_tokens_per_second']} tok/s; "
+                  f"TTFT {metrics['wire_ttft_seconds']:.2f}s; token digest {metrics['token_sha256']}", flush=True)
+            hashes = {row["token_sha256"] for values in rows.values() for row in values}
+            if settings[name].get("FLASHNEXT_NATIVE_MTP") == "on" and metrics["decoder_mode"].get("native_mtp") is not True:
+                run.finish("failed", reason="native MTP was requested but did not execute")
+                return 1
+            if None in hashes or len(hashes) != 1:
+                run.finish("failed", token_parity=False)
+                return 1
+            time.sleep(10)
+    keys = ("runtime_decode_tokens_per_second", "wire_ttft_seconds", "physical_read_bytes", "process_footprint_bytes")
+    medians = {name: {key: median(values) for key in keys if
+                     (values := [row[key] for row in data if row[key] is not None])} for name, data in rows.items()}
+    from .prefill_memory_harness import paired_effect
+
+    effects = {key: paired_effect(
+        {i: row[key] for i, row in enumerate(rows["baseline"], 1) if row[key] is not None},
+        {i: row[key] for i, row in enumerate(rows["candidate"], 1) if row[key] is not None}, {2},
+    ) for key in keys} if args.rounds == 3 else {}
+    run.finish("diagnostic", token_parity=True, medians=medians, paired_effects=effects)
+    print(json.dumps(medians), flush=True)
+    return 0
 
 
 def packaged_smoke(args, provenance, model_id):

@@ -1718,6 +1718,10 @@ class StreamingSwitchGLU(nn.Module):
             if observer is not None:
                 observer(self.layer_id)             # cancellation point and watchdog tick, before the layer's read
             weights = window.weights_for(self)
+            if (os.environ.get("FLASHNEXT_PREFILL_SEED_DECODE") == "1" and window.ring is not None
+                    and window.ring.pending is not None):
+                routed = indices.reshape(-1).tolist()
+                window.ring.seed_decode(self.layer_id, range(self.gate_proj.num_experts), routed)
             return self._issue(
                 mx.expand_dims(x, (-2, -3)), indices,
                 (self.gate_proj, self.up_proj, self.down_proj), indices.astype(mx.uint32), weights, allow_sort,
@@ -1969,6 +1973,8 @@ class StreamingSwitchGLU(nn.Module):
                     self.gate_proj.cache.store,
                     self.gate_proj.cache.prefix.rsplit(".", 1)[0], wanted,
                 )
+                if weights is not None and os.environ.get("FLASHNEXT_PREFILL_SEED_DECODE") == "1":
+                    ring.seed_decode(self.layer_id, order, routed)
             if weights is None:
                 weights = self._read_weights(projections, wanted)
         except BaseException as exc:

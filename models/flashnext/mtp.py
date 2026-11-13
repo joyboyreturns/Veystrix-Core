@@ -176,7 +176,7 @@ def swap_streaming(language, store, mode: str) -> None:
     )
 
 
-def forward(language, hidden_states, next_token_ids, mtp_cache, return_hidden=False):
+def forward(language, hidden_states, next_token_ids, mtp_cache, return_hidden=False, *, skip_logits=False):
     """Run one native draft step and reuse the target embedding and LM head."""
     mtp_output, hc_hidden = language.mtp(
         hidden_states,
@@ -184,6 +184,8 @@ def forward(language, hidden_states, next_token_ids, mtp_cache, return_hidden=Fa
         language.model.embed_tokens,
         mtp_cache,
     )
+    if skip_logits:
+        return (None, hc_hidden) if return_hidden else hc_hidden
     if language.args.tie_word_embeddings:
         logits = language.model.embed_tokens.as_linear(mtp_output)
     else:

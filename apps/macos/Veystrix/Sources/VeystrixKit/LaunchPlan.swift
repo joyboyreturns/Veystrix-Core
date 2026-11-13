@@ -99,6 +99,21 @@ public struct LaunchPlan: Equatable, Sendable {
         env["VEYSTRIX_USAGE_LOG"] = UsageStore(paths: paths).requestsFile.path
         env["VEYSTRIX_CACHE_GB"] = String(settings.cacheQuotaGB)
         env["VEYSTRIX_NEMOTRON_CONTEXT"] = String(settings.nemotronContextTokens)
+        env["VEYSTRIX_NEMOTRON_KV"] = settings.nemotronKVCache.rawValue
+        for (prefix, options) in [("FLASHNEXT", settings.flashNextPerformance), ("VEYSTRIX_NEMOTRON", settings.nemotronPerformance)] {
+            env["\(prefix)_PROMPT_LOOKUP"] = options.decoder == .promptLookup ? "1" : "0"
+            env["\(prefix)_PREFILL_SEED_DECODE"] = options.seedExperts ? "1" : "0"
+            env["\(prefix)_PREFIX_ASYNC_WRITE"] = options.backgroundSnapshots ? "1" : "0"
+            env["\(prefix)_METAL_FMA_DEQUANT"] = options.affineFMA ? "1" : "0"
+            env["\(prefix)_MLX_AUTO_BUFFER_CAPS"] = options.largerMetalBuffers ? "1" : "0"
+        }
+        env["VEYSTRIX_FLASHNEXT_NATIVE_MTP"] = settings.flashNextPerformance.decoder == .nativeMTP ? "on" : "off"
+        env["VEYSTRIX_FLASHNEXT_OUTPUT_TOKENS"] = String(settings.flashNextPerformance.defaultOutputTokens)
+        env["VEYSTRIX_FLASHNEXT_MTP_DEPTH"] = String(settings.flashNextPerformance.draftTokens)
+        env["VEYSTRIX_NEMOTRON_NATIVE_MTP"] = settings.nemotronPerformance.decoder == .nativeMTP ? "1" : "0"
+        env["VEYSTRIX_NEMOTRON_OUTPUT_TOKENS"] = String(settings.nemotronPerformance.defaultOutputTokens)
+        env["VEYSTRIX_NEMOTRON_MTP_DEPTH"] = String(settings.nemotronPerformance.draftTokens)
+        if !settings.nemotronMTPPath.isEmpty { env["VEYSTRIX_NEMOTRON_MTP_PATH"] = settings.nemotronMTPPath }
         // When memory is short the engine purges the macOS file cache by itself (conditional, never during a request;
         // needs the narrow `sudo -n /usr/sbin/purge` permission, otherwise it records that and backs off).
         env["FLASHNEXT_AUTO_PURGE"] = "1"

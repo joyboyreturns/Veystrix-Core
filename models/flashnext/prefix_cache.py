@@ -34,6 +34,7 @@ import copy
 import hashlib
 import fcntl
 import json
+import logging
 import os
 import re
 import shutil
@@ -44,6 +45,7 @@ import time
 import uuid
 import weakref
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
@@ -51,6 +53,9 @@ from pathlib import Path
 import mlx.core as mx
 
 FORMAT_VERSION = "3"      # 3: bind reconstruction metadata to the checksummed tensor payload
+ASYNC_WRITE_FLAG = "FLASHNEXT_PREFIX_ASYNC_WRITE"
+_WRITER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="flashnext-prefix")
+_LOG = logging.getLogger(__name__)
 OWNER_LOCK = ".veystrix-owner.lock"
 _OWNER_MUTEX = threading.Lock()
 _OWNERS = {}
@@ -777,6 +782,7 @@ class PrefixCache:
         )
         self.stats = Stats()
         self._lock = threading.RLock()
+        self._pending_write = None
         self._ram: OrderedDict[str, Entry] = OrderedDict()
         self._ram_bytes = 0
         self._disk: dict[str, dict] = {}              # key -> {"n", "parent", "bytes", "atime"}
@@ -888,7 +894,7 @@ class PrefixCache:
     # ---- store ----
     @_managed_disk
     def put(self, tokens, cache_list, parent: Hit | Entry | None = None, language=None, plan=None,
-            kind: str | None = None, *, auto_parent: bool = True) -> Entry:
+            kind: str | None = None, *, auto_parent: bool = True, defer_write: bool = False) -> Entry:
         """Capture the live cache at ``tokens`` and store it. ``parent`` is the Hit or Entry it extends.
 
         ``plan`` is the chunk-plan provenance (internal edges before ``len(tokens)``). An entry stored
@@ -913,9 +919,47 @@ class PrefixCache:
             self._remember_tokens(key, tokens)
             self._lengths.add(entry.n_tokens)
             self._admit(entry)
-            if self.directory is not None and self.write_through:
+            if self.directory is not None and self.write_through and not defer_write:
                 self._persist(entry)
             return entry
+
+    def persist_background(self, entry: Entry) -> None:
+        """Queue a captured terminal snapshot, keeping at most one write in flight per store."""
+        if self.directory is None or not self.write_through:
+            return
+        with self._lock:
+            if entry.key in self._disk or self._ram.get(entry.key) is not entry:
+                return
+            pending = self._pending_write
+            if pending is None or pending.done():
+                self._pending_write = _WRITER.submit(self._persist_resident, entry)
+                self._pending_write.add_done_callback(self._report_write_error)
+                return
+        # Never accumulate captured tensors behind a slow writer.
+        self._persist_resident(entry)
+
+    @staticmethod
+    def _report_write_error(task) -> None:
+        if not task.cancelled() and (error := task.exception()) is not None:
+            _LOG.error("Background prefix snapshot write failed", exc_info=error)
+
+    @_managed_disk
+    def _persist_resident(self, entry: Entry) -> None:
+        with self._lock:
+            # A clear, pressure purge or eviction can win the race with this task.
+            if self._ram.get(entry.key) is entry:
+                from . import memory_controller
+
+                if memory_controller.forbid_optional():
+                    self.stats.writes_skipped += 1
+                    return
+                self._persist(entry)
+
+    def flush_writes(self) -> None:
+        with self._lock:
+            pending = self._pending_write
+        if pending is not None:
+            pending.result()
 
     def _as_entry(self, parent, tokens):
         if parent is None:

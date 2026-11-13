@@ -94,6 +94,34 @@ class SpeculativeTinyTest(unittest.TestCase):
         mx.eval(self.language(prompt, cache=cache).logits)
         return cache
 
+    def test_prompt_lookup_keeps_greedy_tokens_and_continuation(self):
+        from unittest import mock
+        from models.flashnext.speculative import prompt_lookup_tokens
+        from models.shared.prompt_lookup import ThroughputGate
+
+        first = mx.array([5], dtype=mx.uint32)
+        expected = [5]
+        reference = self.prefill()
+        for _ in range(8):
+            logits = self.language(mx.array([[expected[-1]]], dtype=mx.uint32), cache=reference).logits
+            expected.append(int(mx.argmax(logits[0, -1]).item()))
+        for draft in (expected[1:5], [(expected[1] + 1) % 64, *expected[2:5]]):
+            candidate = self.prefill()
+            history = [59, 5, *draft, 60, 59]
+            with mock.patch.object(ThroughputGate, "allow", return_value=True):
+                actual = list(prompt_lookup_tokens(
+                    self.language, candidate, history, first, 8, set(), lambda: None,
+                ))
+            self.assertEqual(actual, expected[:8])
+            follow = mx.array([[expected[8]]], dtype=mx.uint32)
+            a = self.language(follow, cache=candidate).logits
+            b = self.language(follow, cache=reference).logits
+            self.assertTrue(mx.array_equal(a, b).item())
+            # The reference must be at the same offset for the second branch.
+            reference = self.prefill()
+            for token in expected[:8]:
+                mx.eval(self.language(mx.array([[token]], dtype=mx.uint32), cache=reference).logits)
+
     def test_block_and_rollback_match_single_tokens(self):
         values = [5, 9, 13, 17, 21]
         reference_cache = self.prefill()
@@ -369,6 +397,32 @@ class SpeculativeTinyTest(unittest.TestCase):
         # The draft chain must actually execute, not sit idle.
         self.assertGreater(decoder.stats.drafted, 0)
         self.assertGreater(decoder.stats.cycles, 1)
+
+    def test_mtp_chunked_warmup_matches_target_and_tracks_every_prompt_token(self):
+        from unittest.mock import patch
+        from models.flashnext.mtp import attach
+        from models.flashnext.speculative import MTPGreedy
+
+        language = tiny_language()
+        attach(language)
+        prompt = mx.array([[3, 7, 11, 13, 19, 23, 29]], dtype=mx.uint32)
+        reference = language.make_cache()
+        for start in range(0, 7, 3):
+            output = language(prompt[:, start:start + 3], cache=reference)
+            mx.eval(output.logits)
+        expected = []
+        for _ in range(12):
+            value = int(mx.argmax(output.logits[0, -1]).item())
+            expected.append(value)
+            output = language(mx.array([[value]], dtype=mx.uint32), cache=reference)
+            mx.eval(output.logits)
+        language._position_ids = None
+        language._rope_deltas = None
+        decoder = MTPGreedy(language, depth=3)
+        with patch("models.flashnext.prefill.chunk_tokens", return_value=3):
+            decoder.append(prompt)
+        self.assertEqual(decoder.hist_offset, 7)
+        self.assertEqual(list(decoder.generate(12, set())), expected)
 
     def test_target_replay_replays_single_tokens(self):
         # Recurrent replay must be singleton-equivalent: a batched

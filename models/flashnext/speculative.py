@@ -788,6 +788,18 @@ class MTPGreedy:
 
     def append(self, ids) -> None:
         """Append prompt tokens and seed the next MTP verify cycle."""
+        from .prefill_memory import cache_cap
+
+        with cache_cap(512):
+            self._append(ids)
+
+    def _append(self, ids) -> None:
+        from .prefill import chunk_tokens
+
+        width = min(1024, chunk_tokens() or 1024)
+        if ids.shape[1] > width:
+            self._append_bounded(ids, width)
+            return
         logits, hidden = self._target_capture(ids)
         mx.eval(logits, hidden)
 
@@ -809,6 +821,37 @@ class MTPGreedy:
             self.next_main.reshape(1, 1),
         )
         mx.eval(self.draft_logits, self.draft_hidden)
+
+    def _append_bounded(self, ids, width):
+        """Advance target and draft histories in bounded windows without full vocabulary matrices."""
+        from .prefill import _chunk_completed
+
+        total = int(ids.shape[1])
+        for start in range(0, total, width):
+            part = ids[:, start:start + width]
+            _, captured, token = prefill_target(
+                self.language, part, self.target_cache, want_hidden=True,
+                sampler=lambda row: mx.argmax(row, axis=-1).reshape(-1),
+            )
+            hidden = captured[0]
+            expected = self.language.args.hidden_size * self.language.args.hc_count
+            if hidden.shape[-1] != expected:
+                raise RuntimeError(f"MTP hidden width is {hidden.shape[-1]}, expected {expected}")
+            if self.anchor is None:
+                hidden_rows, pair_tokens = hidden[:, :-1], part[:, 1:]
+            else:
+                hidden_rows = mx.concatenate((self.anchor, hidden[:, :-1]), axis=1)
+                pair_tokens = part
+            if pair_tokens.shape[1]:
+                warm = mtp.forward(self.language, hidden_rows, pair_tokens, self.mtp_cache, skip_logits=True)
+                mx.eval(warm, [entry.state for entry in self.mtp_cache])
+                self.hist_offset += int(pair_tokens.shape[1])
+            self.anchor = hidden[:, -1:]
+            mx.eval(self.anchor)
+            _chunk_completed(start + int(part.shape[1]), total)
+        self.next_main = token
+        self.draft_logits, self.draft_hidden = self._fold(self.anchor, self.next_main.reshape(1, 1))
+        mx.eval(self.draft_logits, self.draft_hidden, self.next_main)
 
     def _draft_chain(self):
         drafts = []
@@ -845,6 +888,14 @@ class MTPGreedy:
 
     def generate(self, max_tokens: int, stops: Iterable[int]):
         """Yield exact greedy tokens. The target cache always trails no output."""
+        from .prefill_memory import cache_cap
+
+        # Verification and rollback allocate temporary Metal buffers on every cycle.
+        # Bound their reuse cache while leaving live model state and the expert pool alone.
+        with cache_cap(512):
+            yield from self._generate(max_tokens, stops)
+
+    def _generate(self, max_tokens: int, stops: Iterable[int]):
         max_tokens = _normalize_max_tokens(max_tokens)
         stops = set(stops)
         produced = 0
@@ -922,3 +973,70 @@ class MTPGreedy:
             for token in processed:
                 produced += 1
                 yield token
+
+
+def prompt_lookup_tokens(language, cache, history, first, horizon, stops, check_cancel):
+    """Greedy Flash-Next decode using the existing singleton-equivalent verifier."""
+    from mlx_vlm.models.qwen3_5 import language as qwen35_language
+
+    from models.shared.prompt_lookup import PromptLookup, ThroughputGate
+    from . import memory_controller
+    from .qwen4_verifier import Qwen4ExactSpeculativeVerifier
+
+    qwen35_language._EXACT_SPECULATIVE_VERIFIER = Qwen4ExactSpeculativeVerifier()
+    lookup, gate = PromptLookup(history), ThroughputGate()
+    produced = 0
+    value = int(first.item())
+
+    def singleton(current, want_logits=True):
+        ids = mx.array([[current]], dtype=mx.uint32)
+        out = language(ids, cache=cache, skip_logits=not want_logits)
+        if not want_logits:
+            mx.eval([entry.state for entry in cache])
+            return None
+        return int(mx.argmax(out.logits[0, -1]).item())
+
+    while produced < horizon and value not in stops:
+        check_cancel()
+        began = time.perf_counter()
+        lookup.append(value)
+        drafts = (
+            lookup.propose(min(4, horizon - produced - 1))
+            if gate.allow() and not memory_controller.forbid_optional() else []
+        )
+        # Stop delimiters never enter the cache or the emitted token tape.
+        for index, draft in enumerate(drafts):
+            if draft in stops:
+                drafts = drafts[:index]
+                break
+        if not drafts:
+            yield value
+            produced += 1
+            began = time.perf_counter()
+            value = singleton(value, want_logits=produced < horizon)
+            gate.observe(False, 1, time.perf_counter() - began)
+            continue
+
+        snapshot = snapshot_cache(cache)
+        ids = mx.array([[value, *drafts]], dtype=mx.uint32)
+        out = language(ids, cache=cache, speculative_verify=True, return_hidden=True, skip_logits=True)
+        predictions = language.speculative_argmax_from_hidden(out.hidden_states[-1])[0].tolist()
+        committed = [value]
+        if predictions[:len(drafts)] == drafts:
+            committed.extend(drafts)
+            value = predictions[-1]
+        else:
+            restore_cache(cache, snapshot)
+            value = singleton(value)
+            for draft in drafts:
+                if draft != value or draft in stops:
+                    break
+                committed.append(draft)
+                value = singleton(draft, want_logits=produced + len(committed) < horizon)
+        gate.observe(True, len(committed), time.perf_counter() - began)
+        for current in committed:
+            check_cancel()
+            produced += 1
+            yield current
+        for current in committed[1:]:
+            lookup.append(current)

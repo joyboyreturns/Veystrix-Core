@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
+import hashlib
 import json
 import os
 import re
@@ -1637,9 +1638,12 @@ class ModelService:
                 call_kwargs["on_prefill_progress"] = prefill_progress
 
             decode = [0, None]
+            token_digest = hashlib.sha256() if os.environ.get("VEYSTRIX_BENCH_TOKEN_DIGEST") == "1" else None
             def decode_token(_token, _piece):
                 now = time.monotonic()
                 decode[0] += 1
+                if token_digest is not None:
+                    token_digest.update(int(_token).to_bytes(4, "little", signed=True))
                 if decode[1] is None:
                     decode[1] = now
                 elapsed = now - decode[1]
@@ -1660,6 +1664,7 @@ class ModelService:
                                    prompt_tokens=getattr(stats, "prompt_tokens", None),
                                    completion_tokens=getattr(stats, "tokens", None),
                                    prefill_seconds=round(getattr(stats, "prefill_seconds", 0.0), 2),
+                                   **({"token_sha256": token_digest.hexdigest()} if token_digest is not None and decode[0] else {}),
                                    decode_tokens_per_second=round(getattr(stats, "rate", 0.0), 2))
             if on_text is not None:
                 for kind, item in stream_filter.finish():

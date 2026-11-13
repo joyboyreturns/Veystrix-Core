@@ -243,6 +243,8 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
     parser.add_argument("--v4", action="store_true")
     parser.add_argument("--mode", choices=modes.MODES)
     parser.add_argument("--pool-gb", help="auto (default), 0, or a fixed size up to 2")
+    parser.add_argument("--native-mtp", choices=("off", "on"), help="Flash-Next native multi-token prediction")
+    parser.add_argument("--mtp-depth", type=int, choices=range(1, 9), help="Flash-Next native MTP draft length")
     parser.add_argument("--enable", action="append", default=[], choices=tuple(modes.EXPERIMENTAL))
     parser.add_argument("--context-limit", type=int)
     parser.add_argument("--max-cold-prefill", type=int,
@@ -294,12 +296,32 @@ def command(argv: list[str]) -> tuple[list[str], dict[str, str]]:
         chat_args.append("--server")
 
     environment = dict(os.environ)
+    output_key = "VEYSTRIX_FLASHNEXT_OUTPUT_TOKENS" if model == "flashnext" else "VEYSTRIX_NEMOTRON_OUTPUT_TOKENS"
+    if output_key in environment:
+        environment["VEYSTRIX_DEFAULT_MAX_OUTPUT_TOKENS"] = environment[output_key]
+    buffer_key = "FLASHNEXT_MLX_AUTO_BUFFER_CAPS" if model == "flashnext" else "VEYSTRIX_NEMOTRON_MLX_AUTO_BUFFER_CAPS"
+    if environment.get("VEYSTRIX_MLX_AUTO_BUFFER_CAPS") == "1" or environment.get(buffer_key) == "1":
+        # MLX reads these once in the child, before its first Metal command buffer.
+        environment.setdefault("MLX_MAX_OPS_PER_BUFFER", "200")
+        environment.setdefault("MLX_MAX_MB_PER_BUFFER", "1024")
     if known.prefix_dir:
         environment["VEYSTRIX_CACHE_ROOT"] = known.prefix_dir
     if plan:
         modes.apply_mode(environment, plan)
         if not known.profile:
             environment["VEYSTRIX_PROFILE_EPHEMERAL"] = "1"
+    if model == "flashnext":
+        for key in ("NATIVE_MTP", "MTP_DEPTH"):
+            configured = environment.get(f"VEYSTRIX_FLASHNEXT_{key}")
+            if configured is not None:
+                environment[f"FLASHNEXT_{key}"] = configured
+    if known.native_mtp is not None or known.mtp_depth is not None:
+        if model != "flashnext":
+            parser.error("native MTP startup flags are available only for Flash-Next")
+        if known.native_mtp is not None:
+            environment["FLASHNEXT_NATIVE_MTP"] = known.native_mtp
+        if known.mtp_depth is not None:
+            environment["FLASHNEXT_MTP_DEPTH"] = str(known.mtp_depth)
     if known.no_auto_purge:
         environment["FLASHNEXT_AUTO_PURGE"] = "0"
     elif known.auto_purge:

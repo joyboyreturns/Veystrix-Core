@@ -302,6 +302,8 @@ class FlashNextBackend(Conversation):
 
     def _session_profile(self):
         profile = self.routing.session_profile(self.stops)
+        if os.environ.get("FLASHNEXT_METAL_FMA_DEQUANT") == "1":
+            profile["metal_affine_fma"] = True
         if self.routing_profile == "fused-quality":
             profile.update({
                 "fused_quality": True,
@@ -1042,6 +1044,9 @@ class FlashNextBackend(Conversation):
         finish = "length"
         self.routing.begin_decode()
         flight_recorder.record("decode_enter")
+        if os.environ.get("VEYSTRIX_BENCH_TOKEN_DIGEST") == "1":
+            flight_recorder.record("flashnext_decode_mode", native_mtp=self._is_native_mtp_decoder(decoder),
+                                   mtp_depth=self.mtp_depth if self._is_native_mtp_decoder(decoder) else None)
         if decoder is not None:
             decoder.set_route_observer(self.routing._observe)
 
@@ -1088,11 +1093,24 @@ class FlashNextBackend(Conversation):
                 token = sampler(step.logits[:, -1, :])
                 mx.eval(token)
 
-        tokens = (
-            standard_tokens()
-            if decoder is None
-            else decoder.generate(generation_horizon, self.stops)
+        from models.flashnext import quantized_kv
+        from models.flashnext.routing import swap_enabled
+
+        use_prompt_lookup = (
+            os.environ.get("FLASHNEXT_PROMPT_LOOKUP") == "1"
+            and decoder is None and gate_probe is None and budget_state is None and self.sampling.greedy
+            and self.routing_profile in ("standard", "exact-quality")
+            and self.routing.threshold == 1.0 and not swap_enabled()
+            and not quantized_kv.fingerprint_parts()
         )
+        if use_prompt_lookup and generation_horizon > 0:
+            from models.flashnext.speculative import prompt_lookup_tokens
+
+            tokens = prompt_lookup_tokens(
+                self.language, self.cache, self.tape, token, generation_horizon, self.stops, check_cancel,
+            )
+        else:
+            tokens = standard_tokens() if decoder is None else decoder.generate(generation_horizon, self.stops)
         decode_interrupted = False
         try:
             for index, value in enumerate(tokens):
@@ -1142,7 +1160,12 @@ class FlashNextBackend(Conversation):
         except GenerationCancelled:
             decode_interrupted = True
             raise
+        except BaseException:
+            if use_prompt_lookup:
+                self._mark_replay_needed()
+            raise
         finally:
+            tokens.close()
             if decoder is not None:
                 decoder.set_route_observer(None)
                 self.cache = decoder.target_cache

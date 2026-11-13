@@ -53,8 +53,55 @@ public enum FlashNextKVCache: String, Codable, CaseIterable, Sendable, Identifia
     }
 }
 
-/// User-visible settings. Stored as JSON in Application Support. Unknown or missing keys fall back to defaults,
-/// so an older settings file keeps working after an update (see `schemaVersion`).
+public enum DecodeStrategy: String, Codable, CaseIterable, Identifiable, Sendable {
+    case standard, promptLookup, nativeMTP
+
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .standard: "Standard"
+        case .promptLookup: "Prompt lookup (greedy)"
+        case .nativeMTP: "Native MTP (greedy)"
+        }
+    }
+}
+
+public enum NemotronKVCache: String, Codable, CaseIterable, Identifiable, Sendable {
+    case int8, bf16
+
+    public var id: String { rawValue }
+    public var title: String { self == .int8 ? "INT8" : "BF16" }
+    public var contextLimit: Int { self == .int8 ? 1_048_576 : 262_144 }
+}
+
+public struct PerformanceOptions: Codable, Equatable, Sendable {
+    public var decoder: DecodeStrategy = .standard
+    public var draftTokens = 2
+    public var seedExperts = false
+    public var backgroundSnapshots = false
+    public var affineFMA = false
+    public var largerMetalBuffers = false
+    public var defaultOutputTokens = 0
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case decoder, draftTokens, seedExperts, backgroundSnapshots, affineFMA, largerMetalBuffers, defaultOutputTokens
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        self.decoder = try c.decodeIfPresent(DecodeStrategy.self, forKey: .decoder) ?? self.decoder
+        draftTokens = try c.decodeIfPresent(Int.self, forKey: .draftTokens) ?? draftTokens
+        seedExperts = try c.decodeIfPresent(Bool.self, forKey: .seedExperts) ?? seedExperts
+        backgroundSnapshots = try c.decodeIfPresent(Bool.self, forKey: .backgroundSnapshots) ?? backgroundSnapshots
+        affineFMA = try c.decodeIfPresent(Bool.self, forKey: .affineFMA) ?? affineFMA
+        largerMetalBuffers = try c.decodeIfPresent(Bool.self, forKey: .largerMetalBuffers) ?? largerMetalBuffers
+        defaultOutputTokens = try c.decodeIfPresent(Int.self, forKey: .defaultOutputTokens) ?? defaultOutputTokens
+    }
+}
+
+/// User-visible settings stored as JSON in Application Support. Missing keys use their defaults.
 public struct AppSettings: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 2
     public static let swapLimitRange = 1...1024
@@ -72,6 +119,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var swapLimitGiB: Int = 5
     public var flashNextKVCache: FlashNextKVCache = .bf16
     public var flashNextSpeed: Bool = false
+    public var flashNextPerformance = PerformanceOptions()
+    public var nemotronPerformance = PerformanceOptions()
+    public var nemotronKVCache: NemotronKVCache = .int8
+    public var nemotronMTPPath = ""
     /// Let the engine's supervisor restart the server after a crash or memory guard stop (bounded and logged).
     public var supervisedRestarts: Bool = true
     public var keepMacAwake: Bool = true
@@ -99,11 +150,17 @@ public struct AppSettings: Codable, Equatable, Sendable {
         set { if selectedModel == .nemotron35 { nemotronCheckpointPath = newValue } else { checkpointPath = newValue } }
     }
 
+    public var activePerformance: PerformanceOptions {
+        get { selectedModel == .nemotron35 ? nemotronPerformance : flashNextPerformance }
+        set { if selectedModel == .nemotron35 { nemotronPerformance = newValue } else { flashNextPerformance = newValue } }
+    }
+
     enum CodingKeys: String, CodingKey {
         case schemaVersion, port, checkpointPath, selectedModel, nemotronCheckpointPath, decodePool, supervisedRestarts, keepMacAwake, cacheQuotaGB,
              cacheDirectory, confirmBeforeLoading, requireAPIKey, checkForUpdatesAutomatically,
              includeLogsInDiagnostics, developerRepoPath, allowBattery, minimumBatteryPercent, allowLowPowerMode,
-             flashNextKVCache, flashNextSpeed, nemotronContextTokens, swapLimitGiB
+             flashNextKVCache, flashNextSpeed, nemotronContextTokens, swapLimitGiB,
+             flashNextPerformance, nemotronPerformance, nemotronKVCache, nemotronMTPPath
     }
 
     public init(from decoder: Decoder) throws {
@@ -120,6 +177,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         }
         s.flashNextKVCache = (try? c.decodeIfPresent(FlashNextKVCache.self, forKey: .flashNextKVCache)) ?? s.flashNextKVCache
         s.flashNextSpeed = try c.decodeIfPresent(Bool.self, forKey: .flashNextSpeed) ?? s.flashNextSpeed
+        s.flashNextPerformance = (try? c.decode(PerformanceOptions.self, forKey: .flashNextPerformance)) ?? s.flashNextPerformance
+        s.nemotronPerformance = (try? c.decode(PerformanceOptions.self, forKey: .nemotronPerformance)) ?? s.nemotronPerformance
+        s.nemotronKVCache = (try? c.decode(NemotronKVCache.self, forKey: .nemotronKVCache)) ?? s.nemotronKVCache
+        s.nemotronMTPPath = try c.decodeIfPresent(String.self, forKey: .nemotronMTPPath) ?? s.nemotronMTPPath
         s.supervisedRestarts = try c.decodeIfPresent(Bool.self, forKey: .supervisedRestarts) ?? s.supervisedRestarts
         s.keepMacAwake = try c.decodeIfPresent(Bool.self, forKey: .keepMacAwake) ?? s.keepMacAwake
         s.allowBattery = try c.decodeIfPresent(Bool.self, forKey: .allowBattery) ?? s.allowBattery
@@ -146,7 +207,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
         if !Self.swapLimitRange.contains(swapLimitGiB) { problems.append("The swap limit must be between 1 and 1024 GiB.") }
         if !(0...100).contains(minimumBatteryPercent) { problems.append("The minimum battery charge must be between 0% and 100%.") }
         if !(1...2000).contains(cacheQuotaGB) { problems.append("The cache quota must be between 1 and 2000 GB.") }
-        if !(1...1_048_576).contains(nemotronContextTokens) { problems.append("Nemotron context must be between 1 and 1,048,576 tokens.") }
+        if !(1...nemotronKVCache.contextLimit).contains(nemotronContextTokens) {
+            problems.append("Nemotron context must be between 1 and \(nemotronKVCache.contextLimit.formatted()) tokens for \(nemotronKVCache.title).")
+        }
+        if !(1...8).contains(flashNextPerformance.draftTokens) || !(1...4).contains(nemotronPerformance.draftTokens) {
+            problems.append("MTP draft depth must be 1–8 for Flash-Next and 1–4 for Nemotron.")
+        }
+        if [flashNextPerformance, nemotronPerformance].contains(where: { !(0...1_048_576).contains($0.defaultOutputTokens) }) {
+            problems.append("The default output limit must be between 0 and 1,048,576 tokens.")
+        }
         return problems
     }
 }
