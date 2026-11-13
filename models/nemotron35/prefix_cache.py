@@ -14,11 +14,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import logging
 import os
 import shutil
 import threading
 import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from functools import wraps
@@ -34,6 +36,10 @@ MAX_TOKENS = 1_048_576
 MIN_TOKENS = 256
 _MAGIC = b'VXT1'
 RAM_BUDGET_FLAG = "VEYSTRIX_NEMOTRON_PREFIX_RAM_MB"
+ASYNC_WRITE_FLAG = "VEYSTRIX_NEMOTRON_PREFIX_ASYNC_WRITE"
+ASYNC_SNAPSHOT_LIMIT = 64 * 2**20
+_WRITER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nemotron-prefix")
+_LOG = logging.getLogger(__name__)
 
 
 def ram_bytes_from_env() -> int:
@@ -88,6 +94,8 @@ class PrefixCache:
         self.compatible_positions = compatible_positions
         self.stats = Stats()
         self._lock = threading.RLock()
+        self._pending_write = None
+        self._write_epoch = 0
         self._recovery_lease = None
         self._disk: dict[str, dict] = {}
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -266,6 +274,39 @@ class PrefixCache:
         return cache, n
 
     # -- store -------------------------------------------------------------------------------------------------
+    def save_background(self, cache, tokens) -> bool:
+        """Queue an evaluated, bounded snapshot, or let the caller save it synchronously."""
+        if not self.min_tokens <= len(tokens) <= MAX_TOKENS:
+            return False
+        if sum(array.nbytes for entry in cache for array in entry.state if array is not None) > ASYNC_SNAPSHOT_LIMIT:
+            return False
+        with self._lock:
+            if self._pending_write is not None and not self._pending_write.done():
+                return False
+            snapshot = state.clone_cache(cache)
+            # Materialize the independent handles on the inference thread.
+            import mlx.core as mx
+
+            mx.eval([array for entry in snapshot for array in entry.state])
+            self._pending_write = _WRITER.submit(self._save_if_current, self._write_epoch, snapshot, tuple(tokens))
+        return True
+
+    def _save_if_current(self, epoch, cache, tokens):
+        with self._lock:
+            if epoch != self._write_epoch:
+                return
+            try:
+                self.save(cache, tokens)
+            except Exception:
+                _LOG.exception("Background prefix snapshot write failed")
+                raise
+
+    def flush_writes(self):
+        with self._lock:
+            pending = self._pending_write
+        if pending is not None:
+            pending.result()
+
     @_managed
     def save(self, cache, tokens, *, hold=False, _tx) -> bool:
         """Snapshot ``cache`` (which must hold exactly ``tokens``). Returns False when skipped."""
@@ -360,6 +401,7 @@ class PrefixCache:
 
     @_managed
     def clear(self, *, _tx) -> None:
+        self._write_epoch += 1
         if _tx is None:
             for key in list(self._disk):
                 self._forget(key)

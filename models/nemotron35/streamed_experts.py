@@ -22,7 +22,7 @@ import concurrent.futures as cf
 import os
 import threading
 import time
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from pathlib import Path
 
 import mlx.core as mx
@@ -217,15 +217,31 @@ class ExpertPool:
         self.speculate = True        # False: layer-major prefill stages whole layers instead of predicting
         self._held = None            # layer-major prefill: experts of the layer in flight, released when it ends
         self._held_layer = None
+        self._held_routes = None
+        self.seeded_bytes = 0
 
     # -- layer scope (layer-major prefill) ---------------------------------------------------------------------
-    def begin_layer(self, layer: int) -> None:
+    def begin_layer(self, layer: int, *, seed=False) -> None:
         """Keep every expert fetched for ``layer`` until ``end_layer``: the layer's token chunks then share one read.
         Held experts bypass the LRU so a long prefill does not evict what decode needs."""
         self._held, self._held_layer = {}, layer
+        self._held_routes = Counter() if seed else None
 
-    def end_layer(self) -> None:
+    def end_layer(self, *, seed=False) -> None:
+        if seed and self._held_routes and self._held:
+            for expert, _ in self._held_routes.most_common():
+                key = (self._held_layer, expert)
+                arrays = self._held.get(expert)
+                if arrays is None or key in self._items:
+                    continue
+                size = sum(array.nbytes for array in arrays.values())
+                if self.resident_bytes + size <= self.budget:
+                    self._items[key] = (arrays, size)
+                    self.resident_bytes += size
+                    self.seeded_bytes += size
+                break
         self._held, self._held_layer = None, None
+        self._held_routes = None
 
     def held_bytes(self) -> int:
         held = self._held
@@ -368,7 +384,7 @@ class ExpertPool:
                 'prefetch_issued': self.prefetch_issued, 'prefetch_used': self.prefetch_used,
                 'prefetch_wasted': self.prefetch_wasted, 'staged_bytes': self._staged_total,
                 'wait_seconds': round(self.wait_seconds, 4), 'read_seconds': round(self.reader.read_seconds, 4),
-                'held_bytes': self.held_bytes()}
+                'held_bytes': self.held_bytes(), 'seeded_bytes': self.seeded_bytes}
 
 
 class NextGate:
@@ -385,6 +401,7 @@ class StreamedSwitchMLP(nn.Module):
         super().__init__()
         self.pool, self.layer, self.group_size, self.eval_every = pool, layer, group_size, eval_every
         self.next_gate = None
+        self._fma = None
 
     def _prefetch_next(self, flat, rows_n):
         nxt = self.next_gate
@@ -423,6 +440,14 @@ class StreamedSwitchMLP(nn.Module):
         return y.squeeze(-2).reshape(*lead, local.shape[-1], flat.shape[-1]).astype(dtype)
 
     def _expert(self, x, weights):
+        if x.shape[0] == 1 and os.environ.get("VEYSTRIX_NEMOTRON_METAL_FMA_DEQUANT") == "1":
+            if self._fma is None:
+                from models.flashnext.metal_runtime import MetalMoEExecutor
+
+                self._fma = MetalMoEExecutor(1, x.shape[-1], 1, group_size=self.group_size, fma_dequant=True)
+            project = self._fma.affine_singleton
+            h = project(x, weights['fc1.weight'], weights['fc1.scales'], weights['fc1.biases'])
+            return project(nn.relu2(h), weights['fc2.weight'], weights['fc2.scales'], weights['fc2.biases'])
         h = mx.quantized_matmul(x, weights['fc1.weight'], weights['fc1.scales'], weights['fc1.biases'],
                                 group_size=self.group_size, bits=4)
         return mx.quantized_matmul(nn.relu2(h), weights['fc2.weight'], weights['fc2.scales'], weights['fc2.biases'],
@@ -433,6 +458,8 @@ class StreamedSwitchMLP(nn.Module):
         hidden = x.shape[-1]
         flat = x.reshape(-1, hidden)
         ids = np.asarray(indices).reshape(flat.shape[0], -1)
+        if self.pool._held_routes is not None and self.pool._held_layer == self.layer:
+            self.pool._held_routes.update(ids.flat)
         rows_n, k = ids.shape
         unique = np.unique(ids)
         if rows_n == 1 and not GATHER:

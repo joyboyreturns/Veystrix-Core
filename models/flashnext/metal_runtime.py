@@ -349,8 +349,8 @@ def _render(source: str, values: Mapping[str, str]) -> str:
     return _KERNEL_TOKEN.sub(lambda match: values.get(match.group(0), match.group(0)), source)
 
 
-@lru_cache(maxsize=1)
-def _mlx_qmv_header() -> str:
+@lru_cache(maxsize=2)
+def _mlx_qmv_header(fma_dequant: bool = False) -> str:
     """Load the exact Q4 vector helpers shipped with the active MLX wheel."""
     import mlx.core as mx
 
@@ -416,6 +416,11 @@ def _mlx_qmv_header() -> str:
     # Custom-kernel helpers receive small local dimensions, not buffer
     # address-space constants. Pass them by value so older Metal compilers do
     # not reject references without an explicit address space.
+    if fma_dequant:
+        old = "return scale * accum + sum * bias;"
+        if header.count(old) != 2:
+            raise RuntimeError("MLX affine dot helpers changed; cannot enable explicit FMA")
+        header = header.replace(old, "return metal::fma(scale, accum, sum * bias);")
     return header.replace("const constant int&", "const int")
 
 
@@ -436,6 +441,7 @@ class MetalMoEExecutor:
         fused_up_swiglu: bool | None = None,
         group_size: int = GROUP_SIZE,
         header_size: int = 4096,
+        fma_dequant: bool | None = None,
     ) -> None:
         if not 1 <= expert_count <= MAX_EXPERTS:
             raise ValueError(f"expert_count must be in 1..{MAX_EXPERTS}")
@@ -460,6 +466,7 @@ class MetalMoEExecutor:
         self.max_width = int(max_width)
         self.group_size = int(group_size)
         self.header_size = int(header_size)
+        self.fma_dequant = os.environ.get("FLASHNEXT_METAL_FMA_DEQUANT") == "1" if fma_dequant is None else fma_dequant
         self.backend = backend
         self.capabilities = probe_capabilities(backend)
         self.last_path = "reference"
@@ -589,6 +596,8 @@ class MetalMoEExecutor:
             and self._boundary_profiler.selected_for(label)
         ):
             name += f"_boundary_{label}"
+        if self.fma_dequant:
+            name += "_affine_fma"
         maker = getattr(self.backend, "metal_kernel", None)
         if maker is None:
             import mlx.core as mx
@@ -599,7 +608,7 @@ class MetalMoEExecutor:
             input_names=input_names,
             output_names=["out"],
             source=_render(_BODIES[kind], values),
-            header=_mlx_qmv_header(),
+            header=_mlx_qmv_header(self.fma_dequant),
             ensure_row_contiguous=True,
             compile_options={"math_mode": "safe"},
         )
@@ -665,6 +674,16 @@ class MetalMoEExecutor:
             (32, ((output_width + 7) // 8) * 2, tokens * slots), (32, 2, 1),
             (tokens, slots, output_width),
         )
+
+    def affine_singleton(self, x, weight, scales, biases):
+        """Project one row through one unpacked Q4 expert using the MLX-derived kernel."""
+        import mlx.core as mx
+
+        if not self.available or x.shape[0] != 1:
+            return mx.quantized_matmul(x, weight, scales, biases, group_size=self.group_size, bits=4)
+        projection = Q4G32Projection(weight[None], scales[None], biases[None])
+        routes = mx.zeros((1, 1), dtype=mx.uint32)
+        return self._metal_projection(x, routes, projection, weight.shape[0], False)[:, 0, :]
 
     def _metal_fused_up_swiglu(
         self,

@@ -85,6 +85,10 @@ class ExpertPool:
         self.store = store
         self.stride = layout.record_stride
         self.offsets = {key: layout.offset(*key) for key in _PARTS}
+        self._row_sizes = {
+            key: layout.shape(*key)[0] * layout.shape(*key)[1] * (4 if key[1] == "weight" else 2)
+            for key in _PARTS
+        }
         self.slots = (int(size_bytes) - HEADER) // self.stride
         if self.slots < 16:
             raise ValueError("expert pool is too small for one decode layer")
@@ -232,6 +236,24 @@ class ExpertPool:
             self._s3.small.pop(key, None)
             self._s3.main.pop(key, None)
         return self._slot_of.pop(key)
+
+    def seed_from_ring(self, layer, expert, rows) -> int:
+        """Copy one complete, already-loaded expert into a free decode slot."""
+        key = (layer, expert)
+        if not self._free or key in self._slot_of or rows.keys() != self.offsets.keys():
+            return 0
+        if any(len(row) != self._row_sizes[part] for part, row in rows.items()):
+            return 0
+        slot = self._free[-1]
+        base = HEADER + slot * self.stride
+        for part, row in rows.items():
+            offset = base + self.offsets[part]
+            self._view[offset:offset + len(row)] = row
+        self._free.pop()
+        self._slot_of[key] = slot
+        if self._s3 is not None:
+            self._s3.insert(key)
+        return sum(map(len, rows.values()))
 
     def fill(self, prefix: str, misses, submit, chunk: int = 2):
         """Queue the nine row reads of every miss; returns the futures."""

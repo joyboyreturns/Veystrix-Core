@@ -280,6 +280,7 @@ class PrefillRing:
         self._pool_view = pool._view
         self._buf32 = None
         self.pending = None
+        self._seeded_layers = set()
         self.disabled = None
         self.last_error = None
         self._stats = {
@@ -485,6 +486,31 @@ class PrefillRing:
             tuple(arrays[f"{projection}.{kind}"] for kind in KINDS)
             for projection in PROJECTIONS
         ]
+
+    def seed_decode(self, layer, positions, routed):
+        """Retain one frequently routed expert per layer from its completed ring reads."""
+        if self.owns_pool or self.pending is None or not self.pool._free or layer < 0:
+            return
+        if layer in self._seeded_layers:
+            return
+        from collections import Counter
+
+        for expert, _ in Counter(routed).most_common():
+            if (layer, expert) in self.pool._slot_of:
+                continue
+            rows = {}
+            try:
+                for plan in self.plans:
+                    start, size = self.pending.row_range(plan.name, positions[expert], 1)
+                    rows[tuple(plan.name.split("."))] = self._pool_view[start:start + size]
+                size = self.pool.seed_from_ring(layer, expert, rows)
+            finally:
+                for row in rows.values():
+                    row.release()
+            if size:
+                self._seeded_layers.add(layer)
+                self._stats["seeded_bytes"] = self._stats.get("seeded_bytes", 0) + size
+            return
 
     # -- lifetime -----------------------------------------------------------
 

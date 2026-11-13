@@ -332,6 +332,20 @@ class ChainTests(Base):
 
 
 class TierTests(Base):
+    def test_queued_write_does_not_recreate_a_cleared_snapshot(self):
+        from concurrent.futures import Future
+
+        directory = self.tmp / "c"
+        store = self.cache(directory, disk=100_000_000, min_disk_free_bytes=0)
+        entry = store.put(self.ids[:64], self.cold(64), defer_write=True)
+        with mock.patch.object(P._WRITER, "submit", return_value=Future()) as submit:
+            store.persist_background(entry)
+        write, snapshot = submit.call_args.args
+        store.clear()
+        write(snapshot)
+        self.assertEqual(store.stats.ssd_writes, 0)
+        self.assertFalse((directory / f"{entry.key}.json").exists())
+
     def test_ram_eviction_spills_to_disk_and_reloads_bit_identically(self):
         entry_size = P.capture(self.cold(64), self.ids[:64], self.fp).nbytes()
         cache = self.cache(self.tmp / "c", ram=int(entry_size * 2.5), disk=1 << 40)

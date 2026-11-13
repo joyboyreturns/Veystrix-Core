@@ -55,6 +55,16 @@ class Base(unittest.TestCase):
 
 
 class WorkflowTests(Base):
+    def test_async_last_snapshot_is_restartable_after_flush(self):
+        model, session = self.engine()
+        with mock.patch.dict(os.environ, {P.ASYNC_WRITE_FLAG: "1"}):
+            _, _, first = self.go(model, session, self.system + self.suffix_a)
+            store = session.store()
+            store.flush_writes()
+            self.assertEqual(store.stats.ssd_writes, 1)
+            _, _, resumed = self.go(model, S.PrefixSession(encode, compat), self.system + self.suffix_b)
+        self.assertEqual(first.snapshots, [len(self.system)])
+        self.assertEqual((resumed.hit_tokens, resumed.tier), (len(self.system), "ssd"))
     def test_restored_suffix_uses_incremental_limit_and_miss_uses_cold_limit(self):
         system = [5] * 62 + MARK
         with mock.patch.dict(os.environ, {"VEYSTRIX_MAX_COLD_PREFILL": "100",

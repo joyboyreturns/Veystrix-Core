@@ -33,6 +33,26 @@ struct SettingsView: View {
                 Text("Saved limit: \(model.settings.swapLimitGiB) GiB for both models. Restart the engine to apply changes.")
                     .font(.callout).foregroundStyle(.secondary)
             }
+            Section("Performance for selected model") {
+                Picker("Decoder", selection: $model.settings.activePerformance.decoder) {
+                    ForEach(DecodeStrategy.allCases) { Text($0.title).tag($0) }
+                }
+                if model.settings.activePerformance.decoder == .nativeMTP {
+                    let maxDraft = model.settings.selectedModel == .nemotron35 ? 4 : 8
+                    Stepper("MTP draft tokens: \(model.settings.activePerformance.draftTokens)",
+                            value: $model.settings.activePerformance.draftTokens, in: 1...maxDraft)
+                    if model.settings.selectedModel == .nemotron35 {
+                        TextField("Nemotron MTP sidecar folder (optional)", text: $model.settings.nemotronMTPPath)
+                    }
+                }
+                Toggle("Seed decode pool from prefill", isOn: $model.settings.activePerformance.seedExperts)
+                Toggle("Write prefix snapshots in the background", isOn: $model.settings.activePerformance.backgroundSnapshots)
+                Toggle("Use affine FMA kernels", isOn: $model.settings.activePerformance.affineFMA)
+                Toggle("Use larger MLX command buffers", isOn: $model.settings.activePerformance.largerMetalBuffers)
+                TextField("Default output limit (0 = uncapped)", value: $model.settings.activePerformance.defaultOutputTokens, format: .number)
+                Text("Experimental. Options are saved per model and apply the next time the engine starts.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Section("Power") {
                 Toggle("Allow operation on battery", isOn: $model.settings.allowBattery)
                 Stepper("Minimum battery charge: \(model.settings.minimumBatteryPercent)%", value: $model.settings.minimumBatteryPercent, in: 0...100, step: 5)
@@ -120,13 +140,19 @@ private struct NemotronContextSettings: View {
     var body: some View {
         Section("Nemotron Context") {
             TextField("Configured maximum tokens", value: $model.settings.nemotronContextTokens, format: .number)
+            Picker("Attention KV precision", selection: $model.settings.nemotronKVCache) {
+                ForEach(NemotronKVCache.allCases) { Text($0.title).tag($0) }
+            }
+            .onChange(of: model.settings.nemotronKVCache) { _, precision in
+                model.settings.nemotronContextTokens = min(model.settings.nemotronContextTokens, precision.contextLimit)
+            }
             if let status = engine.health?.nemotron {
                 LabeledContent("Memory admission", value: engine.health?.isHealthy == true ? "Ready" : "Paused")
                 LabeledContent("Admitted context", value: status.admittedContext.formatted() + " tokens")
                 LabeledContent("Attention KV format", value: status.kvFormat)
                 LabeledContent("1M context validation", value: status.millionTokenValidation ? "Passed" : "Pending")
             }
-            Text("Nemotron defaults to a 1,048,576-token window and up to 65,536 uncached prefill tokens per request. Memory admission runs at startup. Restart to apply context changes.")
+            Text("\(model.settings.nemotronKVCache.title) supports a configured window up to \(model.settings.nemotronKVCache.contextLimit.formatted()) tokens and up to 65,536 uncached prefill tokens per request. Restart to apply changes.")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }

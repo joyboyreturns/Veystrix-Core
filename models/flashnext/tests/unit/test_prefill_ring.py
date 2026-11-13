@@ -153,6 +153,21 @@ class RingCase(unittest.TestCase):
 
 
 class TensorCorrectnessTests(RingCase):
+    def test_prefill_seeds_the_hottest_complete_record_without_a_decode_read(self):
+        routed = [7, 2, 8, 2, 5, 2]
+        wanted = list(dict.fromkeys(routed))
+        prefix = prefix_of(1)
+        with prefill_ring.session(self.language, 1024) as ring:
+            self.assertIsNotNone(ring.stage(self.store, prefix, wanted))
+            ring.seed_decode(1, {expert: i for i, expert in enumerate(wanted)}, routed)
+            self.assertEqual(ring.stats()["seeded_bytes"], self.pool.stride)
+        slots, misses = self.pool.assign(1, [2])
+        self.assertFalse(misses)
+        base = expert_pool.HEADER + slots[2] * self.pool.stride
+        for (projection, part), offset in self.pool.offsets.items():
+            expected = self.store.rows_np(f"{prefix}.{projection}.{part}", [2]).tobytes()
+            self.assertEqual(bytes(self.pool.array[base + offset:base + offset + len(expected)]), expected)
+
     def test_ring_output_is_bitwise_equal_to_existing_path(self):
         x, indices = self.inputs()
         reference = self.run_layers(x, indices)

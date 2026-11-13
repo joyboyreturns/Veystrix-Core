@@ -173,7 +173,7 @@ class NemotronBackend(Conversation):
         from models.nemotron35.backend_core import EngineCore
         from models.nemotron35.config import validate_config
         from models.nemotron35.inventory import estimate_bytes
-        from models.nemotron35.prefix_cache import PrefixCache, ram_bytes_from_env
+        from models.nemotron35.prefix_cache import ASYNC_SNAPSHOT_LIMIT, ASYNC_WRITE_FLAG, PrefixCache, ram_bytes_from_env
         from models.nemotron35.streamed_model import load_streamed
         if not model_path:
             raise SystemExit("Nemotron requires --model-path/--checkpoint pointing at a complete local checkpoint")
@@ -199,10 +199,23 @@ class NemotronBackend(Conversation):
         if prefix_cache is None:
             prefix_cache = os.environ.get("VEYSTRIX_NEMOTRON_PREFIX_CACHE", "1") != "0"
         prefix_ram = ram_bytes_from_env() if prefix_cache else 0
+        self._prefix_async_write = prefix_cache and os.environ.get(ASYNC_WRITE_FLAG) == "1"
+        mtp_path, mtp_reserve = None, 0
+        self.mtp_depth = 0
+        if os.environ.get("VEYSTRIX_NEMOTRON_NATIVE_MTP") == "1":
+            from models.nemotron35.mtp import memory_reserve, resolve_directory
+
+            mtp_path = resolve_directory()
+            mtp_reserve = memory_reserve(config, mtp_path)
+            self.mtp_depth = int(os.environ.get("VEYSTRIX_NEMOTRON_MTP_DEPTH") or "2")
+            if not 1 <= self.mtp_depth <= 4:
+                raise ValueError("Nemotron MTP depth must be between 1 and 4")
         # Plan from the exact dense-core size implied by the verified inventory, BEFORE reading any weight.
         plan = admission.make_plan(config, machine, dense_bytes=estimate_bytes(config)["dense_bytes"],
                                    context_tokens=context_tokens, chunk_tokens=chunk, pool_bytes=pool,
-                                   int8_kv=kv == "int8", lightning=config_check is None, prefix_cache_bytes=prefix_ram)
+                                   int8_kv=kv == "int8", lightning=config_check is None,
+                                   prefix_cache_bytes=prefix_ram + mtp_reserve
+                                   + (ASYNC_SNAPSHOT_LIMIT if self._prefix_async_write else 0))
         self.plan = plan
         if tokenizer is None:
             from veystrix.backends.flashnext import _load_transformers_tokenizer
@@ -212,6 +225,14 @@ class NemotronBackend(Conversation):
         if layer_major_tokens is None:
             layer_major_tokens = int(os.environ.get("VEYSTRIX_NEMOTRON_LAYER_MAJOR_TOKENS") or LAYER_MAJOR_DEFAULT)
         self.core = EngineCore(self.streamed, chunk_tokens=plan.chunk_tokens, layer_major_tokens=layer_major_tokens, int8_kv=kv == "int8")
+        if mtp_path is not None:
+            from models.nemotron35.mtp import DraftHead
+
+            try:
+                self.core.mtp = DraftHead(self.core.model, mtp_path)
+            except BaseException:
+                self.streamed.close()
+                raise
         self.model_path = str(root)
         self.config = config
         self._strict_prefix_plan = config_check is None
@@ -325,8 +346,8 @@ class NemotronBackend(Conversation):
     def generate(self, max_tokens: int, out=None, on_prefilled=None, on_prefill_progress=None,
                  on_decode_token=None, should_cancel=None):
         from models.flashnext import purge_recovery as P
-        from models.nemotron35 import readiness
-        if self.pending:
+        from models.nemotron35 import admission, readiness
+        if self.pending and not admission.swap_only_benchmark():
             self.last_readiness = readiness.ensure_ready(
                 self._current_machine, plan=self.plan, resident_pool_bytes=self.streamed.pool.resident_bytes,
                 reclaim=self.reclaim_owned_memory, purge=self._purge)
@@ -354,6 +375,7 @@ class NemotronBackend(Conversation):
             "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "pool": {"budget_gib": round(pool["budget_bytes"] / 2**30, 2), "resident_gib": round(pool["resident_bytes"] / 2**30, 2),
                      "hit_rate": round(pool["hits"] / asked, 3) if asked else None,
+                     "seeded_bytes": pool.get("seeded_bytes", 0),
                      "staged_mib": round(pool["staged_bytes"] / 2**20, 1)},
             "prefetch": {"issued": issued, "used": used, "wasted": pool["prefetch_wasted"],
                          "precision": round(used / issued, 3) if issued else None},
@@ -425,6 +447,12 @@ class NemotronBackend(Conversation):
             horizon = min(horizon, max(0, context_limit - len(self.tape)))
         total_prompt = len(feed)
         feed = feed[restored:]
+        use_mtp = horizon > 0 and self.mtp_depth > 0 and self.sampling.greedy and self._interactive_budgets is None
+        self.core.begin_mtp_turn(use_mtp)
+        if os.environ.get("VEYSTRIX_BENCH_TOKEN_DIGEST") == "1":
+            from models.flashnext import flight_recorder
+
+            flight_recorder.record("nemotron_decode_mode", native_mtp=use_mtp, mtp_depth=self.mtp_depth if use_mtp else None)
         snapshots = []
         start = restored if fresh else cached          # tokens the cache already holds before this prefill
         mark = [start]
@@ -486,9 +514,11 @@ class NemotronBackend(Conversation):
         snapshot_began = time.perf_counter()
         if capture and compatible(len(self.tape)) and len(feed) >= self.prefix_cache.min_tokens:
             try:   # the prompt boundary: the next request usually shares this whole prefix
-                if self.prefix_cache.save(self.core.cache, self.tape, hold=True):
-                    snapshots.append(len(self.tape))
                 self.prefix_cache.prune(self.tape, snapshots)
+                if self._prefix_async_write and self.prefix_cache.save_background(self.core.cache, self.tape):
+                    snapshots.append(len(self.tape))
+                elif self.prefix_cache.save(self.core.cache, self.tape, hold=True):
+                    snapshots.append(len(self.tape))
             except Exception:
                 pass   # a failed snapshot never fails the request
         self.last_prefix = LastPrefix(
@@ -515,8 +545,20 @@ class NemotronBackend(Conversation):
         timer = DecodeTimer()
         try:
             token = sampler(logits) if horizon > 0 else None
+            speculative = None
+            if use_mtp:
+                speculative = self.core.native_mtp_tokens(token, horizon, self.stops, cancel, self.mtp_depth)
+            elif (horizon > 0 and budgets is None and self.sampling.greedy
+                    and os.environ.get("VEYSTRIX_NEMOTRON_PROMPT_LOOKUP") == "1"):
+                speculative = self.core.prompt_lookup_tokens(self.tape, token, horizon, self.stops, cancel)
             while len(produced) < horizon:
-                value = int(token.item())
+                if speculative is None:
+                    value = int(token.item())
+                else:
+                    value = next(speculative, None)
+                    if value is None:
+                        finish = "stop"
+                        break
                 forced = (budgets is not None and phase == "thinking" and think_budget and close_token is not None
                           and counts["thinking"] == think_budget - 1)
                 if value in self.stops:
@@ -551,12 +593,21 @@ class NemotronBackend(Conversation):
                     if out is not None:
                         with timer.emitting():
                             out(piece)
+                if speculative is not None:
+                    continue
                 try:
                     # Commit the last emitted token to the cache too. Only sample
                     # when another iteration can consume the result.
                     token = self.core.decode(value, sampler=sampler, emit_logits=len(produced) < horizon)
                 except Cancelled as exc:
                     raise GenerationCancelled() from exc
+            if speculative is not None and len(produced) == horizon:
+                next(speculative, None)  # commit a final singleton emitted before its forward
+        except Cancelled as exc:
+            if self.cache_tokens != len(self.tape):
+                self._mark_replay_needed()
+            self.turn_closed = False
+            raise GenerationCancelled() from exc
         except GenerationCancelled:
             # Between tokens the cache still equals the tape; mid-forward cancellation already reset the cache.
             if self.cache_tokens != len(self.tape):
@@ -613,6 +664,7 @@ class NemotronBackend(Conversation):
                 "template": digest("chat_template.jinja"),
                 "total_size": (index.get("metadata") or {}).get("total_size"),
                 "quantization": self.config.get("quantization"), "state_dtypes": f"{self.kv_format}-kv/fp32-ssm",
+                **({"metal_affine_fma": True} if os.environ.get("VEYSTRIX_NEMOTRON_METAL_FMA_DEQUANT") == "1" else {}),
                 "weight_index": digest("model.safetensors.index.json"),
                 "weights": [(name, info.st_size, info.st_mtime_ns, info.st_ino)
                             for name in sorted(set(index["weight_map"].values()))

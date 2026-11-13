@@ -49,6 +49,33 @@ class PrefetchTests(unittest.TestCase):
         return load_streamed(Path(_dir) / "ck", pool_bytes=kw.pop("pool_bytes", 64 * 1024),
                              config_check=permissive_config_check, **kw)
 
+    def test_prefill_seed_moves_the_hottest_held_expert_into_decode_pool(self):
+        model = self.load(prefetch=False)
+        self.addCleanup(model.close)
+        pool = model.pool
+        pool.begin_layer(1, seed=True)
+        resident = pool.fetch(1, [0, 1])
+        pool._held_routes.update([1, 0, 1])
+        pool.end_layer(seed=True)
+        before = pool.stats()
+        reused = pool.fetch(1, [1])
+        self.assertIs(reused[1], resident[1])
+        self.assertEqual(pool.stats()["bytes_read"], before["bytes_read"])
+        self.assertGreater(before["seeded_bytes"], 0)
+
+    def test_explicit_fma_nemotron_projection_matches_stock_within_bf16_tolerance(self):
+        model = self.load(prefetch=False)
+        self.addCleanup(model.close)
+        weights = model.pool.fetch(1, [0])[0]
+        group = TINY_CONFIG["quantization"]["group_size"]
+        layer = StreamedSwitchMLP(model.pool, 1, group)
+        x = mx.random.normal((1, TINY_CONFIG["hidden_size"])).astype(mx.bfloat16)
+        with unittest.mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_METAL_FMA_DEQUANT": "0"}):
+            expected = layer._expert(x, weights)
+        with unittest.mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_METAL_FMA_DEQUANT": "1"}):
+            actual = layer._expert(x, weights)
+        self.assertTrue(mx.allclose(f32(actual), f32(expected), rtol=0.02, atol=0.02).item())
+
     def test_prefetch_never_changes_results(self):
         tokens = mx.array([[1, 5, 9, 3, 7, 2, 11, 4, 6, 8]])
         with_pf, without = self.load(prefetch=True), self.load(prefetch=False)
@@ -159,6 +186,47 @@ class PrefixCacheTests(unittest.TestCase):
             return b.tape[len(self.PROMPT) + len(tail):]
         finally:
             b.close()
+
+    def test_background_save_restores_original_state_after_decode_advances(self):
+        backend = self.backend()
+        self.addCleanup(backend.close)
+        tokens = self.PROMPT[:12]
+        backend.core.prefill(tokens, emit_logits=False)
+        expected = [array.tolist() for array in backend.core.state_arrays()]
+        self.assertTrue(backend.prefix_cache.save_background(backend.core.cache, tokens))
+        backend.core.decode(self.PROMPT[12])
+        backend.prefix_cache.flush_writes()
+        restored, count = backend.prefix_cache.restore(self.PROMPT)
+        self.assertEqual(count, len(tokens))
+        self.assertEqual([array.tolist() for entry in restored for array in entry.state], expected)
+
+    def test_lookup_verifier_matches_singleton_decode_with_int8_kv(self):
+        from models.nemotron35.backend_core import EngineCore
+
+        directory = Path(_dir) / "int8-lookup"
+        write_checkpoint(directory, config=dict(TINY_CONFIG, head_dim=64))
+        models = [load_streamed(directory, pool_bytes=0, config_check=permissive_config_check) for _ in range(2)]
+        for model in models:
+            self.addCleanup(model.close)
+        reference, candidate = [EngineCore(model, chunk_tokens=4, int8_kv=True) for model in models]
+        prompt = self.PROMPT[:12]
+        first = int(mx.argmax(reference.prefill(prompt), axis=-1).item())
+        tokens = [first]
+        for _ in range(4):
+            tokens.append(int(mx.argmax(reference.decode(tokens[-1]), axis=-1).item()))
+        for drafts in (tokens[1:4], [(tokens[1] + 1) % 64, *tokens[2:4]]):
+            candidate.reset()
+            candidate.prefill(prompt)
+            committed, next_token = candidate.verify_decode(first, drafts, cancelled=lambda: False)
+            self.assertEqual(committed, tokens[:4] if drafts[0] == tokens[1] else tokens[:1])
+            self.assertEqual(next_token, tokens[len(committed)])
+            self.assertEqual(candidate.cached_tokens, len(prompt) + len(committed))
+            reference.reset()
+            reference.prefill(prompt)
+            for token in committed:
+                reference.decode(token)
+            self.assertTrue(all(mx.array_equal(a, b).item() for a, b in
+                                zip(reference.state_arrays(), candidate.state_arrays(), strict=True)))
 
     def test_ram_restore_is_independent_and_rejects_replaced_disk_state(self):
         with unittest.mock.patch.dict(os.environ, {"VEYSTRIX_NEMOTRON_PREFIX_RAM_MB": "8"}):

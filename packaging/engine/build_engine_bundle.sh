@@ -45,7 +45,7 @@ rm -rf "$OUT"/python/lib/python3.12/{test,idlelib,tkinter,turtledemo,turtle.py} 
        "$OUT"/python/lib/{tcl*,tk*,itcl*,thread*,Tix*,sqlite3*} "$OUT"/python/bin/{idle*,2to3*,pydoc*} 2>/dev/null || true
 
 echo "==> Engine sources -> compiled lib"
-for pkg in veystrix models/__init__.py models/flashnext models/nemotron35; do
+for pkg in veystrix models/__init__.py models/flashnext models/nemotron35 models/shared; do
   mkdir -p "$OUT/lib/$(dirname "$pkg")" 2>/dev/null || true
   ditto "$ROOT/$pkg" "$OUT/lib/$pkg"
 done

@@ -36,6 +36,13 @@ def swap_refuse_bytes() -> int:
     return SWAP_REFUSE_BYTES
 
 
+def swap_only_benchmark() -> bool:
+    """Benchmark-only override. The independent absolute swap watchdog stays armed."""
+    return (os.environ.get("VEYSTRIX_NEMOTRON_BENCH_SWAP_ONLY") == "1"
+            and os.environ.get("FLASHNEXT_WATCHDOG_MEMORY") == "1"
+            and memory_policy.is_absolute_swap_policy())
+
+
 try:  # the shared server maps this exception to HTTP 503 memory_admission_refused
     from models.flashnext.request_admission import RequestMemoryRefused as _Retriable
 except ImportError:  # pragma: no cover - standalone use
@@ -116,7 +123,8 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
 
     ``pool_bytes=None`` sizes the expert pool automatically: as large as fits (up to AUTO_POOL_MAX) while leaving
     AUTO_POOL_HEADROOM of the budget unplanned. A larger pool means more expert hits and fewer SSD reads."""
-    if machine.pressure >= 4:
+    swap_only = swap_only_benchmark()
+    if machine.pressure >= 4 and not swap_only:
         raise AdmissionRefused('system memory pressure is critical; retry when it falls')
     if machine.swap_used >= swap_refuse_bytes():
         raise AdmissionRefused(f'swap in use ({machine.swap_used / GIB:.2f} GiB) is at the safety line; retry later')
@@ -139,6 +147,8 @@ def make_plan(config: dict, machine: Machine, *, dense_bytes: int, context_token
         # prefill pushed swap from 0.8 to 2.4 GiB): size the pool down instead of adding to the pressure.
         cap = AUTO_POOL_MAX if machine.swap_used < GIB else GIB if machine.swap_used < 2 * GIB else GIB // 4
         pool_bytes = max(0, min(cap, room)) // (64 * 2**20) * (64 * 2**20)
+    if swap_only:
+        return Plan(context_tokens, chunk_tokens, pool_bytes, build(pool_bytes, chunk_tokens), limit)
     pool, chunk = pool_bytes, chunk_tokens
     while True:
         est = build(pool, chunk)
@@ -164,7 +174,7 @@ def check_request(plan: Plan, machine: Machine, *, new_tokens: int, cached_token
     if cached_tokens + new_tokens > plan.context_tokens:
         raise AdmissionRefused(
             f'request needs {cached_tokens + new_tokens} context tokens; this session was admitted for {plan.context_tokens}')
-    if machine.pressure >= 4:
+    if machine.pressure >= 4 and not swap_only_benchmark():
         raise AdmissionRefused('system memory pressure is critical; retry when it falls')
     if machine.swap_used >= swap_refuse_bytes():
         raise AdmissionRefused('swap is at the safety line; retry when system memory pressure falls')
